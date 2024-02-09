@@ -292,6 +292,55 @@ class DoubleDeflector(Component):
         yield from self._lower.step(rays)
 
 
+class Aperture(Component):
+    def __init__(
+        self,
+        z: float,
+        radius_inner: float = 0.005,
+        radius_outer: float = 0.25,
+        x: float = 0.,
+        y: float = 0.,
+        name: str = 'Aperture',
+    ):
+        '''
+
+        Parameters
+        ----------
+        z : float
+            Position of component in optic axis
+        name : str, optional
+            Name of this component which will be displayed by GUI, by default 'Aperture'
+        radius_inner : float, optional
+           Inner radius of the aperture, by default 0.005
+        radius_outer : float, optional
+            Outer radius of the aperture, by default 0.25
+        x : int, optional
+            X position of the centre of the aperture, by default 0
+        y : int, optional
+            Y position of the centre of the aperture, by default 0
+        '''
+
+        super().__init__(z, name)
+
+        self.x = x
+        self.y = y
+        self.radius_inner = radius_inner
+        self.radius_outer = radius_outer
+
+    def step(
+        self, rays: NDArray
+    ) -> Generator[Tuple[float, NDArray], None, None]:
+        pos_x, pos_y = rays[0], rays[2]
+        distance = np.sqrt(
+            (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
+        )
+        mask = np.logical_and(
+            distance >= self.radius_inner,
+            distance < self.radius_outer,
+        )
+        yield self.z, rays[:, mask]
+
+
 class Model:
     def __init__(self, components: Iterable[Component]):
         assert isinstance(components[0], Gun)
@@ -407,6 +456,11 @@ if __name__ == '__main__':
             u_defx=0.05,
             l_defy=-0.025,
             l_defx=0.,
+        ),
+        Aperture(
+            0.15,
+            radius_inner=0.,
+            radius_outer=0.0075,
         ),
         Detector(
             z=0.,
