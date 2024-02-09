@@ -451,7 +451,7 @@ if __name__ == '__main__':
         ),
         Lens(
             z=0.5,
-            f=-0.3,
+            f=-0.2,
         ),
         DoubleDeflector(
             upper=Deflector(
