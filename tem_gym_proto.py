@@ -271,10 +271,8 @@ class Model:
                 rays = this_component.get_rays(num_rays)
             for rays_z, new_rays in this_component.step(rays):
                 yield this_component, rays_z, new_rays
-            rays = np.matmul(
-                self.propagation_matix(
-                    next_component.entrance_z - this_component.exit_z
-                ),
+            rays = self.propagate(
+                next_component.entrance_z - this_component.exit_z,
                 new_rays
             )
         # At detector plane
@@ -327,6 +325,13 @@ class Model:
              [0, 0, 1, z, 0],
              [0, 0, 0, 1, 0],
              [0, 0, 0, 0, 1]]
+        )
+
+    @staticmethod
+    def propagate(distance: float, rays: NDArray) -> NDArray:
+        return np.matmul(
+            Model.propagation_matix(distance),
+            rays,
         )
 
 
