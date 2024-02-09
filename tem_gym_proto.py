@@ -358,6 +358,14 @@ class Model:
             repr_string = repr_string + f'\n - {repr(component)}'
         return repr_string
 
+    @property
+    def gun(self) -> Gun:
+        return self._components[0]
+
+    @property
+    def detector(self) -> Detector:
+        return self._components[-1]
+
     def run_iter(
         self, num_rays: int
     ) -> Generator[Tuple[Component, float, NDArray], None, None]:
@@ -483,7 +491,7 @@ if __name__ == '__main__':
     print(model)
 
     det_rays = model.run_to_end(512)
-    image = components[-1].get_image(det_rays)
+    image = model.detector.get_image(det_rays)
 
     import matplotlib.pyplot as plt
     plt.imshow(image)
