@@ -262,26 +262,20 @@ class Deflector(Component):
 class DoubleDeflector(Component):
     def __init__(
         self,
-        z: float,
-        u_dz: float,
-        l_dz: float,
-        u_defx: float = 0.5,
-        u_defy: float = 0.5,
-        l_defx: float = 0.5,
-        l_defy: float = 0.5,
+        upper: Deflector,
+        lower: Deflector,
         name: str = "DoubleDeflector",
     ):
-        super().__init__(z=z, name=name)
-        self._upper = Deflector(
-            z - u_dz,
-            u_defx,
-            u_defy,
+        super().__init__(
+            z=(upper.z + lower.z) / 2,
+            name=name,
         )
-        self._lower = Deflector(
-            z + l_dz,
-            l_defx,
-            l_defy,
-        )
+        self._upper = upper
+        self._lower = lower
+
+    @property
+    def z(self):
+        return (self._upper.z + self._lower.z) / 2
 
     @property
     def entrance_z(self) -> float:
@@ -460,13 +454,16 @@ if __name__ == '__main__':
             f=-0.3,
         ),
         DoubleDeflector(
-            z=0.25,
-            u_dz=0.025,
-            l_dz=0.025,
-            u_defy=0.05,
-            u_defx=0.05,
-            l_defy=-0.025,
-            l_defx=0.,
+            upper=Deflector(
+                z=0.275,
+                defy=0.05,
+                defx=0.05,
+            ),
+            lower=Deflector(
+                z=0.225,
+                defy=-0.025,
+                defx=0.,
+            ),
         ),
         Sample(
             z=0.2
