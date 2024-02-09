@@ -51,7 +51,6 @@ class Lens(Component):
     def __init__(self, z: float, f: float, name: str = "Lens"):
         super().__init__(name=name, z=z)
         self._f = f
-        self._matrix = self.lens_matrix(f)
 
     @staticmethod
     def lens_matrix(f):
@@ -81,7 +80,19 @@ class Lens(Component):
         self, rays: NDArray
     ) -> Generator[Tuple[float, NDArray], None, None]:
         # Just straightforward matrix multiplication
-        yield self.z, np.matmul(self._matrix, rays)
+        yield self.z, np.matmul(self.lens_matrix(self._f), rays)
+
+
+class Sample(Component):
+    def __init__(self, z: float, name: str = "Sample"):
+        super().__init__(name=name, z=z)
+
+    def step(
+        self, rays: NDArray
+    ) -> Generator[Tuple[float, NDArray], None, None]:
+        # Sample has no effect, yet
+        # Could implement ray intensity / attenuation ??
+        yield self.z, rays
 
 
 class Gun(Component):
@@ -456,6 +467,9 @@ if __name__ == '__main__':
             u_defx=0.05,
             l_defy=-0.025,
             l_defx=0.,
+        ),
+        Sample(
+            z=0.2
         ),
         Aperture(
             0.15,
