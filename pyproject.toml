@@ -10,19 +10,18 @@ authors = [
 ]
 description = "An educational TEM ray tracing matrix package"
 readme = "README.md"
-Requires-Python = "3.9.6"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
 ]
 dependencies = [
-  'pyqtgraph==0.13.1',
-  'pyopengl==3.1.6',
-  'numpy==1.23.3',
+  'pyqtgraph',
+  'pyopengl',
+  'numpy',
   'triangle',
-  'PyQt5==5.15.2',
-  'matplotlib==3.6.1'
+  'PyQt5',
+  'matplotlib'
 ]
 
 [project.urls]
