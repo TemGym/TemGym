@@ -242,11 +242,54 @@ class Deflector(Component):
     def step(
         self, rays: NDArray
     ) -> Generator[Tuple[float, NDArray], None, None]:
-        # Just straightforward matrix multiplication
         yield self.z, np.matmul(
             self.deflector_matrix(self.defx, self.defy),
             rays
         )
+
+
+class DoubleDeflector(Component):
+    def __init__(
+        self,
+        z: float,
+        u_dz: float,
+        l_dz: float,
+        u_defx: float = 0.5,
+        u_defy: float = 0.5,
+        l_defx: float = 0.5,
+        l_defy: float = 0.5,
+        name: str = "DoubleDeflector",
+    ):
+        super().__init__(z=z, name=name)
+        self._upper = Deflector(
+            z - u_dz,
+            u_defx,
+            u_defy,
+        )
+        self._lower = Deflector(
+            z + l_dz,
+            l_defx,
+            l_defy,
+        )
+
+    @property
+    def entrance_z(self) -> float:
+        return self._upper.z
+
+    @property
+    def exit_z(self) -> float:
+        return self._lower.z
+
+    def step(
+        self, rays: NDArray
+    ) -> Generator[Tuple[float, NDArray], None, None]:
+        for z, rays in self._upper.step(rays):
+            yield z, rays
+        Model.propagate(
+            self._lower.entrance_z - z,
+            rays
+        )
+        yield from self._lower.step(rays)
 
 
 class Model:
@@ -356,10 +399,14 @@ if __name__ == '__main__':
             z=0.5,
             f=-0.3,
         ),
-        Deflector(
+        DoubleDeflector(
             z=0.25,
-            defy=0.05,
-            defx=0.05,
+            u_dz=0.025,
+            l_dz=0.025,
+            u_defy=0.05,
+            u_defx=0.05,
+            l_defy=-0.025,
+            l_defx=0.,
         ),
         Detector(
             z=0.,
