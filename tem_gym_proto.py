@@ -490,7 +490,7 @@ if __name__ == '__main__':
     model = Model(components)
     print(model)
 
-    det_rays = model.run_to_end(512)
+    det_rays = model.run_to_component(model.detector, 512)
     image = model.detector.get_image(det_rays)
 
     import matplotlib.pyplot as plt
