@@ -84,7 +84,7 @@ class Lens(Component):
         yield self.z, np.matmul(self._matrix, rays)
 
 
-class GunComponent(Component):
+class Gun(Component):
     def __init__(
         self,
         z: float,
@@ -123,7 +123,7 @@ class GunComponent(Component):
         yield self.z, rays
 
 
-class DetectorComponent(Component):
+class Detector(Component):
     def __init__(
         self,
         z: float,
@@ -186,10 +186,73 @@ class DetectorComponent(Component):
         return image
 
 
+class Deflector(Component):
+    '''Creates a single deflector component and handles calls to GUI creation, updates to GUI
+        and stores the component matrix. See Double Deflector component for a more useful version
+    '''
+    def __init__(
+        self,
+        z: float,
+        defx: float = 0.5,
+        defy: float = 0.5,
+        name: str = "Deflector",
+    ):
+        '''
+
+        Parameters
+        ----------
+        z : float
+            Position of component in optic axis
+        name : str, optional
+            Name of this component which will be displayed by GUI, by default ''
+        defx : float, optional
+            deflection kick in slope units to the incoming ray x angle, by default 0.5
+        defy : float, optional
+            deflection kick in slope units to the incoming ray y angle, by default 0.5
+        '''
+        super().__init__(z=z, name=name)
+        self.defx = defx
+        self.defy = defy
+
+    @staticmethod
+    def deflector_matrix(def_x, def_y):
+        '''Single deflector ray transfer matrix
+
+        Parameters
+        ----------
+        def_x : float
+            deflection in x in slope units
+        def_y : _type_
+            deflection in y in slope units
+
+        Returns
+        -------
+        ndarray
+            Output ray transfer matrix
+        '''
+
+        return np.array(
+            [[1, 0, 0, 0,     0],
+             [0, 1, 0, 0, def_x],
+             [0, 0, 1, 0,     0],
+             [0, 0, 0, 1, def_y],
+             [0, 0, 0, 0,     1]],
+        )
+
+    def step(
+        self, rays: NDArray
+    ) -> Generator[Tuple[float, NDArray], None, None]:
+        # Just straightforward matrix multiplication
+        yield self.z, np.matmul(
+            self.deflector_matrix(self.defx, self.defy),
+            rays
+        )
+
+
 class Model:
     def __init__(self, components: Iterable[Component]):
-        assert isinstance(components[0], GunComponent)
-        assert isinstance(components[-1], DetectorComponent)
+        assert isinstance(components[0], Gun)
+        assert isinstance(components[-1], Detector)
         self._components = components
 
     def __repr__(self):
@@ -277,7 +340,7 @@ class GUIModel:
 
 if __name__ == '__main__':
     components = (
-        GunComponent(
+        Gun(
             z=1.,
             beam_type="parallel",
             beam_radius=0.01,
@@ -288,7 +351,12 @@ if __name__ == '__main__':
             z=0.5,
             f=-0.3,
         ),
-        DetectorComponent(
+        Deflector(
+            z=0.25,
+            defy=0.05,
+            defx=0.05,
+        ),
+        Detector(
             z=0.,
             detector_size=0.05,
             detector_pixels=128,
