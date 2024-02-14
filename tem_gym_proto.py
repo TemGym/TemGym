@@ -420,7 +420,7 @@ class DoubleDeflector(Component):
         for rays in self.upper.step(rays):
             yield rays
         rays = rays.propagate(
-            abs(self.lower.entrance_z - self.upper.exit_z),
+            self.lower.entrance_z - self.upper.exit_z,
         )
         yield from self.lower.step(rays)
 
