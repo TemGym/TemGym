@@ -311,7 +311,7 @@ def _rotate_deg(degrees):
     return _rotate(np.pi/180*degrees)
 
 
-def get_pixel_coords(rays_x, rays_y, size, pixels, flip_y=False, scan_rotation=0.):
+def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation=0.):
     if flip_y:
         transform = _flip_y()
     else:
@@ -322,8 +322,9 @@ def get_pixel_coords(rays_x, rays_y, size, pixels, flip_y=False, scan_rotation=0
 
     y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
 
-    pixel_coords_x = x_transformed / size * pixels + pixels/2 - 1
-    pixel_coords_y = y_transformed / size * pixels + pixels/2 - 1
+    sy, sx = shape
+    pixel_coords_x = x_transformed / pixel_size + sx // 2
+    pixel_coords_y = y_transformed / pixel_size + sy // 2
 
     return (pixel_coords_x, pixel_coords_y)
 
