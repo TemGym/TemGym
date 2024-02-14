@@ -1,7 +1,8 @@
-from typing import Generator, Iterable, Tuple, Optional, Union, Literal, Type
+from typing import Generator, Iterable, Tuple, Optional, Union, Literal, Type, TypeAlias
 from itertools import pairwise
 import numpy as np
 from numpy.typing import NDArray
+
 
 from temgymbasic.functions import (
     circular_beam,
@@ -10,6 +11,10 @@ from temgymbasic.functions import (
     x_axial_point_beam,
     get_pixel_coords,
 )
+
+
+PositiveFloat: TypeAlias = float
+NonNegativeFloat: TypeAlias = float
 
 
 class Component:
@@ -52,6 +57,14 @@ class Lens(Component):
         super().__init__(name=name, z=z)
         self._f = f
 
+    @property
+    def f(self) -> float:
+        return self._f
+
+    @f.setter
+    def f(self, f: float):
+        self._f = f
+
     @staticmethod
     def lens_matrix(f):
         '''
@@ -80,7 +93,7 @@ class Lens(Component):
         self, rays: NDArray
     ) -> Generator[Tuple[float, NDArray], None, None]:
         # Just straightforward matrix multiplication
-        yield self.z, np.matmul(self.lens_matrix(self._f), rays)
+        yield self.z, np.matmul(self.lens_matrix(self.f), rays)
 
 
 class Sample(Component):
@@ -95,14 +108,31 @@ class Sample(Component):
         yield self.z, rays
 
 
+class STEMSample(Sample):
+    def __init__(
+        self,
+        z: float,
+        overfocus: NonNegativeFloat = 0.,
+        semiconv_angle: PositiveFloat = 0.01,
+        scan_shape: Tuple[int, int] = (8, 8),
+        scan_step_yx: Tuple[PositiveFloat, PositiveFloat] = (0.01, 0.01),
+        name: str = "STEMSample"
+    ):
+        super().__init__(name=name, z=z)
+        self.overfocus = overfocus
+        self.semiconv_angle = semiconv_angle
+        self.scan_shape = scan_shape
+        self.scan_step_yx = scan_step_yx
+
+
 class Gun(Component):
     def __init__(
         self,
         z: float,
         beam_type: Literal['parallel', 'point', 'axial', 'x_axial'],
-        beam_radius: float,
-        beam_semi_angle: float,
-        beam_tilt_yx: Tuple[float, float],
+        beam_radius: Optional[float] = None,
+        beam_semi_angle: Optional[float] = None,
+        beam_tilt_yx: Tuple[float, float] = (0., 0.),
         name: str = "Gun",
     ):
         super().__init__(name=name, z=z)
@@ -138,14 +168,16 @@ class Detector(Component):
     def __init__(
         self,
         z: float,
-        detector_size: float,
-        detector_pixels: int,
+        pixel_size: float,
+        shape: Tuple[int, int],
+        scan_rotation: float = 0.,
         flip_y: bool = False,
         name: str = "Detector",
     ):
         super().__init__(name=name, z=z)
-        self.detector_size = detector_size
-        self.detector_pixels = detector_pixels
+        self.pixel_size = pixel_size
+        self.shape = shape
+        self.scan_rotation = scan_rotation
         self.flip_y = flip_y
 
     def step(
@@ -158,33 +190,35 @@ class Detector(Component):
         rays_y = rays[2]
         rays_x = rays[0]
         # Convert rays from detector positions to pixel positions
-        detector_pixel_coords_x, detector_pixel_coords_y = np.round(
+        pixel_coords_y, pixel_coords_x = np.round(
             get_pixel_coords(
                 rays_x=rays_x,
                 rays_y=rays_y,
-                size=self.detector_size,
-                pixels=self.detector_pixels,
-                flip_y=self.flip_y
+                shape=self.shape,
+                pixel_size=self.pixel_size,
+                flip_y=self.flip_y,
+                scan_rotation=self.scan_rotation,
             )
         ).astype(int)
+        sy, sx = self.shape
         mask = np.logical_and(
             np.logical_and(
-                0 <= detector_pixel_coords_y,
-                detector_pixel_coords_y < self.detector_pixels
+                0 <= pixel_coords_y,
+                pixel_coords_y < sy
             ),
             np.logical_and(
-                0 <= detector_pixel_coords_x,
-                detector_pixel_coords_x < self.detector_pixels
+                0 <= pixel_coords_x,
+                pixel_coords_x < sx
             )
         )
         image = np.zeros(
-            (self.detector_pixels, self.detector_pixels),
+            self.shape,
             dtype=int,
         )
         flat_icds = np.ravel_multi_index(
             [
-                detector_pixel_coords_y[mask],
-                detector_pixel_coords_x[mask],
+                pixel_coords_y[mask],
+                pixel_coords_x[mask],
             ],
             image.shape
         )
@@ -204,8 +238,8 @@ class Deflector(Component):
     def __init__(
         self,
         z: float,
-        defx: float = 0.5,
-        defy: float = 0.5,
+        defx: float = 0.,
+        defy: float = 0.,
         name: str = "Deflector",
     ):
         '''
@@ -274,27 +308,39 @@ class DoubleDeflector(Component):
         self._lower = lower
 
     @property
+    def height(self) -> float:
+        return abs(self._upper.z - self._lower.z)
+
+    @property
+    def upper(self) -> Deflector:
+        return self._upper
+
+    @property
+    def lower(self) -> Deflector:
+        return self._lower
+
+    @property
     def z(self):
-        return (self._upper.z + self._lower.z) / 2
+        return (self.upper.z + self.lower.z) / 2
 
     @property
     def entrance_z(self) -> float:
-        return self._upper.z
+        return self.upper.z
 
     @property
     def exit_z(self) -> float:
-        return self._lower.z
+        return self.lower.z
 
     def step(
         self, rays: NDArray
     ) -> Generator[Tuple[float, NDArray], None, None]:
-        for z, rays in self._upper.step(rays):
+        for z, rays in self.upper.step(rays):
             yield z, rays
         Model.propagate(
-            self._lower.entrance_z - z,
+            self.lower.entrance_z - self.upper.exit_z,
             rays
         )
-        yield from self._lower.step(rays)
+        yield from self.lower.step(rays)
 
 
 class Aperture(Component):
@@ -348,9 +394,10 @@ class Aperture(Component):
 
 class Model:
     def __init__(self, components: Iterable[Component]):
-        assert isinstance(components[0], Gun)
-        assert isinstance(components[-1], Detector)
         self._components = components
+        assert len(self._components) >= 2
+        assert isinstance(self.gun, Gun)
+        assert isinstance(self.detector, Detector)
 
     def __repr__(self):
         repr_string = f'[{self.__class__.__name__}]:'
@@ -440,6 +487,159 @@ class Model:
         )
 
 
+class STEMModel(Model):
+    def __init__(
+        self,
+        overfocus: Optional[NonNegativeFloat] = None,
+        semiconv_angle: Optional[PositiveFloat] = None,
+        scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
+        scan_shape: Optional[Tuple[int, int]] = None,
+    ):
+        super().__init__(self.default_components())
+        self.set_stem_params(
+            overfocus=overfocus,
+            semiconv_angle=semiconv_angle,
+            scan_step_yx=scan_step_yx,
+            scan_shape=scan_shape,
+        )
+
+    @staticmethod
+    def default_components():
+        return (
+            Gun(
+                z=1.,
+                beam_type="parallel",
+                beam_radius=0.01,
+            ),
+            DoubleDeflector(
+                upper=Deflector(z=0.775),
+                lower=Deflector(z=0.725),
+            ),
+            Lens(
+                z=0.6,
+                f=-0.2,
+            ),
+            STEMSample(
+                z=0.4,
+            ),
+            DoubleDeflector(
+                upper=Deflector(z=0.275),
+                lower=Deflector(z=0.225),
+            ),
+            Detector(
+                z=0.,
+                pixel_size=0.05,
+                shape=(128, 128),
+            ),
+        )
+
+    @property
+    def scan_coils(self) -> DoubleDeflector:
+        return self._components[1]
+
+    @property
+    def objective(self) -> Lens:
+        return self._components[2]
+
+    @property
+    def sample(self) -> STEMSample:
+        return self._components[3]
+
+    @property
+    def descan_coils(self) -> DoubleDeflector:
+        return self._components[4]
+
+    def set_stem_params(
+        self,
+        overfocus: Optional[NonNegativeFloat] = None,
+        semiconv_angle: Optional[PositiveFloat] = None,
+        scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
+        scan_shape: Optional[Tuple[int, int]] = None,
+    ):
+        if overfocus is not None:
+            self.sample.overfocus = overfocus
+        if semiconv_angle is not None:
+            self.sample.semiconv_angle = semiconv_angle
+        self.set_obj_lens_f_from_overfocus()
+        self.set_beam_radius_from_semiconv()
+        # These could be set externally, no invariants to hold
+        if scan_step_yx is not None:
+            self.sample.scan_step_yx = scan_step_yx
+        if scan_shape is not None:
+            self.sample.scan_shape = scan_shape
+
+    def set_obj_lens_f_from_overfocus(self):
+        if self.sample.overfocus < 0.:
+            raise NotImplementedError(
+                'Only support positive overfocus values (crossover above sample)'
+            )
+        # Lens f is always a negative number, and overfocus for now is always a positive number
+        self.objective.f = -1 * (self.objective.z - self.sample.z - self.sample.overfocus)
+
+    def set_beam_radius_from_semiconv(self):
+        self.gun.beam_radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
+
+    def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
+        scan_pixel_y, scan_pixel_x = scan_pixel_yx
+
+        # Distance to front focal plane from bottom deflector
+        dist_to_ffp = abs(self.scan_coils.exit_z - (self.objective.z + abs(self.objective.f)))
+        dist_to_lens = abs(self.scan_coils.exit_z - self.objective.z)
+
+        # Get the scan position in physical units
+        scan_step_y, scan_step_x = self.sample.scan_step_yx
+        sy, sx = self.sample.scan_shape
+        scan_position_x = (scan_pixel_x - sx / 2.) * scan_step_x
+        scan_position_y = (scan_pixel_y - sy / 2.) * scan_step_y
+
+        # Scan coil setting
+        sc_height = self.scan_coils.height
+        sc_defratio = -1 * (1 + sc_height / dist_to_ffp)
+
+        self.scan_coils.upper.defx = (
+            scan_position_x / (sc_height + dist_to_lens * (1 + sc_defratio))
+        )
+        self.scan_coils.lower.defx = sc_defratio * self.scan_coils.upper.defx
+
+        self.scan_coils.upper.defy = (
+            scan_position_y / (sc_height + dist_to_lens * (1 + sc_defratio))
+        )
+        self.scan_coils.lower.defy = sc_defratio * self.scan_coils.upper.defy
+
+        # Descan coil setting
+        desc_height = self.descan_coils.height
+        # desc_defratio = -1 * (1 + desc_height / dist_to_ffp)
+
+        self.descan_coils.upper.defx = (
+            -self.scan_coils.upper.defx
+            * (sc_height + dist_to_lens * (1 + sc_defratio)) / desc_height
+        )
+        self.descan_coils.lower.defx = -self.descan_coils.upper.defx
+
+        self.descan_coils.upper.defy = (
+            -self.scan_coils.upper.defy
+            * (sc_height + dist_to_lens * (1 + sc_defratio)) / desc_height
+        )
+        self.descan_coils.lower.defy = -self.descan_coils.upper.defy
+
+    def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> NDArray:
+        self.update_scan_coil_ratios(yx)
+        return self.run_to_end(num_rays)
+
+    def scan_point_iter(
+        self, num_rays: int, yx: Tuple[int, int]
+    ) -> Generator[Tuple[Component, float, NDArray], None, None]:
+        self.update_scan_coil_ratios(yx)
+        yield from self.run_iter(num_rays)
+
+    def scan(self, num_rays: int) -> Generator[Tuple[Tuple[int, int], NDArray], None, None]:
+        sy, sx = self.sample.scan_shape
+        for y in range(sy):
+            for x in range(sx):
+                pos = (y, x)
+                yield pos, self.scan_point(num_rays, pos)
+
+
 class GUIModel:
     def __init__(self, model: Model):
         self._model = model
@@ -449,6 +649,34 @@ class GUIModel:
 
 
 if __name__ == '__main__':
+    model = STEMModel()
+    model.set_stem_params(semiconv_angle=0.2)
+    rays = model.scan_point(num_rays=512, yx=(3, 5))
+    model.detector.shape = (512, 512)
+    model.detector.pixel_size = 0.002
+    image = model.detector.get_image(rays)
+
+    import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots()
+    # ax.plot(rays[0], rays[2], 'o')
+    # br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
+    # b, r = br  # noqa
+    # tl = -1 * br
+    # t, l = tl  # noqa
+    # tr = [t, r]
+    # bl = [b, l]
+    # points = np.stack((tl, tr, br, bl), axis=0)
+    # ax.fill(points[:, 1], points[:, 0], facecolor='none', edgecolor='black')
+    # ax.invert_yaxis()
+    # ax.axis('equal')
+
+    # import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.imshow(image)
+    plt.show()
+
+    exit(0)
+
     components = (
         Gun(
             z=1.,
