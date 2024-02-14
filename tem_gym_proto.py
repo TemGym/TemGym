@@ -91,7 +91,7 @@ class Rays:
             scan_rotation=scan_rotation,
             flip_y=flip_y,
         )
-        return det.get_image(self.data)
+        return det.get_image(self)
 
 
 class Component:
@@ -711,6 +711,8 @@ if __name__ == '__main__':
     model.detector.shape = (512, 512)
     model.detector.pixel_size = 0.002
     image = model.detector.get_image(rays)
+
+    image = rays.get_image((512, 512), 0.002)
 
     import matplotlib.pyplot as plt
     # fig, ax = plt.subplots()
