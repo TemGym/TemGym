@@ -25,6 +25,7 @@ class UsageError(Exception):
 @dataclass
 class Rays:
     data: np.ndarray
+    indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
 
     @property
@@ -96,6 +97,7 @@ class Rays:
                 self.propagation_matix(distance),
                 self.data,
             ),
+            indices=self.indices,
             location=self.z + distance,
         )
 
@@ -205,6 +207,7 @@ class Lens(Component):
         # Just straightforward matrix multiplication
         yield Rays(
             data=np.matmul(self.lens_matrix(self.f), rays.data),
+            indices=rays.indices,
             location=self,
         )
 
@@ -269,7 +272,7 @@ class Gun(Component):
 
         r[1, :] += self.beam_tilt_yx[1]
         r[3, :] += self.beam_tilt_yx[0]
-        return Rays(data=r, location=self)
+        return Rays(data=r, indices=np.arange(num_rays), location=self)
 
     def step(
         self, rays: Rays
@@ -406,6 +409,7 @@ class Deflector(Component):
                 self.deflector_matrix(self.defx, self.defy),
                 rays.data,
             ),
+            indices=rays.indices,
             location=self,
         )
 
@@ -510,7 +514,7 @@ class Aperture(Component):
             distance < self.radius_outer,
         )
         yield Rays(
-            data=rays.data[:, mask], location=self
+            data=rays.data[:, mask], indices=rays.indices[mask], location=self
         )
 
 
@@ -526,25 +530,29 @@ class Model:
             in pairwise(self._components)
         ), "Components must be sorted in increasing in z position with no overlap"
 
+    @property
+    def components(self) -> Iterable[Component]:
+        return self._components
+
     def __repr__(self):
         repr_string = f'[{self.__class__.__name__}]:'
-        for component in self._components:
+        for component in self.components:
             repr_string = repr_string + f'\n - {repr(component)}'
         return repr_string
 
     @property
     def gun(self) -> Gun:
-        return self._components[0]
+        return self.components[0]
 
     @property
     def detector(self) -> Detector:
-        return self._components[-1]
+        return self.components[-1]
 
     def run_iter(
         self, num_rays: int
     ) -> Generator[Rays, None, None]:
         rays = None
-        for this_component, next_component in pairwise(self._components):
+        for this_component, next_component in pairwise(self.components):
             if rays is None:
                 # At the gun
                 this_component: Gun
@@ -622,19 +630,19 @@ class STEMModel(Model):
 
     @property
     def scan_coils(self) -> DoubleDeflector:
-        return self._components[1]
+        return self.components[1]
 
     @property
     def objective(self) -> Lens:
-        return self._components[2]
+        return self.components[2]
 
     @property
     def sample(self) -> STEMSample:
-        return self._components[3]
+        return self.components[3]
 
     @property
     def descan_coils(self) -> DoubleDeflector:
-        return self._components[4]
+        return self.components[4]
 
     def set_stem_params(
         self,
@@ -745,36 +753,27 @@ if __name__ == '__main__':
     fig, ax = plt.subplots()
 
     # Variables to store the previous component's ray positions
-    prev_x_positions = None
-    prev_y_positions = None
-    prev_z = None
+    # prev_x_positions = None
+    # prev_y_positions = None
+    # prev_z = None
 
     # Iterate over components and their ray positions
     num_rays = 5
     yx = (5, 5)
-    for rays in model.scan_point_iter(num_rays=num_rays, yx=yx):
-        # Extract x and y positions from rays
-        # Assuming rays[0] are the x positions and rays[2] are the y positions
-        x_positions = rays.x
-        y_positions = rays.y
-        z = rays.z
+    all_rays = tuple(model.scan_point_iter(num_rays=num_rays, yx=yx))
 
-        # If we have previous positions, draw lines from the previous component to the current one
-        if prev_x_positions is not None and prev_y_positions is not None:
-            for prev_x, prev_y, x, y in zip(
-                prev_x_positions, prev_y_positions, x_positions, y_positions
-            ):
-                ax.plot([prev_x, x], [prev_z, z], 'g-')
+    xvals = np.stack(tuple(r.x for r in all_rays), axis=0)
+    yvals = np.stack(tuple(r.x for r in all_rays), axis=0)
+    zvals = np.asarray(tuple(r.z for r in all_rays))
+    ax.plot(xvals, zvals)
 
-        # Store the current positions as previous for the next iteration
-        prev_x_positions = x_positions
-        prev_y_positions = y_positions
-        prev_z = z
-
-        # Optional: Mark the component positions
-        ax.hlines(z, -0.5, 0.5, label=repr(rays.component))
-
-    print(y, x)
+    # Optional: Mark the component positions
+    for component in model.components:
+        if isinstance(component, DoubleDeflector):
+            ax.hlines(component.first.z, -0.5, 0.5, linestyle='--', label=repr(component.first))
+            ax.hlines(component.second.z, -0.5, 0.5, linestyle='--', label=repr(component.second))
+        else:
+            ax.hlines(component.z, -0.5, 0.5, label=repr(component))
 
     ax.set_xlabel('x position')
     ax.set_ylabel('z position')
