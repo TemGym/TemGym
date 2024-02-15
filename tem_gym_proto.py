@@ -403,8 +403,8 @@ class DoubleDeflector(Component):
         assert self.first.z < self.second.z
 
     @property
-    def height(self) -> float:
-        return abs(self._first.z - self._second.z)
+    def length(self) -> float:
+        return self._second.z - self._first.z
 
     @property
     def first(self) -> Deflector:
@@ -664,32 +664,32 @@ class STEMModel(Model):
         scan_position_y = (scan_pixel_y - sy / 2.) * scan_step_y
 
         # Scan coil setting
-        sc_height = self.scan_coils.height
-        sc_defratio = -1 * (1 + sc_height / dist_to_ffp)
+        sc_length = self.scan_coils.length
+        sc_defratio = -1 * (1 + sc_length / dist_to_ffp)
 
         self.scan_coils.first.defx = (
-            scan_position_x / (sc_height + dist_to_lens * (1 + sc_defratio))
+            scan_position_x / (sc_length + dist_to_lens * (1 + sc_defratio))
         )
         self.scan_coils.second.defx = sc_defratio * self.scan_coils.first.defx
 
         self.scan_coils.first.defy = (
-            scan_position_y / (sc_height + dist_to_lens * (1 + sc_defratio))
+            scan_position_y / (sc_length + dist_to_lens * (1 + sc_defratio))
         )
         self.scan_coils.second.defy = sc_defratio * self.scan_coils.first.defy
 
         # Descan coil setting
-        desc_height = self.descan_coils.height
-        # desc_defratio = -1 * (1 + desc_height / dist_to_ffp)
+        desc_length = self.descan_coils.length
+        # desc_defratio = -1 * (1 + desc_length / dist_to_ffp)
 
         self.descan_coils.first.defx = (
             -self.scan_coils.first.defx
-            * (sc_height + dist_to_lens * (1 + sc_defratio)) / desc_height
+            * (sc_length + dist_to_lens * (1 + sc_defratio)) / desc_length
         )
         self.descan_coils.second.defx = -self.descan_coils.first.defx
 
         self.descan_coils.first.defy = (
             -self.scan_coils.first.defy
-            * (sc_height + dist_to_lens * (1 + sc_defratio)) / desc_height
+            * (sc_length + dist_to_lens * (1 + sc_defratio)) / desc_length
         )
         self.descan_coils.second.defy = -self.descan_coils.first.defy
 
