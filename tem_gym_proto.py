@@ -493,6 +493,11 @@ class Model:
         assert len(self._components) >= 2
         assert isinstance(self.gun, Gun)
         assert isinstance(self.detector, Detector)
+        assert all(
+            next_c.entrance_z > this_c.exit_z
+            for this_c, next_c
+            in pairwise(self._components)
+        ), "Components must be sorted in increasing in z position with no overlap"
 
     def __repr__(self):
         repr_string = f'[{self.__class__.__name__}]:'
