@@ -768,17 +768,24 @@ if __name__ == '__main__':
     ax.plot(xvals, zvals)
 
     # Optional: Mark the component positions
+    extent = 1.5 * np.abs(xvals).max()
     for component in model.components:
         if isinstance(component, DoubleDeflector):
-            ax.hlines(component.first.z, -0.5, 0.5, linestyle='--', label=repr(component.first))
-            ax.hlines(component.second.z, -0.5, 0.5, linestyle='--', label=repr(component.second))
+            ax.hlines(
+                component.first.z, -extent, extent, linestyle='--'
+            )
+            ax.text(-extent, component.first.z, repr(component.first), va='bottom')
+            ax.hlines(
+                component.second.z, -extent, extent, linestyle='--'
+            )
+            ax.text(-extent, component.second.z, repr(component.second), va='bottom')
         else:
-            ax.hlines(component.z, -0.5, 0.5, label=repr(component))
+            ax.hlines(component.z, -extent, extent, label=repr(component))
+            ax.text(-extent, component.z, repr(component), va='bottom')
 
     ax.set_xlabel('x position')
     ax.set_ylabel('z position')
     ax.invert_yaxis()
-    ax.legend()
     ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
     plt.show()
 
