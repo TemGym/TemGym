@@ -18,6 +18,10 @@ PositiveFloat: TypeAlias = float
 NonNegativeFloat: TypeAlias = float
 
 
+class UsageError(Exception):
+    ...
+
+
 @dataclass
 class Rays:
     data: np.ndarray
@@ -102,6 +106,13 @@ class Component:
     @property
     def z(self) -> float:
         return self._z
+
+    @z.setter
+    def z(self, new_z: float):
+        raise UsageError("Do not set z on a component directly, use Model methods")
+
+    def _set_z(self, new_z: float):
+        self._z = new_z
 
     @property
     def entrance_z(self) -> float:
@@ -733,7 +744,7 @@ if __name__ == '__main__':
     ax.imshow(image)
     plt.show()
 
-    # exit(0)
+    exit(0)
 
     components = (
         Gun(
