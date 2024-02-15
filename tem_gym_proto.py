@@ -390,50 +390,50 @@ class Deflector(Component):
 class DoubleDeflector(Component):
     def __init__(
         self,
-        upper: Deflector,
-        lower: Deflector,
+        first: Deflector,
+        second: Deflector,
         name: str = "DoubleDeflector",
     ):
         super().__init__(
-            z=(upper.z + lower.z) / 2,
+            z=(first.z + second.z) / 2,
             name=name,
         )
-        self._upper = upper
-        self._lower = lower
+        self._first = first
+        self._second = second
 
     @property
     def height(self) -> float:
-        return abs(self._upper.z - self._lower.z)
+        return abs(self._first.z - self._second.z)
 
     @property
-    def upper(self) -> Deflector:
-        return self._upper
+    def first(self) -> Deflector:
+        return self._first
 
     @property
-    def lower(self) -> Deflector:
-        return self._lower
+    def second(self) -> Deflector:
+        return self._second
 
     @property
     def z(self):
-        return (self.upper.z + self.lower.z) / 2
+        return (self.first.z + self.second.z) / 2
 
     @property
     def entrance_z(self) -> float:
-        return self.upper.z
+        return self.first.z
 
     @property
     def exit_z(self) -> float:
-        return self.lower.z
+        return self.second.z
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        for rays in self.upper.step(rays):
+        for rays in self.first.step(rays):
             yield rays
         rays = rays.propagate(
-            self.lower.entrance_z - self.upper.exit_z,
+            self.second.entrance_z - self.first.exit_z,
         )
-        yield from self.lower.step(rays)
+        yield from self.second.step(rays)
 
 
 class Aperture(Component):
@@ -577,27 +577,27 @@ class STEMModel(Model):
     def default_components():
         return (
             Gun(
-                z=1.,
+                z=0.,
                 beam_type="parallel",
                 beam_radius=0.01,
             ),
             DoubleDeflector(
-                upper=Deflector(z=0.775),
-                lower=Deflector(z=0.725),
+                first=Deflector(z=0.225),
+                second=Deflector(z=0.275),
             ),
             Lens(
-                z=0.6,
+                z=0.4,
                 f=-0.2,
             ),
             STEMSample(
-                z=0.4,
+                z=0.6,
             ),
             DoubleDeflector(
-                upper=Deflector(z=0.275),
-                lower=Deflector(z=0.225),
+                first=Deflector(z=0.725),
+                second=Deflector(z=0.775),
             ),
             Detector(
-                z=0.,
+                z=1.,
                 pixel_size=0.05,
                 shape=(128, 128),
             ),
@@ -666,31 +666,31 @@ class STEMModel(Model):
         sc_height = self.scan_coils.height
         sc_defratio = -1 * (1 + sc_height / dist_to_ffp)
 
-        self.scan_coils.upper.defx = (
+        self.scan_coils.first.defx = (
             scan_position_x / (sc_height + dist_to_lens * (1 + sc_defratio))
         )
-        self.scan_coils.lower.defx = sc_defratio * self.scan_coils.upper.defx
+        self.scan_coils.second.defx = sc_defratio * self.scan_coils.first.defx
 
-        self.scan_coils.upper.defy = (
+        self.scan_coils.first.defy = (
             scan_position_y / (sc_height + dist_to_lens * (1 + sc_defratio))
         )
-        self.scan_coils.lower.defy = sc_defratio * self.scan_coils.upper.defy
+        self.scan_coils.second.defy = sc_defratio * self.scan_coils.first.defy
 
         # Descan coil setting
         desc_height = self.descan_coils.height
         # desc_defratio = -1 * (1 + desc_height / dist_to_ffp)
 
-        self.descan_coils.upper.defx = (
-            -self.scan_coils.upper.defx
+        self.descan_coils.first.defx = (
+            -self.scan_coils.first.defx
             * (sc_height + dist_to_lens * (1 + sc_defratio)) / desc_height
         )
-        self.descan_coils.lower.defx = -self.descan_coils.upper.defx
+        self.descan_coils.second.defx = -self.descan_coils.first.defx
 
-        self.descan_coils.upper.defy = (
-            -self.scan_coils.upper.defy
+        self.descan_coils.first.defy = (
+            -self.scan_coils.first.defy
             * (sc_height + dist_to_lens * (1 + sc_defratio)) / desc_height
         )
-        self.descan_coils.lower.defy = -self.descan_coils.upper.defy
+        self.descan_coils.second.defy = -self.descan_coils.first.defy
 
     def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> Rays:
         self.update_scan_coil_ratios(yx)
@@ -764,12 +764,12 @@ if __name__ == '__main__':
             f=-0.05,
         ),
         DoubleDeflector(
-            upper=Deflector(
+            first=Deflector(
                 z=0.275,
                 defy=0.05,
                 defx=0.05,
             ),
-            lower=Deflector(
+            second=Deflector(
                 z=0.225,
                 defy=-0.025,
                 defx=0.,
