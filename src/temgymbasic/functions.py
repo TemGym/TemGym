@@ -81,7 +81,11 @@ def circular_beam(num_rays, outer_radius):
 
     # Use the equation from stack overflow about ukrainian graves from 2014
     # to calculate the number of even rings including decimal remainder
-    num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
+    
+    if num_rays < 7:
+        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
+    else:
+        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
 
     # Get the number of integer rings
     num_circles_int = int(np.floor(num_circles_dec))
