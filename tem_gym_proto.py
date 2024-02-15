@@ -400,6 +400,7 @@ class DoubleDeflector(Component):
         )
         self._first = first
         self._second = second
+        assert self.first.z < self.second.z
 
     @property
     def height(self) -> float:
