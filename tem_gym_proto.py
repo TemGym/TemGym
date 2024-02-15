@@ -25,8 +25,27 @@ class UsageError(Exception):
 @dataclass
 class Rays:
     data: np.ndarray
-    z: float
-    component: Optional['Component']
+    location: Union[float, 'Component', Tuple['Component', ...]]
+
+    @property
+    def z(self) -> float:
+        try:
+            return self.component.z
+        except AttributeError:
+            return self.location
+
+    @property
+    def component(self) -> Optional['Component']:
+        try:
+            return self.location[-1]
+        except TypeError:
+            pass
+        try:
+            _ = self.location.z
+            return self.location
+        except AttributeError:
+            pass
+        return None
 
     @property
     def num(self):
@@ -73,12 +92,11 @@ class Rays:
 
     def propagate(self, distance: float) -> Self:
         return Rays(
-            np.matmul(
+            data=np.matmul(
                 self.propagation_matix(distance),
                 self.data,
             ),
-            self.z + distance,
-            None,
+            location=self.z + distance,
         )
 
     def get_image(
@@ -182,9 +200,8 @@ class Lens(Component):
     ) -> Generator[Rays, None, None]:
         # Just straightforward matrix multiplication
         yield Rays(
-            np.matmul(self.lens_matrix(self.f), rays.data),
-            self.z,
-            self,
+            data=np.matmul(self.lens_matrix(self.f), rays.data),
+            location=self,
         )
 
 
@@ -197,6 +214,7 @@ class Sample(Component):
     ) -> Generator[Rays, None, None]:
         # Sample has no effect, yet
         # Could implement ray intensity / attenuation ??
+        rays.location = self
         yield rays
 
 
@@ -247,12 +265,13 @@ class Gun(Component):
 
         r[1, :] += self.beam_tilt_yx[1]
         r[3, :] += self.beam_tilt_yx[0]
-        return Rays(r, self.z, self)
+        return Rays(data=r, location=self)
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Gun has no effect after get_rays was called
+        rays.location = self
         yield rays
 
 
@@ -276,6 +295,7 @@ class Detector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Detector has no effect on rays
+        rays.location = self
         yield rays
 
     def get_image(self, rays: Rays) -> NDArray:
@@ -378,12 +398,11 @@ class Deflector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         yield Rays(
-            np.matmul(
+            data=np.matmul(
                 self.deflector_matrix(self.defx, self.defy),
                 rays.data,
             ),
-            self.z,
-            self,
+            location=self,
         )
 
 
@@ -430,11 +449,14 @@ class DoubleDeflector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         for rays in self.first.step(rays):
+            rays.location = (self, self.first)
             yield rays
         rays = rays.propagate(
             self.second.entrance_z - self.first.exit_z,
         )
-        yield from self.second.step(rays)
+        for rays in self.second.step(rays):
+            rays.location = (self, self.second)
+            yield rays
 
 
 class Aperture(Component):
@@ -484,7 +506,7 @@ class Aperture(Component):
             distance < self.radius_outer,
         )
         yield Rays(
-            rays.data[:, mask], self.z, self
+            data=rays.data[:, mask], location=self
         )
 
 
@@ -529,10 +551,10 @@ class Model:
                 next_component.entrance_z - this_component.exit_z,
             )
         # At detector plane
-        yield Rays(rays.data, next_component.z, next_component)
+        next_component: Detector
+        yield from next_component.step(rays)
 
-    def run_to_end(self, num_rays: int) -> Optional[Rays]:
-        rays = None
+    def run_to_end(self, num_rays: int) -> Rays:
         for rays in self.run_iter(num_rays):
             pass
         return rays
@@ -541,21 +563,11 @@ class Model:
         self,
         component: Component,
         num_rays: int,
-        sub_plane: Optional[int] = None,
-    ) -> Union[Rays, Tuple[Rays, ...]]:
-        planes = []
+    ) -> Optional[Rays]:
         for rays in self.run_iter(num_rays):
-            if len(planes) > 0 and rays.component is not component:
-                break
             if rays.component is component:
-                planes.append(rays)
-                if sub_plane is not None and len(planes) == (sub_plane + 1):
-                    break
-        if len(planes) == 1:
-            return planes[0]
-        elif sub_plane is not None:
-            return planes[sub_plane]
-        return tuple(planes)
+                return rays
+        return None
 
 
 class STEMModel(Model):
