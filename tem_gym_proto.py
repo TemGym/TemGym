@@ -241,6 +241,15 @@ class STEMSample(Sample):
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
 
+    def scan_position(self, yx: Tuple[int, int]) -> Tuple[float, float]:
+        y, x = yx
+        # Get the scan position in physical units
+        scan_step_y, scan_step_x = self.scan_step_yx
+        sy, sx = self.scan_shape
+        scan_position_x = (x - sx / 2.) * scan_step_x
+        scan_position_y = (y - sy / 2.) * scan_step_y
+        return (scan_position_y, scan_position_x)
+
 
 class Gun(Component):
     def __init__(
@@ -611,7 +620,7 @@ class STEMModel(Model):
                 second=Deflector(z=0.275),
             ),
             Lens(
-                z=0.4,
+                z=0.5,
                 f=-0.2,
             ),
             STEMSample(
@@ -675,17 +684,11 @@ class STEMModel(Model):
         self.gun.beam_radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
 
     def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
-        scan_pixel_y, scan_pixel_x = scan_pixel_yx
-
         # Distance to front focal plane from bottom deflector
-        dist_to_ffp = abs(self.scan_coils.exit_z - (self.objective.z + abs(self.objective.f)))
-        dist_to_lens = abs(self.scan_coils.exit_z - self.objective.z)
+        dist_to_lens = self.objective.z - self.scan_coils.exit_z
+        dist_to_ffp = dist_to_lens - abs(self.objective.f)
 
-        # Get the scan position in physical units
-        scan_step_y, scan_step_x = self.sample.scan_step_yx
-        sy, sx = self.sample.scan_shape
-        scan_position_x = (scan_pixel_x - sx / 2.) * scan_step_x
-        scan_position_y = (scan_pixel_y - sy / 2.) * scan_step_y
+        scan_position_y, scan_position_x = self.sample.scan_position(scan_pixel_yx)
 
         # Scan coil setting
         sc_length = self.scan_coils.length
@@ -782,6 +785,14 @@ if __name__ == '__main__':
         else:
             ax.hlines(component.z, -extent, extent, label=repr(component))
             ax.text(-extent, component.z, repr(component), va='bottom')
+
+    ax.hlines(
+        model.objective.z - model.objective.f, -extent, extent, linestyle=':'
+    )
+
+    ax.axvline(color='black', linestyle=":", alpha=0.3)
+    _, scan_pos_x = model.sample.scan_position(yx)
+    ax.plot([scan_pos_x], [model.sample.z], 'ko')
 
     ax.set_xlabel('x position')
     ax.set_ylabel('z position')
