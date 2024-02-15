@@ -615,7 +615,6 @@ class STEMModel(Model):
                 shape=(128, 128),
             ),
         )
-
     @property
     def scan_coils(self) -> DoubleDeflector:
         return self._components[1]
@@ -735,11 +734,53 @@ class GUIModel:
 
 if __name__ == '__main__':
     model = STEMModel()
-    model.set_stem_params(semiconv_angle=0.2)
-    rays = model.scan_point(num_rays=512, yx=(3, 5))
-    model.detector.shape = (512, 512)
-    model.detector.pixel_size = 0.002
-    image = model.detector.get_image(rays)
+    model.detector.shape = (11, 11)
+    model.detector.pixel_size = 0.1
+    model.set_stem_params(semiconv_angle=0.01)
+    
+    num_rays = 1
+    yx = [5, 5]
+    
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+
+    # Variables to store the previous component's ray positions
+    prev_x_positions = None
+    prev_y_positions = None
+    prev_z = None
+
+    # Iterate over components and their ray positions
+    for component, z, rays in model.scan_point_iter(num_rays = num_rays, yx = yx):
+        # Extract x and y positions from rays
+        # Assuming rays[0] are the x positions and rays[2] are the y positions
+        x_positions = rays[0]
+        y_positions = rays[2]
+    
+        # If we have previous positions, draw lines from the previous component to the current one
+        if prev_x_positions is not None and prev_y_positions is not None:
+            for prev_x, prev_y, x, y in zip(prev_x_positions, prev_y_positions, x_positions, y_positions):
+                ax.plot([prev_x, x], [prev_z, z], 'g-')
+    
+        # Store the current positions as previous for the next iteration
+        prev_x_positions = x_positions
+        prev_y_positions = y_positions
+        prev_z = z
+    
+        # Optional: Mark the component positions
+        ax.hlines(z, -0.5, 0.5, label=f'{component._name} @ z = {z}')
+        
+    print(y, x)
+    
+    ax.set_xlabel('z position')
+    ax.set_ylabel('x position')
+    ax.legend()
+    ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
+    plt.show()
+
+            
+    # model.detector.shape = (512, 512)
+    # model.detector.pixel_size = 0.002
+    # image = model.detector.get_image(rays)
 
     image = rays.get_image((512, 512), 0.002)
 
@@ -758,9 +799,9 @@ if __name__ == '__main__':
     # ax.axis('equal')
 
     # import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-    ax.imshow(image)
-    plt.show()
+    # fig, ax = plt.subplots()
+    # ax.imshow(image)
+    # plt.show()
 
     exit(0)
 
