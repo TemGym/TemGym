@@ -1,7 +1,8 @@
-from typing import Generator, Iterable, Tuple, Optional, Union, Literal, Type, TypeAlias
+from typing import Generator, Iterable, Tuple, Optional, Union, Literal, Type, TypeAlias, Self
 from itertools import pairwise
 import numpy as np
 from numpy.typing import NDArray
+from dataclasses import dataclass
 
 
 from temgymbasic.functions import (
@@ -15,6 +16,82 @@ from temgymbasic.functions import (
 
 PositiveFloat: TypeAlias = float
 NonNegativeFloat: TypeAlias = float
+
+
+@dataclass
+class Rays:
+    data: np.ndarray
+    z: float
+    component: Optional['Component']
+
+    @property
+    def num(self):
+        return self.data.shape[1]
+
+    @property
+    def x(self):
+        return self.data[0, :]
+
+    @property
+    def y(self):
+        return self.data[2, :]
+
+    @property
+    def dx(self):
+        return self.data[1, :]
+
+    @property
+    def dy(self):
+        return self.data[3, :]
+
+    @staticmethod
+    def propagation_matix(z):
+        '''
+        Propagation matrix
+
+        Parameters
+        ----------
+        z : float
+            Distance to propagate rays
+
+        Returns
+        -------
+        ndarray
+            Propagation matrix
+        '''
+        return np.array(
+            [[1, z, 0, 0, 0],
+             [0, 1, 0, 0, 0],
+             [0, 0, 1, z, 0],
+             [0, 0, 0, 1, 0],
+             [0, 0, 0, 0, 1]]
+        )
+
+    def propagate(self, distance: float) -> Self:
+        return Rays(
+            np.matmul(
+                self.propagation_matix(distance),
+                self.data,
+            ),
+            self.z + distance,
+            None,
+        )
+
+    def get_image(
+        self,
+        shape: Tuple[int, int],
+        pixel_size: PositiveFloat,
+        flip_y: bool = False,
+        scan_rotation: float = 0.
+    ):
+        det = Detector(
+            z=self.z,
+            pixel_size=pixel_size,
+            shape=shape,
+            scan_rotation=scan_rotation,
+            flip_y=flip_y,
+        )
+        return det.get_image(self)
 
 
 class Component:
@@ -38,8 +115,8 @@ class Component:
         return f'{self.__class__.__name__}: {self._name} @ z = {self._z}'
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
         raise NotImplementedError
 
     @staticmethod
@@ -90,10 +167,14 @@ class Lens(Component):
         )
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
         # Just straightforward matrix multiplication
-        yield self.z, np.matmul(self.lens_matrix(self.f), rays)
+        yield Rays(
+            np.matmul(self.lens_matrix(self.f), rays.data),
+            self.z,
+            self,
+        )
 
 
 class Sample(Component):
@@ -101,11 +182,11 @@ class Sample(Component):
         super().__init__(name=name, z=z)
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
         # Sample has no effect, yet
         # Could implement ray intensity / attenuation ??
-        yield self.z, rays
+        yield rays
 
 
 class STEMSample(Sample):
@@ -141,7 +222,7 @@ class Gun(Component):
         self.beam_semi_angle = beam_semi_angle
         self.beam_tilt_yx = beam_tilt_yx
 
-    def get_rays(self, num_rays: int) -> NDArray:
+    def get_rays(self, num_rays: int) -> Rays:
         if self.beam_type == 'parallel':
             r, spot_indices = circular_beam(num_rays, self.beam_radius)
         elif self.beam_type == 'point':
@@ -155,13 +236,13 @@ class Gun(Component):
 
         r[1, :] += self.beam_tilt_yx[1]
         r[3, :] += self.beam_tilt_yx[0]
-        return r
+        return Rays(r, self.z, self)
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
         # Gun has no effect after get_rays was called
-        yield self.z, rays
+        yield rays
 
 
 class Detector(Component):
@@ -181,19 +262,17 @@ class Detector(Component):
         self.flip_y = flip_y
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
         # Detector has no effect on rays
-        yield self.z, rays
+        yield rays
 
-    def get_image(self, rays: NDArray) -> NDArray:
-        rays_y = rays[2]
-        rays_x = rays[0]
+    def get_image(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = np.round(
             get_pixel_coords(
-                rays_x=rays_x,
-                rays_y=rays_y,
+                rays_x=rays.x,
+                rays_y=rays.y,
                 shape=self.shape,
                 pixel_size=self.pixel_size,
                 flip_y=self.flip_y,
@@ -285,11 +364,15 @@ class Deflector(Component):
         )
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
-        yield self.z, np.matmul(
-            self.deflector_matrix(self.defx, self.defy),
-            rays
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        yield Rays(
+            np.matmul(
+                self.deflector_matrix(self.defx, self.defy),
+                rays.data,
+            ),
+            self.z,
+            self,
         )
 
 
@@ -332,13 +415,12 @@ class DoubleDeflector(Component):
         return self.lower.z
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
-        for z, rays in self.upper.step(rays):
-            yield z, rays
-        Model.propagate(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        for rays in self.upper.step(rays):
+            yield rays
+        rays = rays.propagate(
             self.lower.entrance_z - self.upper.exit_z,
-            rays
         )
         yield from self.lower.step(rays)
 
@@ -379,9 +461,9 @@ class Aperture(Component):
         self.radius_outer = radius_outer
 
     def step(
-        self, rays: NDArray
-    ) -> Generator[Tuple[float, NDArray], None, None]:
-        pos_x, pos_y = rays[0], rays[2]
+        self, rays: Rays,
+    ) -> Generator[Rays, None, None]:
+        pos_x, pos_y = rays.x, rays.y
         distance = np.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
@@ -389,7 +471,9 @@ class Aperture(Component):
             distance >= self.radius_inner,
             distance < self.radius_outer,
         )
-        yield self.z, rays[:, mask]
+        yield Rays(
+            rays.data[:, mask], self.z, self
+        )
 
 
 class Model:
@@ -415,24 +499,24 @@ class Model:
 
     def run_iter(
         self, num_rays: int
-    ) -> Generator[Tuple[Component, float, NDArray], None, None]:
+    ) -> Generator[Rays, None, None]:
         rays = None
         for this_component, next_component in pairwise(self._components):
             if rays is None:
                 # At the gun
+                this_component: Gun
                 rays = this_component.get_rays(num_rays)
-            for rays_z, new_rays in this_component.step(rays):
-                yield this_component, rays_z, new_rays
-            rays = self.propagate(
+            for rays in this_component.step(rays):
+                yield rays
+            rays = rays.propagate(
                 next_component.entrance_z - this_component.exit_z,
-                new_rays
             )
         # At detector plane
-        yield next_component, next_component.z, rays
+        yield Rays(rays.data, next_component.z, next_component)
 
-    def run_to_end(self, num_rays: int) -> Optional[NDArray]:
+    def run_to_end(self, num_rays: int) -> Optional[Rays]:
         rays = None
-        for _, _, rays in self.run_iter(num_rays):
+        for rays in self.run_iter(num_rays):
             pass
         return rays
 
@@ -441,12 +525,12 @@ class Model:
         component: Component,
         num_rays: int,
         sub_plane: Optional[int] = None,
-    ) -> Union[NDArray, Tuple[NDArray, ...]]:
+    ) -> Union[Rays, Tuple[Rays, ...]]:
         planes = []
-        for this_component, _, rays in self.run_iter(num_rays):
-            if len(planes) > 0 and this_component is not component:
+        for rays in self.run_iter(num_rays):
+            if len(planes) > 0 and rays.component is not component:
                 break
-            if this_component is component:
+            if rays.component is component:
                 planes.append(rays)
                 if sub_plane is not None and len(planes) == (sub_plane + 1):
                     break
@@ -455,36 +539,6 @@ class Model:
         elif sub_plane is not None:
             return planes[sub_plane]
         return tuple(planes)
-
-    @staticmethod
-    def propagation_matix(z):
-        '''
-        Propagation matrix
-
-        Parameters
-        ----------
-        z : float
-            Distance to propagate rays
-
-        Returns
-        -------
-        ndarray
-            Propagation matrix
-        '''
-        return np.array(
-            [[1, z, 0, 0, 0],
-             [0, 1, 0, 0, 0],
-             [0, 0, 1, z, 0],
-             [0, 0, 0, 1, 0],
-             [0, 0, 0, 0, 1]]
-        )
-
-    @staticmethod
-    def propagate(distance: float, rays: NDArray) -> NDArray:
-        return np.matmul(
-            Model.propagation_matix(distance),
-            rays,
-        )
 
 
 class STEMModel(Model):
@@ -621,17 +675,19 @@ class STEMModel(Model):
         )
         self.descan_coils.lower.defy = -self.descan_coils.upper.defy
 
-    def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> NDArray:
+    def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> Rays:
         self.update_scan_coil_ratios(yx)
         return self.run_to_end(num_rays)
 
     def scan_point_iter(
         self, num_rays: int, yx: Tuple[int, int]
-    ) -> Generator[Tuple[Component, float, NDArray], None, None]:
+    ) -> Generator[Rays, None, None]:
         self.update_scan_coil_ratios(yx)
         yield from self.run_iter(num_rays)
 
-    def scan(self, num_rays: int) -> Generator[Tuple[Tuple[int, int], NDArray], None, None]:
+    def scan(
+        self, num_rays: int
+    ) -> Generator[Tuple[Tuple[int, int], Rays], None, None]:
         sy, sx = self.sample.scan_shape
         for y in range(sy):
             for x in range(sx):
@@ -697,9 +753,11 @@ if __name__ == '__main__':
     # model.detector.pixel_size = 0.002
     # image = model.detector.get_image(rays)
 
+    image = rays.get_image((512, 512), 0.002)
+
     import matplotlib.pyplot as plt
     # fig, ax = plt.subplots()
-    # ax.plot(rays[0], rays[2], 'o')
+    # ax.plot(rays.x, rays.y, 'o')
     # br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
     # b, r = br  # noqa
     # tl = -1 * br
@@ -718,53 +776,67 @@ if __name__ == '__main__':
 
     # exit(0)
 
-    # components = (
-    #     Gun(
-    #         z=1.,
-    #         beam_type="parallel",
-    #         beam_radius=0.01,
-    #         beam_semi_angle=0.001,
-    #         beam_tilt_yx=(0., 0.),
-    #     ),
-    #     Lens(
-    #         z=0.5,
-    #         f=-0.2,
-    #     ),
-    #     DoubleDeflector(
-    #         upper=Deflector(
-    #             z=0.275,
-    #             defy=0.05,
-    #             defx=0.05,
-    #         ),
-    #         lower=Deflector(
-    #             z=0.225,
-    #             defy=-0.025,
-    #             defx=0.,
-    #         ),
-    #     ),
-    #     Sample(
-    #         z=0.2
-    #     ),
-    #     Aperture(
-    #         0.15,
-    #         radius_inner=0.,
-    #         radius_outer=0.0075,
-    #     ),
-    #     Detector(
-    #         z=0.,
-    #         shape=[128, 128],
-    #         pixel_size=0.5/128,
-    #     ),
-    # )
-    # model = Model(components)
-    # print(model)
+    components = (
+        Gun(
+            z=1.,
+            beam_type="parallel",
+            beam_radius=0.03,
+            beam_semi_angle=0.001,
+            beam_tilt_yx=(0., 0.),
+        ),
+        Lens(
+            z=0.5,
+            f=-0.05,
+        ),
+        DoubleDeflector(
+            upper=Deflector(
+                z=0.275,
+                defy=0.05,
+                defx=0.05,
+            ),
+            lower=Deflector(
+                z=0.225,
+                defy=-0.025,
+                defx=0.,
+            ),
+        ),
+        Sample(
+            z=0.2
+        ),
+        Aperture(
+            0.15,
+            radius_inner=0.,
+            radius_outer=0.0075,
+        ),
+        Detector(
+            z=0.,
+            pixel_size=0.01,
+            shape=(128, 128),
+        ),
+    )
+    model = Model(components)
+    print(model)
 
-    # det_rays = model.run_to_component(model.detector, 512)
-    # image = model.detector.get_image(det_rays)
+    rays = model.run_to_component(model.detector, 512)
+    image = model.detector.get_image(rays)
 
-    # import matplotlib.pyplot as plt
-    # plt.imshow(image)
-    # plt.show()
+    import matplotlib.pyplot as plt
+    plt.imshow(image)
+
+    fig, ax = plt.subplots()
+    ax.plot(rays.x, rays.y, 'o')
+    br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
+    b, r = br  # noqa
+    tl = -1 * br
+    t, l = tl  # noqa
+    tr = [t, r]
+    bl = [b, l]
+    points = np.stack((tl, tr, br, bl), axis=0)
+    ax.fill(points[:, 1], points[:, 0], facecolor='none', edgecolor='black')
+    ax.invert_yaxis()
+    ax.axis('equal')
+
+    plt.show()
 
     # rays_y = det_rays[2]
     # rays_x = det_rays[0]
