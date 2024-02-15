@@ -708,41 +708,52 @@ class STEMModel(Model):
     def set_beam_radius_from_semiconv(self):
         self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
 
+    @staticmethod
+    def _set_coils_for_position(
+        scan_coil_length: float,
+        descan_coil_length: float,
+        position: float,
+        dist_to_lens: float,
+        defratio: float,
+    ):
+        s_first_def = (
+            position / (scan_coil_length + dist_to_lens * (1 + defratio))
+        )
+        s_second_def = defratio * s_first_def
+
+        d_first_def = (
+            -s_first_def
+            * (scan_coil_length + dist_to_lens * (1 + defratio)) / descan_coil_length
+        )
+        d_second_def = -d_first_def
+        return (s_first_def, s_second_def, d_first_def, d_second_def)
+
     def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
         # Distance to front focal plane from bottom deflector
         dist_to_lens = self.objective.z - self.scan_coils.exit_z
         dist_to_ffp = dist_to_lens - abs(self.objective.f)
-
+        defratio = -1 * (1 + self.scan_coils.length / dist_to_ffp)
         scan_position_y, scan_position_x = self.sample.scan_position(scan_pixel_yx)
 
-        # Scan coil setting
-        sc_length = self.scan_coils.length
-        sc_defratio = -1 * (1 + sc_length / dist_to_ffp)
-
-        self.scan_coils.first.defx = (
-            scan_position_x / (sc_length + dist_to_lens * (1 + sc_defratio))
+        (
+            self.scan_coils.first.defx,
+            self.scan_coils.second.defx,
+            self.descan_coils.first.defx,
+            self.descan_coils.second.defx,
+        ) = self._set_coils_for_position(
+            self.scan_coils.length, self.descan_coils.length,
+            scan_position_x, dist_to_lens, defratio
         )
-        self.scan_coils.second.defx = sc_defratio * self.scan_coils.first.defx
 
-        self.scan_coils.first.defy = (
-            scan_position_y / (sc_length + dist_to_lens * (1 + sc_defratio))
+        (
+            self.scan_coils.first.defy,
+            self.scan_coils.second.defy,
+            self.descan_coils.first.defy,
+            self.descan_coils.second.defy,
+        ) = self._set_coils_for_position(
+            self.scan_coils.length, self.descan_coils.length,
+            scan_position_y, dist_to_lens, defratio
         )
-        self.scan_coils.second.defy = sc_defratio * self.scan_coils.first.defy
-
-        # Descan coil setting
-        desc_length = self.descan_coils.length
-
-        self.descan_coils.first.defx = (
-            -self.scan_coils.first.defx
-            * (sc_length + dist_to_lens * (1 + sc_defratio)) / desc_length
-        )
-        self.descan_coils.second.defx = -self.descan_coils.first.defx
-
-        self.descan_coils.first.defy = (
-            -self.scan_coils.first.defy
-            * (sc_length + dist_to_lens * (1 + sc_defratio)) / desc_length
-        )
-        self.descan_coils.second.defy = -self.descan_coils.first.defy
 
     def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> Rays:
         self.update_scan_coil_ratios(yx)
