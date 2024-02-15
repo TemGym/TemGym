@@ -612,22 +612,25 @@ class Model:
 class STEMModel(Model):
     def __init__(
         self,
-        overfocus: Optional[NonNegativeFloat] = None,
-        semiconv_angle: Optional[PositiveFloat] = None,
-        scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
-        scan_shape: Optional[Tuple[int, int]] = None,
+        semiconv_angle: PositiveFloat,
+        scan_step_yx: Tuple[PositiveFloat, PositiveFloat],
+        scan_shape: Tuple[int, int],
+        overfocus: float = 0.,
     ):
-        super().__init__(self.default_components())
+        super().__init__(self.default_components(
+            semiconv_angle,
+            scan_step_yx,
+            scan_shape,
+        ))
         assert isinstance(self.source, ParallelBeam)
-        self.set_stem_params(
-            overfocus=overfocus,
-            semiconv_angle=semiconv_angle,
-            scan_step_yx=scan_step_yx,
-            scan_shape=scan_shape,
-        )
+        self.set_stem_params(overfocus=overfocus)
 
     @staticmethod
-    def default_components():
+    def default_components(
+        semiconv_angle: PositiveFloat,
+        scan_step_yx: Tuple[PositiveFloat, PositiveFloat],
+        scan_shape: Tuple[int, int],
+    ):
         return (
             ParallelBeam(
                 z=0.,
@@ -639,10 +642,13 @@ class STEMModel(Model):
             ),
             Lens(
                 z=0.5,
-                f=-0.2,
+                f=0.2,
             ),
             STEMSample(
                 z=0.6,
+                semiconv_angle=semiconv_angle,
+                scan_shape=scan_shape,
+                scan_step_yx=scan_step_yx,
             ),
             DoubleDeflector(
                 first=Deflector(z=0.725),
@@ -677,7 +683,7 @@ class STEMModel(Model):
 
     def set_stem_params(
         self,
-        overfocus: Optional[NonNegativeFloat] = None,
+        overfocus: Optional[float] = None,
         semiconv_angle: Optional[PositiveFloat] = None,
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
@@ -695,12 +701,9 @@ class STEMModel(Model):
             self.sample.scan_shape = scan_shape
 
     def set_obj_lens_f_from_overfocus(self):
-        if self.sample.overfocus < 0.:
-            raise NotImplementedError(
-                'Only support positive overfocus values (crossover above sample)'
-            )
-        # Lens f is always a negative number, and overfocus for now is always a positive number
-        self.objective.f = -1 * (self.objective.z - self.sample.z - self.sample.overfocus)
+        if self.sample.overfocus > (self.sample.z - self.objective.z):
+            raise ValueError("Overfocus point is before lens")
+        self.objective.f = self.sample.z - (self.objective.z + self.sample.overfocus)
 
     def set_beam_radius_from_semiconv(self):
         self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
@@ -728,7 +731,6 @@ class STEMModel(Model):
 
         # Descan coil setting
         desc_length = self.descan_coils.length
-        # desc_defratio = -1 * (1 + desc_length / dist_to_ffp)
 
         self.descan_coils.first.defx = (
             -self.scan_coils.first.defx
@@ -771,8 +773,11 @@ class GUIModel:
 
 
 if __name__ == '__main__':
-    model = STEMModel()
-    model.set_stem_params(semiconv_angle=0.01)
+    model = STEMModel(
+        semiconv_angle=0.01,
+        scan_shape=(8, 8),
+        scan_step_yx=(0.01, 0.01),
+    )
 
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots()
@@ -809,7 +814,7 @@ if __name__ == '__main__':
             ax.text(-extent, component.z, repr(component), va='bottom')
 
     ax.hlines(
-        model.objective.z - model.objective.f, -extent, extent, linestyle=':'
+        model.objective.z - abs(model.objective.f), -extent, extent, linestyle=':'
     )
 
     ax.axvline(color='black', linestyle=":", alpha=0.3)
@@ -850,12 +855,10 @@ if __name__ == '__main__':
     exit(0)
 
     components = (
-        Gun(
+        ParallelBeam(
             z=1.,
-            beam_type="parallel",
-            beam_radius=0.03,
-            beam_semi_angle=0.001,
-            beam_tilt_yx=(0., 0.),
+            radius=0.03,
+            tilt_yx=(0., 0.),
         ),
         Lens(
             z=0.5,
