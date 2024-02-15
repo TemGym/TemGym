@@ -1,4 +1,5 @@
-from typing import Generator, Iterable, Tuple, Optional, Union, Literal, Type, TypeAlias, Self
+import abc
+from typing import Generator, Iterable, Tuple, Optional, Union, Type, TypeAlias, Self
 from itertools import pairwise
 import numpy as np
 from numpy.typing import NDArray
@@ -8,8 +9,6 @@ from dataclasses import dataclass
 from temgymbasic.functions import (
     circular_beam,
     point_beam,
-    axial_point_beam,
-    x_axial_point_beam,
     get_pixel_coords,
 )
 
@@ -118,7 +117,7 @@ class Rays:
         return det.get_image(self)
 
 
-class Component:
+class Component(abc.ABC):
     def __init__(self, z: float, name: str):
         self._name = name
         self._z = z
@@ -251,44 +250,63 @@ class STEMSample(Sample):
         return (scan_position_y, scan_position_x)
 
 
-class Gun(Component):
+class Source(Component):
     def __init__(
-        self,
-        z: float,
-        beam_type: Literal['parallel', 'point', 'axial', 'x_axial'],
-        beam_radius: Optional[float] = None,
-        beam_semi_angle: Optional[float] = None,
-        beam_tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "Gun",
+        self, z: float, tilt_yx: Tuple[float, float] = (0., 0.), name: str = "Source"
     ):
-        super().__init__(name=name, z=z)
-        self.beam_type = beam_type
-        self.beam_radius = beam_radius
-        self.beam_semi_angle = beam_semi_angle
-        self.beam_tilt_yx = beam_tilt_yx
+        super().__init__(z=z, name=name)
+        self.tilt_yx = tilt_yx
 
+    @abc.abstractmethod
     def get_rays(self, num_rays: int) -> Rays:
-        if self.beam_type == 'parallel':
-            r, spot_indices = circular_beam(num_rays, self.beam_radius)
-        elif self.beam_type == 'point':
-            r, spot_indices = point_beam(num_rays, self.beam_semi_angle)
-        elif self.beam_type == 'axial':
-            r = axial_point_beam(num_rays, self.beam_semi_angle)
-        elif self.beam_type == 'x_axial':
-            r = x_axial_point_beam(num_rays, self.beam_semi_angle)
-        else:
-            raise ValueError()
+        raise NotImplementedError
 
-        r[1, :] += self.beam_tilt_yx[1]
-        r[3, :] += self.beam_tilt_yx[0]
-        return Rays(data=r, indices=np.arange(num_rays), location=self)
+    def _make_rays(self, r: NDArray, indices: Optional[NDArray] = None) -> Rays:
+        if indices is None:
+            indices = np.arange(r.shape[1])
+        r[1, :] += self.tilt_yx[1]
+        r[3, :] += self.tilt_yx[0]
+        return Rays(data=r, indices=indices, location=self)
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        # Gun has no effect after get_rays was called
+        # Source has no effect after get_rays was called
         rays.location = self
         yield rays
+
+
+class ParallelBeam(Source):
+    def __init__(
+        self,
+        z: float,
+        radius: float = None,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: str = "ParallelBeam",
+    ):
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name)
+        self.radius = radius
+
+    def get_rays(self, num_rays: int) -> Rays:
+        r, _ = circular_beam(num_rays, self.radius)
+        return self._make_rays(r)
+
+
+class PointSource(Component):
+    def __init__(
+        self,
+        z: float,
+        semi_angle: Optional[float] = None,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: str = "PointSource",
+    ):
+        super().__init__(name=name, z=z)
+        self.semi_angle = semi_angle
+        self.tilt_yx = tilt_yx
+
+    def get_rays(self, num_rays: int) -> Rays:
+        r, _ = point_beam(num_rays, self.semi_angle)
+        return self._make_rays(r)
 
 
 class Detector(Component):
@@ -531,7 +549,7 @@ class Model:
     def __init__(self, components: Iterable[Component]):
         self._components = components
         assert len(self._components) >= 2
-        assert isinstance(self.gun, Gun)
+        assert isinstance(self.source, Source)
         assert isinstance(self.detector, Detector)
         assert all(
             next_c.entrance_z > this_c.exit_z
@@ -550,7 +568,7 @@ class Model:
         return repr_string
 
     @property
-    def gun(self) -> Gun:
+    def source(self) -> Source:
         return self.components[0]
 
     @property
@@ -564,7 +582,7 @@ class Model:
         for this_component, next_component in pairwise(self.components):
             if rays is None:
                 # At the gun
-                this_component: Gun
+                this_component: Source
                 rays = this_component.get_rays(num_rays)
             for rays in this_component.step(rays):
                 yield rays
@@ -600,6 +618,7 @@ class STEMModel(Model):
         scan_shape: Optional[Tuple[int, int]] = None,
     ):
         super().__init__(self.default_components())
+        assert isinstance(self.source, ParallelBeam)
         self.set_stem_params(
             overfocus=overfocus,
             semiconv_angle=semiconv_angle,
@@ -610,10 +629,9 @@ class STEMModel(Model):
     @staticmethod
     def default_components():
         return (
-            Gun(
+            ParallelBeam(
                 z=0.,
-                beam_type="parallel",
-                beam_radius=0.01,
+                radius=0.01,
             ),
             DoubleDeflector(
                 first=Deflector(z=0.225),
@@ -636,6 +654,10 @@ class STEMModel(Model):
                 shape=(128, 128),
             ),
         )
+
+    @property
+    def source(self) -> ParallelBeam:
+        return self.components[0]
 
     @property
     def scan_coils(self) -> DoubleDeflector:
@@ -681,7 +703,7 @@ class STEMModel(Model):
         self.objective.f = -1 * (self.objective.z - self.sample.z - self.sample.overfocus)
 
     def set_beam_radius_from_semiconv(self):
-        self.gun.beam_radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
+        self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
 
     def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
         # Distance to front focal plane from bottom deflector
