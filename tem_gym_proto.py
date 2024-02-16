@@ -21,6 +21,10 @@ class UsageError(Exception):
     ...
 
 
+class InvalidModelError(Exception):
+    ...
+
+
 @dataclass
 class Rays:
     data: np.ndarray
@@ -467,7 +471,8 @@ class DoubleDeflector(Component):
         self._validate_component()
 
     def _validate_component(self):
-        assert self.first.z < self.second.z, "First deflector must be before second"
+        if self.first.z >= self.second.z:
+            raise InvalidModelError("First deflector must be before second")
 
     @property
     def length(self) -> float:
@@ -626,13 +631,18 @@ class Model:
         self._validate_components()
 
     def _validate_components(self):
-        assert len(self._components) >= 1, "Must have at least one component"
-        assert isinstance(self.source, Source), "First component must always be a Source"
-        assert all(
-            next_c.entrance_z > this_c.exit_z
+        if len(self._components) <= 1:
+            raise InvalidModelError("Must have at least one component")
+        if not isinstance(self.source, Source):
+            raise InvalidModelError("First component must always be a Source")
+        if any(
+            next_c.entrance_z <= this_c.exit_z
             for this_c, next_c
             in pairwise(self._components)
-        ), "Components must be sorted in increasing in z position with no overlap"
+        ):
+            raise InvalidModelError(
+                "Components must be sorted in increasing in z position with no overlap"
+            )
         for c in self._components:
             c._validate_component()
 
@@ -660,10 +670,20 @@ class Model:
     def last(self) -> Detector:
         return self.components[-1]
 
-    def move_component(self, component: Component, z: float):
+    def move_component(
+        self,
+        component: Component,
+        z: float,
+    ):
+        old_z = component.z
         component._set_z(z)
         self._sort_components()
-        self._validate_components()
+        try:
+            self._validate_components()
+        except InvalidModelError as err:
+            # Unwind the change but reraise
+            self.move_component(component, old_z)
+            raise err from None
 
     def _sort_components(self):
         self._components = tuple(
@@ -720,25 +740,27 @@ class STEMModel(Model):
         scan_shape: Tuple[int, int],
         overfocus: float = 0.,
     ):
+        self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
         super().__init__(self.default_components(
             semiconv_angle,
             scan_step_yx,
             scan_shape,
         ))
-        self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
         self.set_stem_params(overfocus=overfocus)
 
     def _validate_components(self):
         super()._validate_components()
-        assert isinstance(self.source, ParallelBeam)
+        if not isinstance(self.source, ParallelBeam):
+            raise InvalidModelError("Must have a ParallelBeam for STEMModel")
+        # Called here because even if all components are valid from
+        # the perspective of z the current overfocus/semiconv
+        # could forbid the new state, so we change the state during
+        # validation such that it could be unwound if necessary
+        self.set_stem_params()
 
     def _sort_components(self):
         """Component order fixed in STEMModel"""
         pass
-
-    def move_component(self, component: Component, z: float):
-        super().move_component(component, z)
-        self.set_stem_params()
 
     @staticmethod
     def default_components(
@@ -838,11 +860,11 @@ class STEMModel(Model):
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
-            raise ValueError("Overfocus point is before lens")
+            raise InvalidModelError("Overfocus point is before lens")
         self.objective.f = self.sample.z - (self.objective.z + self.sample.overfocus)
 
     def set_beam_radius_from_semiconv(self):
-        self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
+        self.source.radius = abs(self.objective.f) * np.tan(abs(self.sample.semiconv_angle))
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx
