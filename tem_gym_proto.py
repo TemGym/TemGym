@@ -610,9 +610,8 @@ class Aperture(Component):
 class Model:
     def __init__(self, components: Iterable[Component]):
         self._components = components
-        assert len(self._components) >= 2
+        assert len(self._components) >= 1
         assert isinstance(self.source, Source)
-        assert isinstance(self.detector, Detector)
         assert all(
             next_c.entrance_z > this_c.exit_z
             for this_c, next_c
@@ -634,7 +633,13 @@ class Model:
         return self.components[0]
 
     @property
-    def detector(self) -> Detector:
+    def detector(self) -> Optional[Detector]:
+        if isinstance(self.last, Detector):
+            return self.last
+        return None
+
+    @property
+    def last(self) -> Detector:
         return self.components[-1]
 
     def run_iter(
