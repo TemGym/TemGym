@@ -769,7 +769,7 @@ class STEMModel(Model):
             self.sample.scan_step_yx = scan_step_yx
         if scan_shape is not None:
             self.sample.scan_shape = scan_shape
-        self.update_scan_coil_ratios((0, 0))
+        self.move_to((0, 0))
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
@@ -779,7 +779,7 @@ class STEMModel(Model):
     def set_beam_radius_from_semiconv(self):
         self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
 
-    def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
+    def move_to(self, scan_pixel_yx: Tuple[int, int]):
         scan_position = self.sample.scan_position(scan_pixel_yx)
         centreline = (0., 0.)
 
@@ -795,13 +795,13 @@ class STEMModel(Model):
         )
 
     def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> Rays:
-        self.update_scan_coil_ratios(yx)
+        self.move_to(yx)
         return self.run_to_end(num_rays)
 
     def scan_point_iter(
         self, num_rays: int, yx: Tuple[int, int]
     ) -> Generator[Rays, None, None]:
-        self.update_scan_coil_ratios(yx)
+        self.move_to(yx)
         yield from self.run_iter(num_rays)
 
     def scan(
