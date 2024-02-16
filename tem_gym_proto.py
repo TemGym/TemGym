@@ -769,6 +769,7 @@ class STEMModel(Model):
             self.sample.scan_step_yx = scan_step_yx
         if scan_shape is not None:
             self.sample.scan_shape = scan_shape
+        self.update_scan_coil_ratios((0, 0))
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
