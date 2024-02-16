@@ -25,6 +25,14 @@ class InvalidModelError(Exception):
     ...
 
 
+def P2R(radii, angles):
+    return radii * np.exp(1j*angles)
+
+
+def R2P(x):
+    return np.abs(x), np.angle(x)
+
+
 @dataclass
 class Rays:
     data: np.ndarray
@@ -245,7 +253,8 @@ class STEMSample(Sample):
         overfocus: NonNegativeFloat = 0.,
         semiconv_angle: PositiveFloat = 0.01,
         scan_shape: Tuple[int, int] = (8, 8),
-        scan_step_yx: Tuple[PositiveFloat, PositiveFloat] = (0.01, 0.01),
+        scan_step_yx: Tuple[float, float] = (0.01, 0.01),
+        scan_rotation: float = 0.,
         name: str = "STEMSample"
     ):
         super().__init__(name=name, z=z)
@@ -253,6 +262,7 @@ class STEMSample(Sample):
         self.semiconv_angle = semiconv_angle
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
+        self.scan_rotation = scan_rotation
 
     def scan_position(self, yx: Tuple[int, int]) -> Tuple[float, float]:
         y, x = yx
@@ -261,6 +271,10 @@ class STEMSample(Sample):
         sy, sx = self.scan_shape
         scan_position_x = (x - sx / 2.) * scan_step_x
         scan_position_y = (y - sy / 2.) * scan_step_y
+        if self.scan_rotation != 0.:
+            pos_r, pos_a = R2P(scan_position_x + scan_position_y * 1j)
+            pos_c = P2R(pos_r, pos_a + self.scan_rotation)
+            scan_position_y, scan_position_x = pos_c.imag, pos_c.real
         return (scan_position_y, scan_position_x)
 
 
@@ -341,17 +355,10 @@ class RadialSpikesBeam(ParallelBeam):
         yvals = np.zeros_like(xvals)
         origin_c = xvals + yvals * 1j
 
-        def P2R(radii, angles):
-            return radii * np.exp(1j*angles)
-
-        def R2P(x):
-            return np.abs(x), np.angle(x)
-
         orad, oang = R2P(origin_c)
         radius1 = P2R(orad * 0.75, oang + np.pi * 0.4)
         radius2 = P2R(orad * 0.5, oang + np.pi * 0.8)
         radius3 = P2R(orad * 0.25, oang + np.pi * 1.2)
-
         r_c = np.concatenate((origin_c, radius1, radius2, radius3))
 
         r = np.zeros((5, r_c.size))
@@ -828,15 +835,19 @@ class STEMModel(Model):
     def __init__(
         self,
         semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[PositiveFloat, PositiveFloat],
+        scan_step_yx: Tuple[float, float],
         scan_shape: Tuple[int, int],
+        scan_rotation: float = 0.,
         overfocus: float = 0.,
     ):
+        # Note a flip_y or flip_x can be achieved by setting
+        # either of scan_step_yx to negative values
         self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
         super().__init__(self.default_components(
             semiconv_angle,
             scan_step_yx,
             scan_shape,
+            scan_rotation,
         ))
         self.set_stem_params(overfocus=overfocus)
 
@@ -863,8 +874,9 @@ class STEMModel(Model):
     @staticmethod
     def default_components(
         semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[PositiveFloat, PositiveFloat],
+        scan_step_yx: Tuple[float, float],
         scan_shape: Tuple[int, int],
+        scan_rotation: float,
     ):
         return (
             ParallelBeam(
@@ -884,6 +896,7 @@ class STEMModel(Model):
                 semiconv_angle=semiconv_angle,
                 scan_shape=scan_shape,
                 scan_step_yx=scan_step_yx,
+                scan_rotation=scan_rotation,
             ),
             DoubleDeflector(
                 first=Deflector(z=0.725),
@@ -931,6 +944,7 @@ class STEMModel(Model):
         semiconv_angle: Optional[PositiveFloat] = None,
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
+        scan_rotation: Optional[float] = None,
     ):
         """
         Change one-or-more STEM params
@@ -953,6 +967,8 @@ class STEMModel(Model):
             self.sample.scan_step_yx = scan_step_yx
         if scan_shape is not None:
             self.sample.scan_shape = scan_shape
+        if scan_rotation is not None:
+            self.sample.scan_rotation = scan_rotation
         self.move_to(self.scan_coord)
 
     def set_obj_lens_f_from_overfocus(self):
