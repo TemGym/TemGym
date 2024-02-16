@@ -912,7 +912,5 @@ if __name__ == '__main__':
     ax.invert_yaxis()
     ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
     plt.show()
-    
     opls = np.stack(tuple(r.path_length for r in all_rays), axis = 0)
     print(opls)
-
