@@ -768,6 +768,17 @@ class STEMModel(Model):
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
     ):
+        """
+        Change one-or-more STEM params
+
+        This must be the endpoint that is used to keep the
+        model in a valid state, as all the potential input parameters
+        eventually affect the coil deflection values
+
+        The other method is `move_to` to set the current scan position.
+        Neither method requires that the current scan coordinate is actually
+        within the scan grid.
+        """
         if overfocus is not None:
             self.sample.overfocus = overfocus
         if semiconv_angle is not None:
