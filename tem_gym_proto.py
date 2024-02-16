@@ -125,6 +125,9 @@ class Component(abc.ABC):
         self._name = name
         self._z = z
 
+    def _validate_component(self):
+        pass
+
     @property
     def z(self) -> float:
         return self._z
@@ -149,7 +152,7 @@ class Component(abc.ABC):
         return self._name
 
     def __repr__(self):
-        return f'{self.__class__.__name__}: {self._name} @ z = {self._z}'
+        return f'{self.__class__.__name__}: {self._name} @ z = {self.z}'
 
     def step(
         self, rays: Rays
@@ -461,7 +464,10 @@ class DoubleDeflector(Component):
         )
         self._first = first
         self._second = second
-        assert self.first.z < self.second.z
+        self._validate_component()
+
+    def _validate_component(self):
+        assert self.first.z < self.second.z, "First deflector must be before second"
 
     @property
     def length(self) -> float:
@@ -477,7 +483,13 @@ class DoubleDeflector(Component):
 
     @property
     def z(self):
-        return (self.first.z + self.second.z) / 2
+        self._z = (self.first.z + self.second.z) / 2
+        return self._z
+
+    def _set_z(self, new_z: float):
+        dz = new_z - self.z
+        self.first._set_z(self.first.z + dz)
+        self.second._set_z(self.second.z + dz)
 
     @property
     def entrance_z(self) -> float:
@@ -610,13 +622,19 @@ class Aperture(Component):
 class Model:
     def __init__(self, components: Iterable[Component]):
         self._components = components
-        assert len(self._components) >= 1
-        assert isinstance(self.source, Source)
+        self._sort_components()
+        self._validate_components()
+
+    def _validate_components(self):
+        assert len(self._components) >= 1, "Must have at least one component"
+        assert isinstance(self.source, Source), "First component must always be a Source"
         assert all(
             next_c.entrance_z > this_c.exit_z
             for this_c, next_c
             in pairwise(self._components)
         ), "Components must be sorted in increasing in z position with no overlap"
+        for c in self._components:
+            c._validate_component()
 
     @property
     def components(self) -> Iterable[Component]:
@@ -641,6 +659,16 @@ class Model:
     @property
     def last(self) -> Detector:
         return self.components[-1]
+
+    def move_component(self, component: Component, z: float):
+        component._set_z(z)
+        self._sort_components()
+        self._validate_components()
+
+    def _sort_components(self):
+        self._components = tuple(
+            sorted(self._components, key=lambda c: c.z)
+        )
 
     def run_iter(
         self, num_rays: int
@@ -697,9 +725,20 @@ class STEMModel(Model):
             scan_step_yx,
             scan_shape,
         ))
-        assert isinstance(self.source, ParallelBeam)
-        self._scan_pixel_yx = (0, 0)
+        self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
         self.set_stem_params(overfocus=overfocus)
+
+    def _validate_components(self):
+        super()._validate_components()
+        assert isinstance(self.source, ParallelBeam)
+
+    def _sort_components(self):
+        """Component order fixed in STEMModel"""
+        pass
+
+    def move_component(self, component: Component, z: float):
+        super().move_component(component, z)
+        self.set_stem_params()
 
     @staticmethod
     def default_components(
