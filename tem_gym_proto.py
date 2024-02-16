@@ -404,15 +404,19 @@ class Detector(Component):
     ):
         """
         The intention of rotation is to rotate the detector
-        realative to the common y/x coordinate system of the Model.
+        realative to the common y/x coordinate system of the optics.
         A positive rotation would rotate the detector anti-clockwise
         looking down a ray at the detector.
-        In STEMModel the scan grid is aligned with the physical
-        y/x coordinate system of the rays by default, but could also
-        be rotated since we work in continuous units to set the
-        coil deflection values. In this case the "scan_rotation"
-        would be the sum of the physical rotation of the detector
-        and the rotation of the scan grid relative to y/x.
+        In STEMModel the scan grid is aligned with the optics
+        y/x coordinate system default, but can also
+        be rotated using the "scan_rotation" parameter.
+        The image rotation is then the combination of the
+        physical rotation of the detector and the rotation of the
+        scan grid relative to y/x of the optics.
+
+        The detector flip_y acts only at the image generation step,
+        the scan grid itself can be flipped by setting negative
+        scan step values
         """
         super().__init__(name=name, z=z)
         self.pixel_size = pixel_size
