@@ -1041,19 +1041,7 @@ if __name__ == '__main__':
     )
 
     import matplotlib.pyplot as plt
-    # image = model.run_to_z(512, model.objective.ffp).get_image((128, 128), 0.0001)
-    # plt.imshow(image)
-    # plt.show()
-    # exit()
-
     fig, ax = plt.subplots()
-
-    # Variables to store the previous component's ray positions
-    # prev_x_positions = None
-    # prev_y_positions = None
-    # prev_z = None
-
-    # Iterate over components and their ray positions
     num_rays = 5
     yx = (5, 5)
     all_rays = tuple(model.scan_point_iter(num_rays=num_rays, yx=yx))
