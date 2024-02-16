@@ -405,8 +405,10 @@ class Detector(Component):
         """
         The intention of rotation is to rotate the detector
         realative to the common y/x coordinate system of the optics.
-        A positive rotation would rotate the detector anti-clockwise
-        looking down a ray at the detector.
+        A positive rotation would rotate the detector clockwise
+        looking down a ray at the detector, and the image will appear
+        to rotate anti-clockwise.
+
         In STEMModel the scan grid is aligned with the optics
         y/x coordinate system default, but can also
         be rotated using the "scan_rotation" parameter.
