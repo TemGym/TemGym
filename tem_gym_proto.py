@@ -112,13 +112,13 @@ class Rays:
         shape: Tuple[int, int],
         pixel_size: PositiveFloat,
         flip_y: bool = False,
-        scan_rotation: float = 0.
+        rotation: float = 0.
     ):
         det = Detector(
             z=self.z,
             pixel_size=pixel_size,
             shape=shape,
-            scan_rotation=scan_rotation,
+            rotation=rotation,
             flip_y=flip_y,
         )
         return det.get_image(self)
@@ -306,6 +306,60 @@ class ParallelBeam(Source):
         return self._make_rays(r)
 
 
+class XAxialBeam(ParallelBeam):
+    def __init__(
+        self,
+        z: float,
+        radius: float = None,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: str = "XAxialBeam",
+    ):
+        super().__init__(z=z, radius=radius, tilt_yx=tilt_yx, name=name)
+
+    def get_rays(self, num_rays: int) -> Rays:
+        r = np.zeros((5, num_rays))
+        r[0, :] = np.linspace(
+            -self.radius, self.radius, num=num_rays, endpoint=True
+        )
+        return self._make_rays(r)
+
+
+class RadialSpikesBeam(ParallelBeam):
+    def __init__(
+        self,
+        z: float,
+        radius: float = None,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: str = "XAxialBeam",
+    ):
+        super().__init__(z=z, radius=radius, tilt_yx=tilt_yx, name=name)
+
+    def get_rays(self, num_rays: int) -> Rays:
+        xvals = np.linspace(
+            0., self.radius, num=num_rays // 4, endpoint=True
+        )
+        yvals = np.zeros_like(xvals)
+        origin_c = xvals + yvals * 1j
+
+        def P2R(radii, angles):
+            return radii * np.exp(1j*angles)
+
+        def R2P(x):
+            return np.abs(x), np.angle(x)
+
+        orad, oang = R2P(origin_c)
+        radius1 = P2R(orad * 0.75, oang + np.pi * 0.4)
+        radius2 = P2R(orad * 0.5, oang + np.pi * 0.8)
+        radius3 = P2R(orad * 0.25, oang + np.pi * 1.2)
+
+        r_c = np.concatenate((origin_c, radius1, radius2, radius3))
+
+        r = np.zeros((5, r_c.size))
+        r[0, :] = r_c.real
+        r[2, :] = r_c.imag
+        return self._make_rays(r)
+
+
 class PointSource(Component):
     def __init__(
         self,
@@ -329,14 +383,26 @@ class Detector(Component):
         z: float,
         pixel_size: float,
         shape: Tuple[int, int],
-        scan_rotation: float = 0.,
+        rotation: float = 0.,
         flip_y: bool = False,
         name: str = "Detector",
     ):
+        """
+        The intention of rotation is to rotate the detector
+        realative to the common y/x coordinate system of the Model.
+        A positive rotation would rotate the detector anti-clockwise
+        looking down a ray at the detector.
+        In STEMModel the scan grid is aligned with the physical
+        y/x coordinate system of the rays by default, but could also
+        be rotated since we work in continuous units to set the
+        coil deflection values. In this case the "scan_rotation"
+        would be the sum of the physical rotation of the detector
+        and the rotation of the scan grid relative to y/x.
+        """
         super().__init__(name=name, z=z)
         self.pixel_size = pixel_size
         self.shape = shape
-        self.scan_rotation = scan_rotation
+        self.rotation = rotation
         self.flip_y = flip_y
 
     def step(
@@ -348,14 +414,14 @@ class Detector(Component):
 
     def get_image(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
-        pixel_coords_y, pixel_coords_x = np.round(
+        pixel_coords_x, pixel_coords_y = np.round(
             get_pixel_coords(
                 rays_x=rays.x,
                 rays_y=rays.y,
                 shape=self.shape,
                 pixel_size=self.pixel_size,
                 flip_y=self.flip_y,
-                scan_rotation=self.scan_rotation,
+                scan_rotation=self.rotation,
             )
         ).astype(int)
         sy, sx = self.shape
