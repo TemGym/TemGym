@@ -635,20 +635,15 @@ class Model:
     def run_iter(
         self, num_rays: int
     ) -> Generator[Rays, None, None]:
-        rays = None
-        for this_component, next_component in pairwise(self.components):
-            if rays is None:
-                # At the gun
-                this_component: Source
-                rays = this_component.get_rays(num_rays)
-            for rays in this_component.step(rays):
-                yield rays
+        source: Source = self.components[0]
+        rays = source.get_rays(num_rays)
+        for component in self.components:
             rays = rays.propagate(
-                next_component.entrance_z - this_component.exit_z,
+                component.entrance_z - rays.z,
             )
-        # At detector plane
-        next_component: Detector
-        yield from next_component.step(rays)
+            for rays in component.step(rays):
+                # Could use generator with return value here...
+                yield rays
 
     def run_to_end(self, num_rays: int) -> Rays:
         for rays in self.run_iter(num_rays):
