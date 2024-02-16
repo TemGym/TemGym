@@ -38,6 +38,7 @@ class Rays:
     data: np.ndarray
     indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
+    path_length: np.ndarray
 
     @property
     def z(self) -> float:
@@ -80,7 +81,7 @@ class Rays:
         return self.data[3, :]
 
     @staticmethod
-    def propagation_matix(z):
+    def propagation_matrix(z):
         '''
         Propagation matrix
 
@@ -105,11 +106,12 @@ class Rays:
     def propagate(self, distance: float) -> Self:
         return Rays(
             data=np.matmul(
-                self.propagation_matix(distance),
+                self.propagation_matrix(distance),
                 self.data,
             ),
             indices=self.indices,
             location=self.z + distance,
+            path_length=self.path_length + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
         )
 
     def propagate_to(self, z: float) -> Self:
@@ -230,6 +232,7 @@ class Lens(Component):
             data=np.matmul(self.lens_matrix(self.f), rays.data),
             indices=rays.indices,
             location=self,
+            path_length=rays.path_length
         )
 
 
@@ -294,7 +297,7 @@ class Source(Component):
             indices = np.arange(r.shape[1])
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
-        return Rays(data=r, indices=indices, location=self)
+        return Rays(data=r, indices=indices, location=self, path_length=0.0)
 
     def step(
         self, rays: Rays
@@ -525,6 +528,7 @@ class Deflector(Component):
             ),
             indices=rays.indices,
             location=self,
+            path_length=rays.path_length
         )
 
 
@@ -1082,95 +1086,5 @@ if __name__ == '__main__':
     ax.invert_yaxis()
     ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
     plt.show()
-
-    # model.detector.shape = (512, 512)
-    # model.detector.pixel_size = 0.002
-    # image = model.detector.get_image(rays)
-
-    # image = rays.get_image((512, 512), 0.002)
-
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots()
-    # ax.plot(rays.x, rays.y, 'o')
-    # br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
-    # b, r = br  # noqa
-    # tl = -1 * br
-    # t, l = tl  # noqa
-    # tr = [t, r]
-    # bl = [b, l]
-    # points = np.stack((tl, tr, br, bl), axis=0)
-    # ax.fill(points[:, 1], points[:, 0], facecolor='none', edgecolor='black')
-    # ax.invert_yaxis()
-    # ax.axis('equal')
-
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots()
-    # ax.imshow(image)
-    # plt.show()
-
-    exit(0)
-
-    components = (
-        ParallelBeam(
-            z=1.,
-            radius=0.03,
-            tilt_yx=(0., 0.),
-        ),
-        Lens(
-            z=0.5,
-            f=-0.05,
-        ),
-        DoubleDeflector(
-            first=Deflector(
-                z=0.275,
-                defy=0.05,
-                defx=0.05,
-            ),
-            second=Deflector(
-                z=0.225,
-                defy=-0.025,
-                defx=0.,
-            ),
-        ),
-        Sample(
-            z=0.2
-        ),
-        Aperture(
-            0.15,
-            radius_inner=0.,
-            radius_outer=0.0075,
-        ),
-        Detector(
-            z=0.,
-            pixel_size=0.01,
-            shape=(128, 128),
-        ),
-    )
-    model = Model(components)
-    print(model)
-
-    rays = model.run_to_component(model.detector, 512)
-    image = model.detector.get_image(rays)
-
-    import matplotlib.pyplot as plt
-    plt.imshow(image)
-
-    fig, ax = plt.subplots()
-    ax.plot(rays.x, rays.y, 'o')
-    br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
-    b, r = br  # noqa
-    tl = -1 * br
-    t, l = tl  # noqa
-    tr = [t, r]
-    bl = [b, l]
-    points = np.stack((tl, tr, br, bl), axis=0)
-    ax.fill(points[:, 1], points[:, 0], facecolor='none', edgecolor='black')
-    ax.invert_yaxis()
-    ax.axis('equal')
-
-    plt.show()
-
-    # rays_y = det_rays[2]
-    # rays_x = det_rays[0]
-    # plt.plot(rays_x, rays_y, 'o')
-    # plt.show()
+    opls = np.stack(tuple(r.path_length for r in all_rays), axis=0)
+    print(opls)
