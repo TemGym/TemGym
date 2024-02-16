@@ -851,7 +851,6 @@ class STEMModel(Model):
             self.sample.semiconv_angle = semiconv_angle
         self.set_obj_lens_f_from_overfocus()
         self.set_beam_radius_from_semiconv()
-        # These could be set externally, no invariants to hold
         if scan_step_yx is not None:
             self.sample.scan_step_yx = scan_step_yx
         if scan_shape is not None:
