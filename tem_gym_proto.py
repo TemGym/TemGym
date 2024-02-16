@@ -685,6 +685,32 @@ class Model:
             self.move_component(component, old_z)
             raise err from None
 
+    def add_component(self, component: Component):
+        original_components = tuple(self._components)
+        self._components = tuple(self._components) + (component,)
+        self._sort_components()
+        try:
+            self._validate_components()
+        except InvalidModelError as err:
+            # Unwind the change but reraise
+            self._components = original_components
+            raise err from None
+
+    def remove_component(self, component: Component):
+        original_components = tuple(self._components)
+        self._components = tuple(
+            c for c in self._components
+            if c is not component
+        )
+        if len(self._components) == len(original_components):
+            raise ValueError("Component not found in model, cannot remove")
+        try:
+            self._validate_components()
+        except InvalidModelError as err:
+            # Unwind the change but reraise
+            self._components = original_components
+            raise err from None
+
     def _sort_components(self):
         self._components = tuple(
             sorted(self._components, key=lambda c: c.z)
@@ -761,6 +787,12 @@ class STEMModel(Model):
     def _sort_components(self):
         """Component order fixed in STEMModel"""
         pass
+
+    def add_component(self, component: Component):
+        raise UsageError("Cannot add components to STEMModel")
+
+    def remove_component(self, component: Component):
+        raise UsageError("Cannot remove components from STEMModel")
 
     @staticmethod
     def default_components(
