@@ -693,6 +693,7 @@ class STEMModel(Model):
             scan_shape,
         ))
         assert isinstance(self.source, ParallelBeam)
+        self._scan_pixel_yx = (0, 0)
         self.set_stem_params(overfocus=overfocus)
 
     @staticmethod
@@ -751,6 +752,15 @@ class STEMModel(Model):
     def descan_coils(self) -> DoubleDeflector:
         return self.components[4]
 
+    @property
+    def scan_coord(self) -> Tuple[int, int]:
+        return self._scan_pixel_yx
+
+    @scan_coord.setter
+    def scan_coord(self, scan_pixel_yx: Tuple[int, int]):
+        self._scan_pixel_yx = scan_pixel_yx
+        self.move_to(self.scan_coord)
+
     def set_stem_params(
         self,
         overfocus: Optional[float] = None,
@@ -769,7 +779,7 @@ class STEMModel(Model):
             self.sample.scan_step_yx = scan_step_yx
         if scan_shape is not None:
             self.sample.scan_shape = scan_shape
-        self.move_to((0, 0))
+        self.move_to(self.scan_coord)
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
@@ -780,6 +790,7 @@ class STEMModel(Model):
         self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
+        self._scan_pixel_yx = scan_pixel_yx
         scan_position = self.sample.scan_position(scan_pixel_yx)
         centreline = (0., 0.)
 
