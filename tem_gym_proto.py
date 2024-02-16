@@ -111,7 +111,10 @@ class Rays:
             ),
             indices=self.indices,
             location=self.z + distance,
-            path_length=self.path_length + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
+            path_length=(
+                self.path_length
+                + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
+            )
         )
 
     def propagate_to(self, z: float) -> Self:
@@ -297,7 +300,9 @@ class Source(Component):
             indices = np.arange(r.shape[1])
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
-        return Rays(data=r, indices=indices, location=self, path_length=0.0)
+        return Rays(
+            data=r, indices=indices, location=self, path_length=np.zeros((num_rays,))
+        )
 
     def step(
         self, rays: Rays
@@ -697,7 +702,8 @@ class Aperture(Component):
             distance < self.radius_outer,
         )
         yield Rays(
-            data=rays.data[:, mask], indices=rays.indices[mask], location=self
+            data=rays.data[:, mask], indices=rays.indices[mask],
+            location=self, path_length=rays.path_length[mask],
         )
 
 
