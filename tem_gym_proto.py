@@ -1,5 +1,4 @@
 import abc
-import operator
 from typing import Generator, Iterable, Tuple, Optional, Union, Type, TypeAlias, Self
 from itertools import pairwise
 import numpy as np
@@ -524,6 +523,33 @@ class DoubleDeflector(Component):
         second_def = out_slope - first_def
         return first_def, second_def
 
+    def send_ray_through_points(
+        self,
+        in_ray: Tuple[float, float],
+        pt1: Tuple[float, float, float],
+        pt2: Tuple[float, float, float],
+        in_slope: Tuple[float, float] = (0., 0.)
+    ):
+        """
+        in_ray is (y, x), z is implicitly the z of the first deflector
+        pt1 and pt2 are (z, y, x) after the second deflector
+        in_slope is (dy, dx) at the incident point
+        """
+        self.first.defy, self.second.defy = self._send_ray_through_pts_1d(
+            (self.first.z, in_ray[0]),
+            self.second.z,
+            pt1[:2],
+            pt2[:2],
+            in_slope=in_slope[0],
+        )
+        self.first.defx, self.second.defx = self._send_ray_through_pts_1d(
+            (self.first.z, in_ray[1]),
+            self.second.z,
+            (pt1[0], pt1[2]),
+            (pt2[0], pt2[2]),
+            in_slope=in_slope[1],
+        )
+
 
 class Aperture(Component):
     def __init__(
@@ -760,47 +786,18 @@ class STEMModel(Model):
         return (s_first_def, s_second_def, d_first_def, d_second_def)
 
     def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
-        # Distance to front focal plane from bottom deflector
-        # dist_to_lens = self.objective.z - self.scan_coils.exit_z
-        # dist_to_ffp = dist_to_lens - abs(self.objective.f)
-        # defratio = -1 * (1 + self.scan_coils.length / dist_to_ffp)
-        scan_position_y, scan_position_x = self.sample.scan_position(scan_pixel_yx)
+        scan_position = self.sample.scan_position(scan_pixel_yx)
+        centreline = (0., 0.)
 
-        (
-            self.scan_coils.first.defx,
-            self.scan_coils.second.defx,
-        ) = self.scan_coils._send_ray_through_pts_1d(
-            (self.scan_coils.first.z, 0.),
-            self.scan_coils.second.z,
-            (self.objective.z - abs(self.objective.f), 0.),
-            (self.objective.z, scan_position_x),
+        self.scan_coils.send_ray_through_points(
+            centreline,
+            (self.objective.z - abs(self.objective.f), *centreline),
+            (self.objective.z, *scan_position),
         )
-        (
-            self.scan_coils.first.defy,
-            self.scan_coils.second.defy,
-        ) = self.scan_coils._send_ray_through_pts_1d(
-            (self.scan_coils.first.z, 0.),
-            self.scan_coils.second.z,
-            (self.objective.z - abs(self.objective.f), 0.),
-            (self.objective.z, scan_position_y),
-        )
-        (
-            self.descan_coils.first.defx,
-            self.descan_coils.second.defx,
-        ) = self.descan_coils._send_ray_through_pts_1d(
-            (self.descan_coils.first.z, scan_position_x),
-            self.descan_coils.second.z,
-            (self.descan_coils.second.z + 0.01, 0.),
-            (self.descan_coils.second.z + 0.02, 0.),
-        )
-        (
-            self.descan_coils.first.defy,
-            self.descan_coils.second.defy,
-        ) = self.descan_coils._send_ray_through_pts_1d(
-            (self.descan_coils.first.z, scan_position_y),
-            self.descan_coils.second.z,
-            (self.descan_coils.second.z + 0.01, 0.),
-            (self.descan_coils.second.z + 0.02, 0.),
+        self.descan_coils.send_ray_through_points(
+            scan_position,
+            (self.descan_coils.second.z + 0.01, *centreline),
+            (self.descan_coils.second.z + 0.02, *centreline),
         )
 
     def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> Rays:
