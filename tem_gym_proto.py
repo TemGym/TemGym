@@ -100,6 +100,9 @@ class Rays:
             location=self.z + distance,
         )
 
+    def propagate_to(self, z: float) -> Self:
+        return self.propagate(z - self.z)
+
     def get_image(
         self,
         shape: Tuple[int, int],
@@ -175,6 +178,10 @@ class Lens(Component):
     @f.setter
     def f(self, f: float):
         self._f = f
+
+    @property
+    def ffp(self) -> float:
+        return self.z - abs(self.f)
 
     @staticmethod
     def lens_matrix(f):
@@ -486,9 +493,7 @@ class DoubleDeflector(Component):
         for rays in self.first.step(rays):
             rays.location = (self, self.first)
             yield rays
-        rays = rays.propagate(
-            self.second.entrance_z - self.first.exit_z,
-        )
+        rays = rays.propagate_to(self.second.entrance_z)
         for rays in self.second.step(rays):
             rays.location = (self, self.second)
             yield rays
@@ -638,12 +643,25 @@ class Model:
         source: Source = self.components[0]
         rays = source.get_rays(num_rays)
         for component in self.components:
-            rays = rays.propagate(
-                component.entrance_z - rays.z,
-            )
+            rays = rays.propagate_to(component.entrance_z)
             for rays in component.step(rays):
                 # Could use generator with return value here...
                 yield rays
+
+    def run_to_z(self, num_rays: int, z: float) -> Optional[Rays]:
+        """
+        Get the rays at a point z
+
+        If z is the position of a component, this returns the rays before the
+        component affects the rays. To get the rays just after the component
+        use 'run_to_component' instead.
+        """
+        last_rays = None
+        for rays in self.run_iter(num_rays):
+            if last_rays is not None and (last_rays.z < z <= rays.z):
+                return last_rays.propagate_to(z)
+            last_rays = rays
+        return None
 
     def run_to_end(self, num_rays: int) -> Rays:
         for rays in self.run_iter(num_rays):
@@ -760,33 +778,13 @@ class STEMModel(Model):
     def set_beam_radius_from_semiconv(self):
         self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
 
-    @staticmethod
-    def _set_coils_for_position(
-        scan_coil_length: float,
-        descan_coil_length: float,
-        position: float,
-        dist_to_lens: float,
-        defratio: float,
-    ):
-        s_first_def = (
-            position / (scan_coil_length + dist_to_lens * (1 + defratio))
-        )
-        s_second_def = defratio * s_first_def
-
-        d_first_def = (
-            -s_first_def
-            * (scan_coil_length + dist_to_lens * (1 + defratio)) / descan_coil_length
-        )
-        d_second_def = -d_first_def
-        return (s_first_def, s_second_def, d_first_def, d_second_def)
-
     def update_scan_coil_ratios(self, scan_pixel_yx: Tuple[int, int]):
         scan_position = self.sample.scan_position(scan_pixel_yx)
         centreline = (0., 0.)
 
         self.scan_coils.send_ray_through_points(
             centreline,
-            (self.objective.z - abs(self.objective.f), *centreline),
+            (self.objective.ffp, *centreline),
             (self.objective.z, *scan_position),
         )
         self.descan_coils.send_ray_through_points(
@@ -831,6 +829,11 @@ if __name__ == '__main__':
     )
 
     import matplotlib.pyplot as plt
+    # image = model.run_to_z(512, model.objective.ffp).get_image((128, 128), 0.0001)
+    # plt.imshow(image)
+    # plt.show()
+    # exit()
+
     fig, ax = plt.subplots()
 
     # Variables to store the previous component's ray positions
@@ -865,7 +868,7 @@ if __name__ == '__main__':
             ax.text(-extent, component.z, repr(component), va='bottom')
 
     ax.hlines(
-        model.objective.z - abs(model.objective.f), -extent, extent, linestyle=':'
+        model.objective.ffp, -extent, extent, linestyle=':'
     )
 
     ax.axvline(color='black', linestyle=":", alpha=0.3)
