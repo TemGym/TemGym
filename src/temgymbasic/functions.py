@@ -1,6 +1,44 @@
 
 import numpy as np
+from collections import defaultdict
 
+def get_interference(x_out, phase_out, pixels, scale):
+    
+    x_left = scale[0]
+    x_right = scale[1]
+
+    x_edge = np.abs(x_left) + np.abs(x_right)
+    
+    image = np.zeros((pixels), np.complex128)
+
+    pixel_size_x = (x_edge)/pixels
+    
+    #Create a boolean mask to filter out values outside the valid range of the image plane.
+    valid_mask_x = (x_out > x_left) & (x_out < x_right)
+
+    phase_out_valid = phase_out[valid_mask_x]
+
+    #Filter the coordinates to keep only the valid ones
+    x_out_valid = x_out[valid_mask_x]
+
+    #Create the pixel bins
+    bins_x = np.arange(x_left, x_right+pixel_size_x, pixel_size_x)
+
+    x_bin_indices = np.digitize(x_out_valid, bins_x) - 1
+
+    bin_values = defaultdict(list)
+
+    for i, (x_idx) in enumerate(x_bin_indices):
+        bin_values[(x_idx)].append(phase_out_valid[i])  
+
+    #Loop through the coordinates, find the phases of all the rays in each pixel, and calculate the interference. 
+    for x in bin_values:
+        phases = np.array(bin_values[x])
+        image[x] = np.sum(np.exp(1j*(phases)))
+    
+    image_x_pos = bins_x[:-1] + pixel_size_x/2
+    
+    return image_x_pos, image
 
 def initial_r(num_rays: int):
     r = np.zeros(
