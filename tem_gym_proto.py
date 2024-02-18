@@ -10,6 +10,7 @@ from temgymbasic.functions import (
     circular_beam,
     point_beam,
     get_pixel_coords,
+    get_interference
 )
 
 
@@ -302,11 +303,11 @@ class ParallelBeam(Source):
         return self._make_rays(r)
 
 
-class PointSource(Component):
+class PointSource(Source):
     def __init__(
         self,
         z: float,
-        semi_angle: Optional[float] = None,
+        semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: str = "PointSource",
     ):
@@ -557,6 +558,47 @@ class DoubleDeflector(Component):
             (pt1[0], pt1[2]),
             (pt2[0], pt2[2]),
             in_slope=in_slope[1],
+        )
+
+
+class Biprism(Component):
+    def __init__(
+        self,
+        z: float,
+        x: float=0.,
+        defx: float=0.,
+        name: str='Biprism',
+    ):
+        '''
+
+        Parameters
+        ----------
+        z : float
+            Position of component in optic axis
+        x: float
+            Central position of biprism in x dimension
+        name : str, optional
+            Name of this component which will be displayed by GUI, by default ''
+        defx : float, optional
+            deflection kick in slope units to the incoming ray x angle, by default 0.5
+        '''
+        super().__init__(z=z, name=name)
+        self.defx = defx
+        self.x = x
+
+    def step(
+        self, rays: Rays,
+    ) -> Generator[Rays, None, None]:
+        pos_x = rays.x
+        x_dist = (pos_x - self.x)
+        x_sign = np.sign(x_dist)
+        rays.data[1] = rays.data[1] + self.defx*x_sign
+
+        yield Rays(
+            data=rays.data,
+            indices=rays.indices,
+            path_length=rays.path_length + np.abs(self.defx)*x_dist,
+            location=self,
         )
 
 
@@ -854,11 +896,15 @@ class GUIModel:
 
 
 if __name__ == '__main__':
-    model = STEMModel(
-        semiconv_angle=0.01,
-        scan_shape=(8, 8),
-        scan_step_yx=(0.01, 0.01),
-    )
+    
+    components = [PointSource(z=0.0, semi_angle=0.1),
+                    Biprism(z=0.5, defx=-0.1),
+                    Detector(
+                        z=1.,
+                        pixel_size=0.05,
+                        shape=(128, 1), )] 
+    
+    model = Model(components)
 
     import matplotlib.pyplot as plt
     # image = model.run_to_z(512, model.objective.ffp).get_image((128, 128), 0.0001)
@@ -868,15 +914,10 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots()
 
-    # Variables to store the previous component's ray positions
-    # prev_x_positions = None
-    # prev_y_positions = None
-    # prev_z = None
 
     # Iterate over components and their ray positions
-    num_rays = 5
-    yx = (5, 5)
-    all_rays = tuple(model.scan_point_iter(num_rays=num_rays, yx=yx))
+    num_rays = 10000
+    all_rays = tuple(model.run_iter(num_rays=num_rays))
 
     xvals = np.stack(tuple(r.x for r in all_rays), axis=0)
     yvals = np.stack(tuple(r.x for r in all_rays), axis=0)
@@ -899,18 +940,21 @@ if __name__ == '__main__':
             ax.hlines(component.z, -extent, extent, label=repr(component))
             ax.text(-extent, component.z, repr(component), va='bottom')
 
-    ax.hlines(
-        model.objective.ffp, -extent, extent, linestyle=':'
-    )
-
-    ax.axvline(color='black', linestyle=":", alpha=0.3)
-    _, scan_pos_x = model.sample.scan_position(yx)
-    ax.plot([scan_pos_x], [model.sample.z], 'ko')
-
     ax.set_xlabel('x position')
     ax.set_ylabel('z position')
     ax.invert_yaxis()
-    ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
-    plt.show()
+
     opls = np.stack(tuple(r.path_length for r in all_rays), axis=0)
     print(opls)
+
+    wavelength = 0.1
+    k = 2*np.pi/wavelength
+    opl_detector = opls[-1, :]
+    phase_detector = k * opl_detector
+
+    image_x_pos, image = get_interference(xvals[-1, :], phase_detector, 64, [-0.06, 0.06])
+                                          
+    plt.figure()
+    plt.plot(image_x_pos, np.abs(image)**2/np.max(np.abs(image)**2))
+
+    plt.show()
