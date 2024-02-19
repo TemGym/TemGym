@@ -916,7 +916,7 @@ if __name__ == '__main__':
 
 
     # Iterate over components and their ray positions
-    num_rays = 10000
+    num_rays = 1000
     all_rays = tuple(model.run_iter(num_rays=num_rays))
 
     xvals = np.stack(tuple(r.x for r in all_rays), axis=0)
@@ -947,12 +947,12 @@ if __name__ == '__main__':
     opls = np.stack(tuple(r.path_length for r in all_rays), axis=0)
     print(opls)
 
-    wavelength = 0.1
+    wavelength = 0.00001
     k = 2*np.pi/wavelength
     opl_detector = opls[-1, :]
     phase_detector = k * opl_detector
 
-    image_x_pos, image = get_interference(xvals[-1, :], phase_detector, 64, [-0.06, 0.06])
+    image_x_pos, image = get_interference(xvals[-1, :], phase_detector, 128, [-0.06, 0.06])
                                           
     plt.figure()
     plt.plot(image_x_pos, np.abs(image)**2/np.max(np.abs(image)**2))
