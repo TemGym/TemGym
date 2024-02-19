@@ -138,7 +138,9 @@ class Rays:
 
 
 class Component(abc.ABC):
-    def __init__(self, z: float, name: str):
+    def __init__(self, z: float, name: Optional[str] = None):
+        if name is None:
+            name = type(self).__name__
         self._name = name
         self._z = z
 
@@ -187,7 +189,7 @@ class ComponentGUIWrapper:
 
 
 class Lens(Component):
-    def __init__(self, z: float, f: float, name: str = "Lens"):
+    def __init__(self, z: float, f: float, name: Optional[str] = None):
         super().__init__(name=name, z=z)
         self._f = f
 
@@ -240,7 +242,7 @@ class Lens(Component):
 
 
 class Sample(Component):
-    def __init__(self, z: float, name: str = "Sample"):
+    def __init__(self, z: float, name: Optional[str] = None):
         super().__init__(name=name, z=z)
 
     def step(
@@ -261,7 +263,7 @@ class STEMSample(Sample):
         scan_shape: Tuple[int, int] = (8, 8),
         scan_step_yx: Tuple[float, float] = (0.01, 0.01),
         scan_rotation: float = 0.,
-        name: str = "STEMSample"
+        name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
         self.overfocus = overfocus
@@ -286,7 +288,7 @@ class STEMSample(Sample):
 
 class Source(Component):
     def __init__(
-        self, z: float, tilt_yx: Tuple[float, float] = (0., 0.), name: str = "Source"
+        self, z: float, tilt_yx: Tuple[float, float] = (0., 0.), name: Optional[str] = None
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
@@ -318,7 +320,7 @@ class ParallelBeam(Source):
         z: float,
         radius: float = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "ParallelBeam",
+        name: Optional[str] = None,
     ):
         super().__init__(z=z, tilt_yx=tilt_yx, name=name)
         self.radius = radius
@@ -329,15 +331,6 @@ class ParallelBeam(Source):
 
 
 class XAxialBeam(ParallelBeam):
-    def __init__(
-        self,
-        z: float,
-        radius: float = None,
-        tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "XAxialBeam",
-    ):
-        super().__init__(z=z, radius=radius, tilt_yx=tilt_yx, name=name)
-
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
         r[0, :] = np.linspace(
@@ -347,15 +340,6 @@ class XAxialBeam(ParallelBeam):
 
 
 class RadialSpikesBeam(ParallelBeam):
-    def __init__(
-        self,
-        z: float,
-        radius: float = None,
-        tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "XAxialBeam",
-    ):
-        super().__init__(z=z, radius=radius, tilt_yx=tilt_yx, name=name)
-
     def get_rays(self, num_rays: int) -> Rays:
         xvals = np.linspace(
             0., self.radius, num=num_rays // 4, endpoint=True
@@ -381,7 +365,7 @@ class PointSource(Component):
         z: float,
         semi_angle: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "PointSource",
+        name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
         self.semi_angle = semi_angle
@@ -400,7 +384,7 @@ class Detector(Component):
         shape: Tuple[int, int],
         rotation: float = 0.,
         flip_y: bool = False,
-        name: str = "Detector",
+        name: Optional[str] = None,
     ):
         """
         The intention of rotation is to rotate the detector
@@ -482,7 +466,7 @@ class Deflector(Component):
         z: float,
         defx: float = 0.,
         defy: float = 0.,
-        name: str = "Deflector",
+        name: Optional[str] = None,
     ):
         '''
 
@@ -545,7 +529,7 @@ class DoubleDeflector(Component):
         self,
         first: Deflector,
         second: Deflector,
-        name: str = "DoubleDeflector",
+        name: Optional[str] = None,
     ):
         super().__init__(
             z=(first.z + second.z) / 2,
@@ -666,7 +650,7 @@ class Aperture(Component):
         radius_outer: float = 0.25,
         x: float = 0.,
         y: float = 0.,
-        name: str = 'Aperture',
+        name: Optional[str] = None,
     ):
         '''
 
