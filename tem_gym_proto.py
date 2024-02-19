@@ -984,7 +984,7 @@ class STEMModel(Model):
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
         scan_rotation: Optional[float] = None,
-    ):
+    ) -> Self:
         """
         Change one-or-more STEM params
 
@@ -1009,6 +1009,7 @@ class STEMModel(Model):
         if scan_rotation is not None:
             self.sample.scan_rotation = scan_rotation
         self.move_to(self.scan_coord)
+        return self
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
