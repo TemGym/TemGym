@@ -973,6 +973,7 @@ class STEMModel(Model):
         flip_y: bool,
         overfocus: float,
         detector_z,
+        detector_pixel_size,
     ):
         # Note a flip_y or flip_x can be achieved by setting
         # either of scan_step_yx to negative values
@@ -985,6 +986,7 @@ class STEMModel(Model):
             scan_rotation,
             flip_y,
             detector_z,
+            detector_pixel_size,
         ))
         self.set_stem_params(overfocus=overfocus)
 
@@ -1017,6 +1019,7 @@ class STEMModel(Model):
         scan_rotation: float,
         flip_y: bool,
         detector_z: PositiveFloat,
+        detector_pixel_size: PositiveFloat,
     ):
         return (
             ParallelBeam(
@@ -1044,7 +1047,7 @@ class STEMModel(Model):
             ),
             Detector(
                 z=detector_z,
-                pixel_size=0.05,
+                pixel_size=detector_pixel_size,
                 shape=(128, 128),
                 flip_y=flip_y
             ),
