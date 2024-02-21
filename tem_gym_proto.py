@@ -7,10 +7,103 @@ from dataclasses import dataclass
 
 
 from temgymbasic.functions import (
-    circular_beam,
-    point_beam,
     get_pixel_coords,
 )
+
+def initial_r(num_rays: int):
+    r = np.zeros(
+        (5, num_rays),
+        dtype=np.float64
+    )  # x, theta_x, y, theta_y, 1
+
+    r[4, :] = np.ones(num_rays)
+    return r
+
+# FIXME resolve code duplication between circular_beam() and point_beam()
+def circular_beam(num_rays, outer_radius):
+    '''Generates a circular paralell initial beam
+
+    Parameters
+    ----------
+    r : ndarray
+        Ray position and slope matrix
+    outer_radius : float
+        Outer radius of the circular beam
+
+    Returns
+    -------
+    r : ndarray
+        Updated ray position & slope matrix which create a circular beam
+    num_points_kth_ring: ndarray
+        Array of the number of points on each ring of our circular beam
+    '''
+    r = initial_r(num_rays)
+
+    # Use the equation from stack overflow about ukrainian graves from 2014
+    # to calculate the number of even rings including decimal remainder
+    
+    if num_rays < 7:
+        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
+    else:
+        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
+
+    # Get the number of integer rings
+    num_circles_int = int(np.floor(num_circles_dec))
+
+    # Calculate the number of points per ring with the integer amoung of rings
+    num_points_kth_ring = np.round(
+        2*np.pi*(np.arange(0, num_circles_int+1))).astype(int)
+
+    # get the remainding amount of rays
+    remainder_rays = num_rays - np.sum(num_points_kth_ring)
+
+    # Get the proportion of points in each rung
+    proportion = num_points_kth_ring/np.sum(num_points_kth_ring)
+
+    # resolve this proportion to an integer value, and reverse it
+    num_rays_to_each_ring = np.ceil(proportion*remainder_rays)[::-1]
+
+    # We need to decide on where to stop adding the remainder of rays to the
+    # rest of the rings. We find this point by summing the rays in each ring
+    # from outside to inside, and then getting the index where it is greater
+    # than or equal to the remainder
+    index_to_stop_adding_rays = np.where(
+        np.cumsum(num_rays_to_each_ring) >= remainder_rays)[0][0]
+
+    # We then get the total number of rays to add
+    rays_to_add = np.cumsum(num_rays_to_each_ring)[
+        index_to_stop_adding_rays].astype(np.int32)
+
+    # The number of rays to add isn't always matching the remainder, so we
+    # collect them here with this line
+    final_sub = rays_to_add - remainder_rays
+
+    # Here we take them away so we get the number of rays we want
+    num_rays_to_each_ring[index_to_stop_adding_rays] -= final_sub
+
+    # Then we add all of these rays to the correct ring
+    num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
+        :index_to_stop_adding_rays+1
+    ].astype(int)
+
+    # Add one point for the centre, and take one away from the end
+    num_points_kth_ring[0] = 1
+    num_points_kth_ring[-1] = num_points_kth_ring[-1] - 1
+
+    # Make get the radii for the number of circles of rays we need
+    radii = np.linspace(0, outer_radius, num_circles_int+1)
+
+    # fill in the x and y coordinates to our ray array
+    idx = 0
+    for i in range(len(radii)):
+        for j in range(num_points_kth_ring[i]):
+            radius = radii[i]
+            t = j*(2 * np.pi / num_points_kth_ring[i])
+            r[0, idx] = radius*np.cos(t)
+            r[2, idx] = radius*np.sin(t)
+            idx += 1
+
+    return r, num_points_kth_ring
 
 
 PositiveFloat: TypeAlias = float
@@ -21,11 +114,24 @@ class UsageError(Exception):
     ...
 
 
+class InvalidModelError(Exception):
+    ...
+
+
+def P2R(radii, angles):
+    return radii * np.exp(1j*angles)
+
+
+def R2P(x):
+    return np.abs(x), np.angle(x)
+
+
 @dataclass
 class Rays:
     data: np.ndarray
     indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
+    path_length: np.ndarray
 
     @property
     def z(self) -> float:
@@ -68,7 +174,7 @@ class Rays:
         return self.data[3, :]
 
     @staticmethod
-    def propagation_matix(z):
+    def propagation_matrix(z):
         '''
         Propagation matrix
 
@@ -93,11 +199,15 @@ class Rays:
     def propagate(self, distance: float) -> Self:
         return Rays(
             data=np.matmul(
-                self.propagation_matix(distance),
+                self.propagation_matrix(distance),
                 self.data,
             ),
             indices=self.indices,
             location=self.z + distance,
+            path_length=(
+                self.path_length
+                + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
+            )
         )
 
     def propagate_to(self, z: float) -> Self:
@@ -108,22 +218,27 @@ class Rays:
         shape: Tuple[int, int],
         pixel_size: PositiveFloat,
         flip_y: bool = False,
-        scan_rotation: float = 0.
+        rotation: float = 0.
     ):
         det = Detector(
             z=self.z,
             pixel_size=pixel_size,
             shape=shape,
-            scan_rotation=scan_rotation,
+            rotation=rotation,
             flip_y=flip_y,
         )
         return det.get_image(self)
 
 
 class Component(abc.ABC):
-    def __init__(self, z: float, name: str):
+    def __init__(self, z: float, name: Optional[str] = None):
+        if name is None:
+            name = type(self).__name__
         self._name = name
         self._z = z
+
+    def _validate_component(self):
+        pass
 
     @property
     def z(self) -> float:
@@ -149,7 +264,7 @@ class Component(abc.ABC):
         return self._name
 
     def __repr__(self):
-        return f'{self.__class__.__name__}: {self._name} @ z = {self._z}'
+        return f'{self.__class__.__name__}: {self._name} @ z = {self.z}'
 
     def step(
         self, rays: Rays
@@ -167,7 +282,7 @@ class ComponentGUIWrapper:
 
 
 class Lens(Component):
-    def __init__(self, z: float, f: float, name: str = "Lens"):
+    def __init__(self, z: float, f: float, name: Optional[str] = None):
         super().__init__(name=name, z=z)
         self._f = f
 
@@ -215,11 +330,12 @@ class Lens(Component):
             data=np.matmul(self.lens_matrix(self.f), rays.data),
             indices=rays.indices,
             location=self,
+            path_length=rays.path_length
         )
 
 
 class Sample(Component):
-    def __init__(self, z: float, name: str = "Sample"):
+    def __init__(self, z: float, name: Optional[str] = None):
         super().__init__(name=name, z=z)
 
     def step(
@@ -238,14 +354,16 @@ class STEMSample(Sample):
         overfocus: NonNegativeFloat = 0.,
         semiconv_angle: PositiveFloat = 0.01,
         scan_shape: Tuple[int, int] = (8, 8),
-        scan_step_yx: Tuple[PositiveFloat, PositiveFloat] = (0.01, 0.01),
-        name: str = "STEMSample"
+        scan_step_yx: Tuple[float, float] = (0.01, 0.01),
+        scan_rotation: float = 0.,
+        name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
         self.overfocus = overfocus
         self.semiconv_angle = semiconv_angle
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
+        self.scan_rotation = scan_rotation
 
     def scan_position(self, yx: Tuple[int, int]) -> Tuple[float, float]:
         y, x = yx
@@ -254,12 +372,16 @@ class STEMSample(Sample):
         sy, sx = self.scan_shape
         scan_position_x = (x - sx / 2.) * scan_step_x
         scan_position_y = (y - sy / 2.) * scan_step_y
+        if self.scan_rotation != 0.:
+            pos_r, pos_a = R2P(scan_position_x + scan_position_y * 1j)
+            pos_c = P2R(pos_r, pos_a + self.scan_rotation)
+            scan_position_y, scan_position_x = pos_c.imag, pos_c.real
         return (scan_position_y, scan_position_x)
 
 
 class Source(Component):
     def __init__(
-        self, z: float, tilt_yx: Tuple[float, float] = (0., 0.), name: str = "Source"
+        self, z: float, tilt_yx: Tuple[float, float] = (0., 0.), name: Optional[str] = None
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
@@ -273,7 +395,9 @@ class Source(Component):
             indices = np.arange(r.shape[1])
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
-        return Rays(data=r, indices=indices, location=self)
+        return Rays(
+            data=r, indices=indices, location=self, path_length=np.zeros((r.shape[1],))
+        )
 
     def step(
         self, rays: Rays
@@ -289,7 +413,7 @@ class ParallelBeam(Source):
         z: float,
         radius: float = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "ParallelBeam",
+        name: Optional[str] = None,
     ):
         super().__init__(z=z, tilt_yx=tilt_yx, name=name)
         self.radius = radius
@@ -299,13 +423,42 @@ class ParallelBeam(Source):
         return self._make_rays(r)
 
 
-class PointSource(Component):
+class XAxialBeam(ParallelBeam):
+    def get_rays(self, num_rays: int) -> Rays:
+        r = np.zeros((5, num_rays))
+        r[0, :] = np.linspace(
+            -self.radius, self.radius, num=num_rays, endpoint=True
+        )
+        return self._make_rays(r)
+
+
+class RadialSpikesBeam(ParallelBeam):
+    def get_rays(self, num_rays: int) -> Rays:
+        xvals = np.linspace(
+            0., self.radius, num=num_rays // 4, endpoint=True
+        )
+        yvals = np.zeros_like(xvals)
+        origin_c = xvals + yvals * 1j
+
+        orad, oang = R2P(origin_c)
+        radius1 = P2R(orad * 0.75, oang + np.pi * 0.4)
+        radius2 = P2R(orad * 0.5, oang + np.pi * 0.8)
+        radius3 = P2R(orad * 0.25, oang + np.pi * 1.2)
+        r_c = np.concatenate((origin_c, radius1, radius2, radius3))
+
+        r = np.zeros((5, r_c.size))
+        r[0, :] = r_c.real
+        r[2, :] = r_c.imag
+        return self._make_rays(r)
+
+
+class PointSource(Source):
     def __init__(
         self,
         z: float,
-        semi_angle: Optional[float] = None,
+        semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
-        name: str = "PointSource",
+        name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
         self.semi_angle = semi_angle
@@ -322,14 +475,29 @@ class Detector(Component):
         z: float,
         pixel_size: float,
         shape: Tuple[int, int],
-        scan_rotation: float = 0.,
+        rotation: float = 0.,
         flip_y: bool = False,
-        name: str = "Detector",
+        name: Optional[str] = None,
     ):
+        """
+        The intention of rotation is to rotate the detector
+        realative to the common y/x coordinate system of the optics.
+        A positive rotation would rotate the detector clockwise
+        looking down a ray , and the image will appear
+        to rotate anti-clockwise.
+
+        In STEMModel the scan grid is aligned with the optics
+        y/x coordinate system default, but can also
+        be rotated using the "scan_rotation" parameter.
+
+        The detector flip_y acts only at the image generation step,
+        the scan grid itself can be flipped by setting negative
+        scan step values
+        """
         super().__init__(name=name, z=z)
         self.pixel_size = pixel_size
         self.shape = shape
-        self.scan_rotation = scan_rotation
+        self.rotation = rotation
         self.flip_y = flip_y
 
     def step(
@@ -341,14 +509,14 @@ class Detector(Component):
 
     def get_image(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
-        pixel_coords_y, pixel_coords_x = np.round(
+        pixel_coords_x, pixel_coords_y = np.round(
             get_pixel_coords(
                 rays_x=rays.x,
                 rays_y=rays.y,
                 shape=self.shape,
                 pixel_size=self.pixel_size,
                 flip_y=self.flip_y,
-                scan_rotation=self.scan_rotation,
+                scan_rotation=self.rotation,
             )
         ).astype(int)
         sy, sx = self.shape
@@ -391,7 +559,7 @@ class Deflector(Component):
         z: float,
         defx: float = 0.,
         defy: float = 0.,
-        name: str = "Deflector",
+        name: Optional[str] = None,
     ):
         '''
 
@@ -445,6 +613,7 @@ class Deflector(Component):
             ),
             indices=rays.indices,
             location=self,
+            path_length=rays.path_length
         )
 
 
@@ -453,7 +622,7 @@ class DoubleDeflector(Component):
         self,
         first: Deflector,
         second: Deflector,
-        name: str = "DoubleDeflector",
+        name: Optional[str] = None,
     ):
         super().__init__(
             z=(first.z + second.z) / 2,
@@ -461,7 +630,11 @@ class DoubleDeflector(Component):
         )
         self._first = first
         self._second = second
-        assert self.first.z < self.second.z
+        self._validate_component()
+
+    def _validate_component(self):
+        if self.first.z >= self.second.z:
+            raise InvalidModelError("First deflector must be before second")
 
     @property
     def length(self) -> float:
@@ -477,7 +650,13 @@ class DoubleDeflector(Component):
 
     @property
     def z(self):
-        return (self.first.z + self.second.z) / 2
+        self._z = (self.first.z + self.second.z) / 2
+        return self._z
+
+    def _set_z(self, new_z: float):
+        dz = new_z - self.z
+        self.first._set_z(self.first.z + dz)
+        self.second._set_z(self.second.z + dz)
 
     @property
     def entrance_z(self) -> float:
@@ -556,6 +735,47 @@ class DoubleDeflector(Component):
         )
 
 
+class Biprism(Component):
+    def __init__(
+        self,
+        z: float,
+        x: float = 0.,
+        defx: float = 0.,
+        name: Optional[str] = None,
+    ):
+        '''
+
+        Parameters
+        ----------
+        z : float
+            Position of component in optic axis
+        x: float
+            Central position of biprism in x dimension
+        name : str, optional
+            Name of this component which will be displayed by GUI, by default ''
+        defx : float, optional
+            deflection kick in slope units to the incoming ray x angle, by default 0.5
+        '''
+        super().__init__(z=z, name=name)
+        self.defx = defx
+        self.x = x
+
+    def step(
+        self, rays: Rays,
+    ) -> Generator[Rays, None, None]:
+        pos_x = rays.x
+        x_dist = (pos_x - self.x)
+        x_sign = np.sign(x_dist)
+        rays.data[1] = rays.data[1] + self.defx*x_sign
+
+        yield Rays(
+            data=rays.data,
+            indices=rays.indices,
+            path_length=rays.path_length + np.abs(self.defx)*x_dist,
+            location=self,
+        )
+
+
 class Aperture(Component):
     def __init__(
         self,
@@ -564,7 +784,7 @@ class Aperture(Component):
         radius_outer: float = 0.25,
         x: float = 0.,
         y: float = 0.,
-        name: str = 'Aperture',
+        name: Optional[str] = None,
     ):
         '''
 
@@ -603,20 +823,32 @@ class Aperture(Component):
             distance < self.radius_outer,
         )
         yield Rays(
-            data=rays.data[:, mask], indices=rays.indices[mask], location=self
+            data=rays.data[:, mask], indices=rays.indices[mask],
+            location=self, path_length=rays.path_length[mask],
         )
 
 
 class Model:
     def __init__(self, components: Iterable[Component]):
         self._components = components
-        assert len(self._components) >= 1
-        assert isinstance(self.source, Source)
-        assert all(
-            next_c.entrance_z > this_c.exit_z
+        self._sort_components()
+        self._validate_components()
+
+    def _validate_components(self):
+        if len(self._components) <= 1:
+            raise InvalidModelError("Must have at least one component")
+        if not isinstance(self.source, Source):
+            raise InvalidModelError("First component must always be a Source")
+        if any(
+            next_c.entrance_z <= this_c.exit_z
             for this_c, next_c
             in pairwise(self._components)
-        ), "Components must be sorted in increasing in z position with no overlap"
+        ):
+            raise InvalidModelError(
+                "Components must be sorted in increasing in z position with no overlap"
+            )
+        for c in self._components:
+            c._validate_component()
 
     @property
     def components(self) -> Iterable[Component]:
@@ -641,6 +873,52 @@ class Model:
     @property
     def last(self) -> Detector:
         return self.components[-1]
+
+    def move_component(
+        self,
+        component: Component,
+        z: float,
+    ):
+        old_z = component.z
+        component._set_z(z)
+        self._sort_components()
+        try:
+            self._validate_components()
+        except InvalidModelError as err:
+            # Unwind the change but reraise
+            self.move_component(component, old_z)
+            raise err from None
+
+    def add_component(self, component: Component):
+        original_components = tuple(self._components)
+        self._components = tuple(self._components) + (component,)
+        self._sort_components()
+        try:
+            self._validate_components()
+        except InvalidModelError as err:
+            # Unwind the change but reraise
+            self._components = original_components
+            raise err from None
+
+    def remove_component(self, component: Component):
+        original_components = tuple(self._components)
+        self._components = tuple(
+            c for c in self._components
+            if c is not component
+        )
+        if len(self._components) == len(original_components):
+            raise ValueError("Component not found in model, cannot remove")
+        try:
+            self._validate_components()
+        except InvalidModelError as err:
+            # Unwind the change but reraise
+            self._components = original_components
+            raise err from None
+
+    def _sort_components(self):
+        self._components = tuple(
+            sorted(self._components, key=lambda c: c.z)
+        )
 
     def run_iter(
         self, num_rays: int
@@ -687,53 +965,88 @@ class Model:
 class STEMModel(Model):
     def __init__(
         self,
+        camera_length: PositiveFloat,
         semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[PositiveFloat, PositiveFloat],
+        scan_step_yx: Tuple[float, float],
         scan_shape: Tuple[int, int],
-        overfocus: float = 0.,
+        scan_rotation: float,
+        flip_y: bool,
+        overfocus: float,
+        detector_z,
     ):
+        # Note a flip_y or flip_x can be achieved by setting
+        # either of scan_step_yx to negative values
+        self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
         super().__init__(self.default_components(
+            camera_length,
             semiconv_angle,
             scan_step_yx,
             scan_shape,
+            scan_rotation,
+            flip_y,
+            detector_z,
         ))
-        assert isinstance(self.source, ParallelBeam)
-        self._scan_pixel_yx = (0, 0)
         self.set_stem_params(overfocus=overfocus)
+
+    def _validate_components(self):
+        super()._validate_components()
+        if not isinstance(self.source, ParallelBeam):
+            raise InvalidModelError("Must have a ParallelBeam for STEMModel")
+        # Called here because even if all components are valid from
+        # the perspective of z the current overfocus/semiconv
+        # could forbid the new state, so we change the state during
+        # validation such that it could be unwound if necessary
+        self.set_stem_params()
+
+    def _sort_components(self):
+        """Component order fixed in STEMModel"""
+        pass
+
+    def add_component(self, component: Component):
+        raise UsageError("Cannot add components to STEMModel")
+
+    def remove_component(self, component: Component):
+        raise UsageError("Cannot remove components from STEMModel")
 
     @staticmethod
     def default_components(
+        camera_length: PositiveFloat,
         semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[PositiveFloat, PositiveFloat],
+        scan_step_yx: Tuple[float, float],
         scan_shape: Tuple[int, int],
+        scan_rotation: float,
+        flip_y: bool,
+        detector_z: PositiveFloat,
     ):
         return (
             ParallelBeam(
-                z=0.,
+                z=0.0,
                 radius=0.01,
             ),
             DoubleDeflector(
-                first=Deflector(z=0.225),
-                second=Deflector(z=0.275),
+                first=Deflector(z=0.1),
+                second=Deflector(z=0.15),
             ),
             Lens(
-                z=0.5,
-                f=0.2,
+                z=0.2,
+                f=0.1,
             ),
             STEMSample(
-                z=0.6,
+                z=detector_z-camera_length,
                 semiconv_angle=semiconv_angle,
                 scan_shape=scan_shape,
                 scan_step_yx=scan_step_yx,
+                scan_rotation=scan_rotation,
             ),
             DoubleDeflector(
-                first=Deflector(z=0.725),
-                second=Deflector(z=0.775),
+                first=Deflector(z=0.3),
+                second=Deflector(z=0.35),
             ),
             Detector(
-                z=1.,
+                z=detector_z,
                 pixel_size=0.05,
                 shape=(128, 128),
+                flip_y=flip_y
             ),
         )
 
@@ -772,6 +1085,7 @@ class STEMModel(Model):
         semiconv_angle: Optional[PositiveFloat] = None,
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
+        scan_rotation: Optional[float] = None,
     ):
         """
         Change one-or-more STEM params
@@ -790,20 +1104,21 @@ class STEMModel(Model):
             self.sample.semiconv_angle = semiconv_angle
         self.set_obj_lens_f_from_overfocus()
         self.set_beam_radius_from_semiconv()
-        # These could be set externally, no invariants to hold
         if scan_step_yx is not None:
             self.sample.scan_step_yx = scan_step_yx
         if scan_shape is not None:
             self.sample.scan_shape = scan_shape
+        if scan_rotation is not None:
+            self.sample.scan_rotation = scan_rotation
         self.move_to(self.scan_coord)
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
-            raise ValueError("Overfocus point is before lens")
+            raise InvalidModelError("Overfocus point is before lens")
         self.objective.f = self.sample.z - (self.objective.z + self.sample.overfocus)
 
     def set_beam_radius_from_semiconv(self):
-        self.source.radius = abs(self.objective.f) * np.tan(self.sample.semiconv_angle)
+        self.source.radius = abs(self.objective.f) * np.tan(abs(self.sample.semiconv_angle))
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx
@@ -847,156 +1162,3 @@ class GUIModel:
         self._gui_components = tuple(
             c.gui_wrapper()(c) for c in self._model._components
         )
-
-
-if __name__ == '__main__':
-    model = STEMModel(
-        semiconv_angle=0.01,
-        scan_shape=(8, 8),
-        scan_step_yx=(0.01, 0.01),
-    )
-
-    import matplotlib.pyplot as plt
-    # image = model.run_to_z(512, model.objective.ffp).get_image((128, 128), 0.0001)
-    # plt.imshow(image)
-    # plt.show()
-    # exit()
-
-    fig, ax = plt.subplots()
-
-    # Variables to store the previous component's ray positions
-    # prev_x_positions = None
-    # prev_y_positions = None
-    # prev_z = None
-
-    # Iterate over components and their ray positions
-    num_rays = 5
-    yx = (5, 5)
-    all_rays = tuple(model.scan_point_iter(num_rays=num_rays, yx=yx))
-
-    xvals = np.stack(tuple(r.x for r in all_rays), axis=0)
-    yvals = np.stack(tuple(r.x for r in all_rays), axis=0)
-    zvals = np.asarray(tuple(r.z for r in all_rays))
-    ax.plot(xvals, zvals)
-
-    # Optional: Mark the component positions
-    extent = 1.5 * np.abs(xvals).max()
-    for component in model.components:
-        if isinstance(component, DoubleDeflector):
-            ax.hlines(
-                component.first.z, -extent, extent, linestyle='--'
-            )
-            ax.text(-extent, component.first.z, repr(component.first), va='bottom')
-            ax.hlines(
-                component.second.z, -extent, extent, linestyle='--'
-            )
-            ax.text(-extent, component.second.z, repr(component.second), va='bottom')
-        else:
-            ax.hlines(component.z, -extent, extent, label=repr(component))
-            ax.text(-extent, component.z, repr(component), va='bottom')
-
-    ax.hlines(
-        model.objective.ffp, -extent, extent, linestyle=':'
-    )
-
-    ax.axvline(color='black', linestyle=":", alpha=0.3)
-    _, scan_pos_x = model.sample.scan_position(yx)
-    ax.plot([scan_pos_x], [model.sample.z], 'ko')
-
-    ax.set_xlabel('x position')
-    ax.set_ylabel('z position')
-    ax.invert_yaxis()
-    ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
-    plt.show()
-
-    # model.detector.shape = (512, 512)
-    # model.detector.pixel_size = 0.002
-    # image = model.detector.get_image(rays)
-
-    # image = rays.get_image((512, 512), 0.002)
-
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots()
-    # ax.plot(rays.x, rays.y, 'o')
-    # br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
-    # b, r = br  # noqa
-    # tl = -1 * br
-    # t, l = tl  # noqa
-    # tr = [t, r]
-    # bl = [b, l]
-    # points = np.stack((tl, tr, br, bl), axis=0)
-    # ax.fill(points[:, 1], points[:, 0], facecolor='none', edgecolor='black')
-    # ax.invert_yaxis()
-    # ax.axis('equal')
-
-    # import matplotlib.pyplot as plt
-    # fig, ax = plt.subplots()
-    # ax.imshow(image)
-    # plt.show()
-
-    exit(0)
-
-    components = (
-        ParallelBeam(
-            z=1.,
-            radius=0.03,
-            tilt_yx=(0., 0.),
-        ),
-        Lens(
-            z=0.5,
-            f=-0.05,
-        ),
-        DoubleDeflector(
-            first=Deflector(
-                z=0.275,
-                defy=0.05,
-                defx=0.05,
-            ),
-            second=Deflector(
-                z=0.225,
-                defy=-0.025,
-                defx=0.,
-            ),
-        ),
-        Sample(
-            z=0.2
-        ),
-        Aperture(
-            0.15,
-            radius_inner=0.,
-            radius_outer=0.0075,
-        ),
-        Detector(
-            z=0.,
-            pixel_size=0.01,
-            shape=(128, 128),
-        ),
-    )
-    model = Model(components)
-    print(model)
-
-    rays = model.run_to_component(model.detector, 512)
-    image = model.detector.get_image(rays)
-
-    import matplotlib.pyplot as plt
-    plt.imshow(image)
-
-    fig, ax = plt.subplots()
-    ax.plot(rays.x, rays.y, 'o')
-    br = (np.asarray(model.detector.shape) // 2) * model.detector.pixel_size
-    b, r = br  # noqa
-    tl = -1 * br
-    t, l = tl  # noqa
-    tr = [t, r]
-    bl = [b, l]
-    points = np.stack((tl, tr, br, bl), axis=0)
-    ax.fill(points[:, 1], points[:, 0], facecolor='none', edgecolor='black')
-    ax.invert_yaxis()
-    ax.axis('equal')
-
-    plt.show()
-
-    # rays_y = det_rays[2]
-    # rays_x = det_rays[0]
-    # plt.plot(rays_x, rays_y, 'o')
-    # plt.show()
