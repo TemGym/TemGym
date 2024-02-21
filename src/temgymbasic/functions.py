@@ -2,16 +2,6 @@
 import numpy as np
 
 
-def initial_r(num_rays: int):
-    r = np.zeros(
-        (5, num_rays),
-        dtype=np.float64
-    )  # x, theta_x, y, theta_y, 1
-
-    r[4, :] = np.ones(num_rays)
-    return r
-
-
 def make_test_sample(size=256):
     # Code From Dieter Weber
     obj = np.ones((size, size), dtype=np.complex64)
@@ -60,7 +50,7 @@ def make_test_sample(size=256):
 
 
 # FIXME resolve code duplication between circular_beam() and point_beam()
-def circular_beam(num_rays, outer_radius):
+def circular_beam(r, outer_radius):
     '''Generates a circular paralell initial beam
 
     Parameters
@@ -77,15 +67,11 @@ def circular_beam(num_rays, outer_radius):
     num_points_kth_ring: ndarray
         Array of the number of points on each ring of our circular beam
     '''
-    r = initial_r(num_rays)
+    num_rays = r.shape[2]
 
     # Use the equation from stack overflow about ukrainian graves from 2014
     # to calculate the number of even rings including decimal remainder
-    
-    if num_rays < 7:
-        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
-    else:
-        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
+    num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
 
     # Get the number of integer rings
     num_circles_int = int(np.floor(num_circles_dec))
@@ -124,7 +110,7 @@ def circular_beam(num_rays, outer_radius):
     # Then we add all of these rays to the correct ring
     num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
         :index_to_stop_adding_rays+1
-    ].astype(int)
+    ]
 
     # Add one point for the centre, and take one away from the end
     num_points_kth_ring[0] = 1
@@ -139,14 +125,14 @@ def circular_beam(num_rays, outer_radius):
         for j in range(num_points_kth_ring[i]):
             radius = radii[i]
             t = j*(2 * np.pi / num_points_kth_ring[i])
-            r[0, idx] = radius*np.cos(t)
-            r[2, idx] = radius*np.sin(t)
+            r[0, 0, idx] = radius*np.cos(t)
+            r[0, 2, idx] = radius*np.sin(t)
             idx += 1
 
     return r, num_points_kth_ring
 
 
-def point_beam(num_rays, gun_beam_semi_angle):
+def point_beam(r, gun_beam_semi_angle):
     '''Generates a point initial beam that spreads out with semi angle 'gun_beam_semi_angle'
 
     Parameters
@@ -163,7 +149,8 @@ def point_beam(num_rays, gun_beam_semi_angle):
     num_points_kth_ring: ndarray
         Array of the number of points on each ring of our circular beam
     '''
-    r = initial_r(num_rays)
+    num_rays = r.shape[2]
+
     # Use the equation from stack overflow about ukrainian graves
     # to calculate the number of even rings including decimal remainder
     num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
@@ -205,7 +192,7 @@ def point_beam(num_rays, gun_beam_semi_angle):
     # Then we add all of these rays to the correct ring
     num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
         :index_to_stop_adding_rays+1
-    ].astype(int)
+    ]
 
     # Add one point for the centre, and take one away from the end
     num_points_kth_ring[0] = 1
@@ -220,14 +207,14 @@ def point_beam(num_rays, gun_beam_semi_angle):
         for j in range(num_points_kth_ring[i]):
             radius = radii[i]
             t = j*(2 * np.pi / num_points_kth_ring[i])
-            r[1, idx] = np.tan(gun_beam_semi_angle*radius)*np.cos(t)
-            r[3, idx] = np.tan(gun_beam_semi_angle*radius)*np.sin(t)
+            r[0, 1, idx] = np.tan(gun_beam_semi_angle*radius)*np.cos(t)
+            r[0, 3, idx] = np.tan(gun_beam_semi_angle*radius)*np.sin(t)
             idx += 1
 
     return r, num_points_kth_ring
 
 
-def axial_point_beam(num_rays, gun_beam_semi_angle):
+def axial_point_beam(r, gun_beam_semi_angle):
     '''Generates a cross shaped initial beam on the x and y axis
     that spreads out with semi angle 'gun_beam_semi_angle'
 
@@ -243,7 +230,7 @@ def axial_point_beam(num_rays, gun_beam_semi_angle):
     r : ndarray
         Updated ray position & slope matrix which create a circular beam
     '''
-    r = initial_r(num_rays)
+    num_rays = r.shape[2]
 
     x_rays = int(round(num_rays/2))
     x_angles = np.linspace(-gun_beam_semi_angle, gun_beam_semi_angle, x_rays, endpoint=True)
@@ -251,16 +238,16 @@ def axial_point_beam(num_rays, gun_beam_semi_angle):
     y_angles = np.linspace(-gun_beam_semi_angle, gun_beam_semi_angle, y_rays, endpoint=True)
 
     for idx, angle in enumerate(x_angles):
-        r[1, idx] = np.tan(angle)
+        r[0, 1, idx] = np.tan(angle)
 
     for idx, angle in enumerate(y_angles):
         i = idx + y_rays
-        r[3, i] = np.tan(angle)
+        r[0, 3, i] = np.tan(angle)
 
     return r
 
 
-def x_axial_point_beam(num_rays, gun_beam_semi_angle):
+def x_axial_point_beam(r, gun_beam_semi_angle):
     '''Generates a cross shaped initial beam on the x axis
     that spreads out with semi angle 'gun_beam_semi_angle'
 
@@ -276,13 +263,13 @@ def x_axial_point_beam(num_rays, gun_beam_semi_angle):
     r : ndarray
         Updated ray position & slope matrix which create a circular beam
     '''
-    r = initial_r(num_rays)
+    num_rays = r.shape[2]
 
     x_rays = int(round(num_rays))
     x_angles = np.linspace(-gun_beam_semi_angle, gun_beam_semi_angle, x_rays, endpoint=True)
 
     for idx, angle in enumerate(x_angles):
-        r[1, idx] = np.tan(angle)
+        r[0, 1, idx] = np.tan(angle)
 
     return r
 
@@ -315,7 +302,7 @@ def _rotate_deg(degrees):
     return _rotate(np.pi/180*degrees)
 
 
-def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation=0.):
+def get_pixel_coords(rays_x, rays_y, size, pixels, flip_y=False, scan_rotation=0.):
     if flip_y:
         transform = _flip_y()
     else:
@@ -326,9 +313,8 @@ def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotat
 
     y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
 
-    sy, sx = shape
-    pixel_coords_x = x_transformed / pixel_size + sx // 2
-    pixel_coords_y = y_transformed / pixel_size + sy // 2
+    pixel_coords_x = x_transformed / size * pixels + pixels/2 - 1
+    pixel_coords_y = y_transformed / size * pixels + pixels/2 - 1
 
     return (pixel_coords_x, pixel_coords_y)
 
