@@ -6,9 +6,51 @@ from numpy.typing import NDArray
 from dataclasses import dataclass
 
 
-from temgymbasic.functions import (
-    get_pixel_coords,
-)
+def _flip_y():
+    # From libertem.corrections.coordinates v0.11.1
+    return np.array([
+        (-1, 0),
+        (0, 1)
+    ])
+
+
+def _identity():
+    # From libertem.corrections.coordinates v0.11.1
+    return np.eye(2)
+
+
+def _rotate(radians):
+    # From libertem.corrections.coordinates v0.11.1
+    # https://en.wikipedia.org/wiki/Rotation_matrix
+    # y, x instead of x, y
+    return np.array([
+        (np.cos(radians), np.sin(radians)),
+        (-np.sin(radians), np.cos(radians))
+    ])
+
+
+def _rotate_deg(degrees):
+    # From libertem.corrections.coordinates v0.11.1
+    return _rotate(np.pi/180*degrees)
+
+
+def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation=0.):
+    if flip_y:
+        transform = _flip_y()
+    else:
+        transform = _identity()
+
+    # Transformations are applied right to left
+    transform = _rotate_deg(scan_rotation) @ transform
+
+    y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
+
+    sy, sx = shape
+    pixel_coords_x = x_transformed / pixel_size + sx // 2
+    pixel_coords_y = y_transformed / pixel_size + sy // 2
+
+    return (pixel_coords_x, pixel_coords_y)
+
 
 def initial_r(num_rays: int):
     r = np.zeros(
@@ -18,6 +60,7 @@ def initial_r(num_rays: int):
 
     r[4, :] = np.ones(num_rays)
     return r
+
 
 # FIXME resolve code duplication between circular_beam() and point_beam()
 def circular_beam(num_rays, outer_radius):
@@ -41,7 +84,7 @@ def circular_beam(num_rays, outer_radius):
 
     # Use the equation from stack overflow about ukrainian graves from 2014
     # to calculate the number of even rings including decimal remainder
-    
+
     if num_rays < 7:
         num_circles_dec = 1.0  # Round up if the number is between 0 and 1
     else:
@@ -452,21 +495,21 @@ class RadialSpikesBeam(ParallelBeam):
         return self._make_rays(r)
 
 
-class PointSource(Source):
-    def __init__(
-        self,
-        z: float,
-        semi_angle: Optional[float] = 0.,
-        tilt_yx: Tuple[float, float] = (0., 0.),
-        name: Optional[str] = None,
-    ):
-        super().__init__(name=name, z=z)
-        self.semi_angle = semi_angle
-        self.tilt_yx = tilt_yx
+# class PointSource(Source):
+#     def __init__(
+#         self,
+#         z: float,
+#         semi_angle: Optional[float] = 0.,
+#         tilt_yx: Tuple[float, float] = (0., 0.),
+#         name: Optional[str] = None,
+#     ):
+#         super().__init__(name=name, z=z)
+#         self.semi_angle = semi_angle
+#         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int) -> Rays:
-        r, _ = point_beam(num_rays, self.semi_angle)
-        return self._make_rays(r)
+#     def get_rays(self, num_rays: int) -> Rays:
+#         r, _ = point_beam(num_rays, self.semi_angle)
+#         return self._make_rays(r)
 
 
 class Detector(Component):
