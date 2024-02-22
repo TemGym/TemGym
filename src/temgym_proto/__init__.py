@@ -446,6 +446,15 @@ class STEMSample(Sample):
             scan_position_y, scan_position_x = pos_c.imag, pos_c.real
         return (scan_position_y, scan_position_x)
 
+    def on_grid(self, rays: Rays, as_int: bool = True) -> NDArray:
+        return rays.on_grid(
+            shape=self.scan_shape,
+            # This needs to be refactored...
+            pixel_size=self.scan_step_yx[0],
+            rotation=self.scan_rotation,
+            as_int=as_int,
+        )
+
 
 class Source(Component):
     def __init__(
@@ -575,15 +584,18 @@ class Detector(Component):
         rays.location = self
         yield rays
 
-    def get_image(self, rays: Rays) -> NDArray:
-        # Convert rays from detector positions to pixel positions
-        pixel_coords_y, pixel_coords_x = rays.on_grid(
+    def on_grid(self, rays: Rays, as_int: bool = True) -> NDArray:
+        return rays.on_grid(
             shape=self.shape,
             pixel_size=self.pixel_size,
             flip_y=self.flip_y,
             rotation=self.rotation,
-            as_int=True,
+            as_int=as_int,
         )
+
+    def get_image(self, rays: Rays) -> NDArray:
+        # Convert rays from detector positions to pixel positions
+        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
         mask = np.logical_and(
             np.logical_and(
