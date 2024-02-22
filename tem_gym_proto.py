@@ -46,8 +46,8 @@ def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotat
     y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
 
     sy, sx = shape
-    pixel_coords_x = x_transformed / pixel_size + sx // 2
-    pixel_coords_y = y_transformed / pixel_size + sy // 2
+    pixel_coords_x = (x_transformed / pixel_size) + (sx // 2)
+    pixel_coords_y = (y_transformed / pixel_size) + (sy // 2)
 
     return (pixel_coords_x, pixel_coords_y)
 
@@ -209,6 +209,10 @@ class Rays:
         return self.data[2, :]
 
     @property
+    def yx(self):
+        return self.data[[2, 0], :]
+
+    @property
     def dx(self):
         return self.data[1, :]
 
@@ -255,6 +259,27 @@ class Rays:
 
     def propagate_to(self, z: float) -> Self:
         return self.propagate(z - self.z)
+
+    def on_grid(
+        self,
+        shape: Tuple[int, int],
+        pixel_size: PositiveFloat,
+        flip_y: bool = False,
+        rotation: float = 0.,
+        as_int: bool = True
+    ) -> Tuple[NDArray, NDArray]:
+        """Returns in yy, xx!"""
+        xx, yy = get_pixel_coords(
+            rays_x=self.x,
+            rays_y=self.y,
+            shape=shape,
+            pixel_size=pixel_size,
+            flip_y=flip_y,
+            scan_rotation=rotation,
+        )
+        if as_int:
+            return np.round((yy, xx)).astype(int)
+        return yy, xx
 
     def get_image(
         self,
@@ -552,16 +577,13 @@ class Detector(Component):
 
     def get_image(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
-        pixel_coords_x, pixel_coords_y = np.round(
-            get_pixel_coords(
-                rays_x=rays.x,
-                rays_y=rays.y,
-                shape=self.shape,
-                pixel_size=self.pixel_size,
-                flip_y=self.flip_y,
-                scan_rotation=self.rotation,
-            )
-        ).astype(int)
+        pixel_coords_y, pixel_coords_x = rays.on_grid(
+            shape=self.shape,
+            pixel_size=self.pixel_size,
+            flip_y=self.flip_y,
+            rotation=self.rotation,
+            as_int=True,
+        )
         sy, sx = self.shape
         mask = np.logical_and(
             np.logical_and(
@@ -1006,32 +1028,12 @@ class Model:
 
 
 class STEMModel(Model):
-    def __init__(
-        self,
-        camera_length: PositiveFloat,
-        semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[float, float],
-        scan_shape: Tuple[int, int],
-        scan_rotation: float,
-        flip_y: bool,
-        overfocus: float,
-        detector_z,
-        detector_pixel_size,
-    ):
+    def __init__(self):
         # Note a flip_y or flip_x can be achieved by setting
         # either of scan_step_yx to negative values
         self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
-        super().__init__(self.default_components(
-            camera_length,
-            semiconv_angle,
-            scan_step_yx,
-            scan_shape,
-            scan_rotation,
-            flip_y,
-            detector_z,
-            detector_pixel_size,
-        ))
-        self.set_stem_params(overfocus=overfocus)
+        super().__init__(self.default_components())
+        self.set_stem_params()
 
     def _validate_components(self):
         super()._validate_components()
@@ -1054,16 +1056,10 @@ class STEMModel(Model):
         raise UsageError("Cannot remove components from STEMModel")
 
     @staticmethod
-    def default_components(
-        camera_length: PositiveFloat,
-        semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[float, float],
-        scan_shape: Tuple[int, int],
-        scan_rotation: float,
-        flip_y: bool,
-        detector_z: PositiveFloat,
-        detector_pixel_size: PositiveFloat,
-    ):
+    def default_components():
+        """
+        Just an initial valid state for the model
+        """
         return (
             ParallelBeam(
                 z=0.0,
@@ -1074,25 +1070,20 @@ class STEMModel(Model):
                 second=Deflector(z=0.15),
             ),
             Lens(
-                z=0.2,
+                z=0.3,
                 f=0.1,
             ),
             STEMSample(
-                z=detector_z-camera_length,
-                semiconv_angle=semiconv_angle,
-                scan_shape=scan_shape,
-                scan_step_yx=scan_step_yx,
-                scan_rotation=scan_rotation,
+                z=0.5,
             ),
             DoubleDeflector(
-                first=Deflector(z=0.3),
-                second=Deflector(z=0.35),
+                first=Deflector(z=0.6),
+                second=Deflector(z=0.625),
             ),
             Detector(
-                z=detector_z,
-                pixel_size=detector_pixel_size,
+                z=1.,
+                pixel_size=0.01,
                 shape=(128, 128),
-                flip_y=flip_y
             ),
         )
 
@@ -1132,7 +1123,8 @@ class STEMModel(Model):
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
         scan_rotation: Optional[float] = None,
-    ):
+        camera_length: Optional[float] = None,
+    ) -> Self:
         """
         Change one-or-more STEM params
 
@@ -1156,7 +1148,13 @@ class STEMModel(Model):
             self.sample.scan_shape = scan_shape
         if scan_rotation is not None:
             self.sample.scan_rotation = scan_rotation
+        if camera_length is not None:
+            self.move_component(
+                self.detector,
+                self.sample.z + camera_length
+            )
         self.move_to(self.scan_coord)
+        return self
 
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
