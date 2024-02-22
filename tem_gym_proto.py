@@ -6,12 +6,147 @@ from numpy.typing import NDArray
 from dataclasses import dataclass
 
 
-from temgymbasic.functions import (
-    circular_beam,
-    point_beam,
-    get_pixel_coords,
-    get_interference
-)
+def _flip_y():
+    # From libertem.corrections.coordinates v0.11.1
+    return np.array([
+        (-1, 0),
+        (0, 1)
+    ])
+
+
+def _identity():
+    # From libertem.corrections.coordinates v0.11.1
+    return np.eye(2)
+
+
+def _rotate(radians):
+    # From libertem.corrections.coordinates v0.11.1
+    # https://en.wikipedia.org/wiki/Rotation_matrix
+    # y, x instead of x, y
+    return np.array([
+        (np.cos(radians), np.sin(radians)),
+        (-np.sin(radians), np.cos(radians))
+    ])
+
+
+def _rotate_deg(degrees):
+    # From libertem.corrections.coordinates v0.11.1
+    return _rotate(np.pi/180*degrees)
+
+
+def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation=0.):
+    if flip_y:
+        transform = _flip_y()
+    else:
+        transform = _identity()
+
+    # Transformations are applied right to left
+    transform = _rotate_deg(scan_rotation) @ transform
+
+    y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
+
+    sy, sx = shape
+    pixel_coords_x = (x_transformed / pixel_size) + (sx // 2)
+    pixel_coords_y = (y_transformed / pixel_size) + (sy // 2)
+
+    return (pixel_coords_x, pixel_coords_y)
+
+
+def initial_r(num_rays: int):
+    r = np.zeros(
+        (5, num_rays),
+        dtype=np.float64
+    )  # x, theta_x, y, theta_y, 1
+
+    r[4, :] = np.ones(num_rays)
+    return r
+
+
+# FIXME resolve code duplication between circular_beam() and point_beam()
+def circular_beam(num_rays, outer_radius):
+    '''Generates a circular paralell initial beam
+
+    Parameters
+    ----------
+    r : ndarray
+        Ray position and slope matrix
+    outer_radius : float
+        Outer radius of the circular beam
+
+    Returns
+    -------
+    r : ndarray
+        Updated ray position & slope matrix which create a circular beam
+    num_points_kth_ring: ndarray
+        Array of the number of points on each ring of our circular beam
+    '''
+    r = initial_r(num_rays)
+
+    # Use the equation from stack overflow about ukrainian graves from 2014
+    # to calculate the number of even rings including decimal remainder
+
+    if num_rays < 7:
+        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
+    else:
+        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
+
+    # Get the number of integer rings
+    num_circles_int = int(np.floor(num_circles_dec))
+
+    # Calculate the number of points per ring with the integer amoung of rings
+    num_points_kth_ring = np.round(
+        2*np.pi*(np.arange(0, num_circles_int+1))).astype(int)
+
+    # get the remainding amount of rays
+    remainder_rays = num_rays - np.sum(num_points_kth_ring)
+
+    # Get the proportion of points in each rung
+    proportion = num_points_kth_ring/np.sum(num_points_kth_ring)
+
+    # resolve this proportion to an integer value, and reverse it
+    num_rays_to_each_ring = np.ceil(proportion*remainder_rays)[::-1]
+
+    # We need to decide on where to stop adding the remainder of rays to the
+    # rest of the rings. We find this point by summing the rays in each ring
+    # from outside to inside, and then getting the index where it is greater
+    # than or equal to the remainder
+    index_to_stop_adding_rays = np.where(
+        np.cumsum(num_rays_to_each_ring) >= remainder_rays)[0][0]
+
+    # We then get the total number of rays to add
+    rays_to_add = np.cumsum(num_rays_to_each_ring)[
+        index_to_stop_adding_rays].astype(np.int32)
+
+    # The number of rays to add isn't always matching the remainder, so we
+    # collect them here with this line
+    final_sub = rays_to_add - remainder_rays
+
+    # Here we take them away so we get the number of rays we want
+    num_rays_to_each_ring[index_to_stop_adding_rays] -= final_sub
+
+    # Then we add all of these rays to the correct ring
+    num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
+        :index_to_stop_adding_rays+1
+    ].astype(int)
+
+    # Add one point for the centre, and take one away from the end
+    num_points_kth_ring[0] = 1
+    num_points_kth_ring[-1] = num_points_kth_ring[-1] - 1
+
+    # Make get the radii for the number of circles of rays we need
+    radii = np.linspace(0, outer_radius, num_circles_int+1)
+
+    # fill in the x and y coordinates to our ray array
+    idx = 0
+    for i in range(len(radii)):
+        for j in range(num_points_kth_ring[i]):
+            radius = radii[i]
+            t = j*(2 * np.pi / num_points_kth_ring[i])
+            r[0, idx] = radius*np.cos(t)
+            r[2, idx] = radius*np.sin(t)
+            idx += 1
+
+    return r, num_points_kth_ring
 
 
 PositiveFloat: TypeAlias = float
@@ -74,6 +209,10 @@ class Rays:
         return self.data[2, :]
 
     @property
+    def yx(self):
+        return self.data[[2, 0], :]
+
+    @property
     def dx(self):
         return self.data[1, :]
 
@@ -120,6 +259,27 @@ class Rays:
 
     def propagate_to(self, z: float) -> Self:
         return self.propagate(z - self.z)
+
+    def on_grid(
+        self,
+        shape: Tuple[int, int],
+        pixel_size: PositiveFloat,
+        flip_y: bool = False,
+        rotation: float = 0.,
+        as_int: bool = True
+    ) -> Tuple[NDArray, NDArray]:
+        """Returns in yy, xx!"""
+        xx, yy = get_pixel_coords(
+            rays_x=self.x,
+            rays_y=self.y,
+            shape=shape,
+            pixel_size=pixel_size,
+            flip_y=flip_y,
+            scan_rotation=rotation,
+        )
+        if as_int:
+            return np.round((yy, xx)).astype(int)
+        return yy, xx
 
     def get_image(
         self,
@@ -304,7 +464,7 @@ class Source(Component):
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
         return Rays(
-            data=r, indices=indices, location=self, path_length=np.zeros((num_rays,))
+            data=r, indices=indices, location=self, path_length=np.zeros((r.shape[1],))
         )
 
     def step(
@@ -360,21 +520,21 @@ class RadialSpikesBeam(ParallelBeam):
         return self._make_rays(r)
 
 
-class PointSource(Source):
-    def __init__(
-        self,
-        z: float,
-        semi_angle: Optional[float] = 0.,
-        tilt_yx: Tuple[float, float] = (0., 0.),
-        name: Optional[str] = None,
-    ):
-        super().__init__(name=name, z=z)
-        self.semi_angle = semi_angle
-        self.tilt_yx = tilt_yx
+# class PointSource(Source):
+#     def __init__(
+#         self,
+#         z: float,
+#         semi_angle: Optional[float] = 0.,
+#         tilt_yx: Tuple[float, float] = (0., 0.),
+#         name: Optional[str] = None,
+#     ):
+#         super().__init__(name=name, z=z)
+#         self.semi_angle = semi_angle
+#         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int) -> Rays:
-        r, _ = point_beam(num_rays, self.semi_angle)
-        return self._make_rays(r)
+#     def get_rays(self, num_rays: int) -> Rays:
+#         r, _ = point_beam(num_rays, self.semi_angle)
+#         return self._make_rays(r)
 
 
 class Detector(Component):
@@ -417,16 +577,13 @@ class Detector(Component):
 
     def get_image(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
-        pixel_coords_x, pixel_coords_y = np.round(
-            get_pixel_coords(
-                rays_x=rays.x,
-                rays_y=rays.y,
-                shape=self.shape,
-                pixel_size=self.pixel_size,
-                flip_y=self.flip_y,
-                scan_rotation=self.rotation,
-            )
-        ).astype(int)
+        pixel_coords_y, pixel_coords_x = rays.on_grid(
+            shape=self.shape,
+            pixel_size=self.pixel_size,
+            flip_y=self.flip_y,
+            rotation=self.rotation,
+            as_int=True,
+        )
         sy, sx = self.shape
         mask = np.logical_and(
             np.logical_and(
@@ -871,24 +1028,12 @@ class Model:
 
 
 class STEMModel(Model):
-    def __init__(
-        self,
-        semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[float, float],
-        scan_shape: Tuple[int, int],
-        scan_rotation: float = 0.,
-        overfocus: float = 0.,
-    ):
+    def __init__(self):
         # Note a flip_y or flip_x can be achieved by setting
         # either of scan_step_yx to negative values
         self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
-        super().__init__(self.default_components(
-            semiconv_angle,
-            scan_step_yx,
-            scan_shape,
-            scan_rotation,
-        ))
-        self.set_stem_params(overfocus=overfocus)
+        super().__init__(self.default_components())
+        self.set_stem_params()
 
     def _validate_components(self):
         super()._validate_components()
@@ -911,39 +1056,33 @@ class STEMModel(Model):
         raise UsageError("Cannot remove components from STEMModel")
 
     @staticmethod
-    def default_components(
-        semiconv_angle: PositiveFloat,
-        scan_step_yx: Tuple[float, float],
-        scan_shape: Tuple[int, int],
-        scan_rotation: float,
-    ):
+    def default_components():
+        """
+        Just an initial valid state for the model
+        """
         return (
             ParallelBeam(
-                z=0.,
+                z=0.0,
                 radius=0.01,
             ),
             DoubleDeflector(
-                first=Deflector(z=0.225),
-                second=Deflector(z=0.275),
+                first=Deflector(z=0.1),
+                second=Deflector(z=0.15),
             ),
             Lens(
-                z=0.5,
-                f=0.2,
+                z=0.3,
+                f=0.1,
             ),
             STEMSample(
-                z=0.6,
-                semiconv_angle=semiconv_angle,
-                scan_shape=scan_shape,
-                scan_step_yx=scan_step_yx,
-                scan_rotation=scan_rotation,
+                z=0.5,
             ),
             DoubleDeflector(
-                first=Deflector(z=0.725),
-                second=Deflector(z=0.775),
+                first=Deflector(z=0.6),
+                second=Deflector(z=0.625),
             ),
             Detector(
                 z=1.,
-                pixel_size=0.05,
+                pixel_size=0.01,
                 shape=(128, 128),
             ),
         )
@@ -984,6 +1123,7 @@ class STEMModel(Model):
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
         scan_rotation: Optional[float] = None,
+        camera_length: Optional[float] = None,
     ) -> Self:
         """
         Change one-or-more STEM params
@@ -1008,6 +1148,11 @@ class STEMModel(Model):
             self.sample.scan_shape = scan_shape
         if scan_rotation is not None:
             self.sample.scan_rotation = scan_rotation
+        if camera_length is not None:
+            self.move_component(
+                self.detector,
+                self.sample.z + camera_length
+            )
         self.move_to(self.scan_coord)
         return self
 
@@ -1061,63 +1206,3 @@ class GUIModel:
         self._gui_components = tuple(
             c.gui_wrapper()(c) for c in self._model._components
         )
-
-
-if __name__ == '__main__':
-    components = (
-        PointSource(z=0.0, semi_angle=0.1),
-        Biprism(z=0.5, defx=-0.1),
-        Detector(
-            z=1.,
-            pixel_size=0.05,
-            shape=(128, 1),
-        ),
-    )
-    model = Model(components)
-
-    import matplotlib.pyplot as plt
-    fig, ax = plt.subplots()
-
-    # Iterate over components and their ray positions
-    num_rays = 1000
-    all_rays = tuple(model.run_iter(num_rays=num_rays))
-
-    xvals = np.stack(tuple(r.x for r in all_rays), axis=0)
-    yvals = np.stack(tuple(r.x for r in all_rays), axis=0)
-    zvals = np.asarray(tuple(r.z for r in all_rays))
-    ax.plot(xvals, zvals)
-
-    # Optional: Mark the component positions
-    extent = 1.5 * np.abs(xvals).max()
-    for component in model.components:
-        if isinstance(component, DoubleDeflector):
-            ax.hlines(
-                component.first.z, -extent, extent, linestyle='--'
-            )
-            ax.text(-extent, component.first.z, repr(component.first), va='bottom')
-            ax.hlines(
-                component.second.z, -extent, extent, linestyle='--'
-            )
-            ax.text(-extent, component.second.z, repr(component.second), va='bottom')
-        else:
-            ax.hlines(component.z, -extent, extent, label=repr(component))
-            ax.text(-extent, component.z, repr(component), va='bottom')
-
-    ax.set_xlabel('x position')
-    ax.set_ylabel('z position')
-    ax.invert_yaxis()
-
-    opls = np.stack(tuple(r.path_length for r in all_rays), axis=0)
-    print(opls)
-
-    wavelength = 0.00001
-    k = 2*np.pi/wavelength
-    opl_detector = opls[-1, :]
-    phase_detector = k * opl_detector
-
-    image_x_pos, image = get_interference(xvals[-1, :], phase_detector, 128, [-0.06, 0.06])
-
-    plt.figure()
-    plt.plot(image_x_pos, np.abs(image)**2/np.max(np.abs(image)**2))
-
-    plt.show()
