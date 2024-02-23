@@ -1,5 +1,8 @@
 import abc
-from typing import Generator, Iterable, Tuple, Optional, Union, Type, TypeAlias, Self
+from typing import (
+    Generator, Iterable, Tuple, Optional, Union, Type, TypeAlias, Self,
+    TYPE_CHECKING
+)
 from itertools import pairwise
 import numpy as np
 from numpy.typing import NDArray
@@ -10,6 +13,9 @@ from .utils import (
     P2R, R2P,
     circular_beam,
 )
+
+if TYPE_CHECKING:
+    from .gui import ComponentGUIWrapper
 
 
 PositiveFloat: TypeAlias = float
@@ -196,12 +202,7 @@ class Component(abc.ABC):
 
     @staticmethod
     def gui_wrapper() -> Type['ComponentGUIWrapper']:
-        return ComponentGUIWrapper
-
-
-class ComponentGUIWrapper:
-    def __init__(self, component: Component):
-        self.component = component
+        raise NotImplementedError
 
 
 class Lens(Component):

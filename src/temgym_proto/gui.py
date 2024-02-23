@@ -1,4 +1,9 @@
-from . import Model
+from . import Model, Component
+
+
+class ComponentGUIWrapper:
+    def __init__(self, component: Component):
+        self.component = component
 
 
 class GUIModel:
