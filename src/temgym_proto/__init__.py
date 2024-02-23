@@ -5,148 +5,11 @@ import numpy as np
 from numpy.typing import NDArray
 from dataclasses import dataclass
 
-
-def _flip_y():
-    # From libertem.corrections.coordinates v0.11.1
-    return np.array([
-        (-1, 0),
-        (0, 1)
-    ])
-
-
-def _identity():
-    # From libertem.corrections.coordinates v0.11.1
-    return np.eye(2)
-
-
-def _rotate(radians):
-    # From libertem.corrections.coordinates v0.11.1
-    # https://en.wikipedia.org/wiki/Rotation_matrix
-    # y, x instead of x, y
-    return np.array([
-        (np.cos(radians), np.sin(radians)),
-        (-np.sin(radians), np.cos(radians))
-    ])
-
-
-def _rotate_deg(degrees):
-    # From libertem.corrections.coordinates v0.11.1
-    return _rotate(np.pi/180*degrees)
-
-
-def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation=0.):
-    if flip_y:
-        transform = _flip_y()
-    else:
-        transform = _identity()
-
-    # Transformations are applied right to left
-    transform = _rotate_deg(scan_rotation) @ transform
-
-    y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
-
-    sy, sx = shape
-    pixel_coords_x = (x_transformed / pixel_size) + (sx // 2)
-    pixel_coords_y = (y_transformed / pixel_size) + (sy // 2)
-
-    return (pixel_coords_x, pixel_coords_y)
-
-
-def initial_r(num_rays: int):
-    r = np.zeros(
-        (5, num_rays),
-        dtype=np.float64
-    )  # x, theta_x, y, theta_y, 1
-
-    r[4, :] = np.ones(num_rays)
-    return r
-
-
-# FIXME resolve code duplication between circular_beam() and point_beam()
-def circular_beam(num_rays, outer_radius):
-    '''Generates a circular paralell initial beam
-
-    Parameters
-    ----------
-    r : ndarray
-        Ray position and slope matrix
-    outer_radius : float
-        Outer radius of the circular beam
-
-    Returns
-    -------
-    r : ndarray
-        Updated ray position & slope matrix which create a circular beam
-    num_points_kth_ring: ndarray
-        Array of the number of points on each ring of our circular beam
-    '''
-    r = initial_r(num_rays)
-
-    # Use the equation from stack overflow about ukrainian graves from 2014
-    # to calculate the number of even rings including decimal remainder
-
-    if num_rays < 7:
-        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
-    else:
-        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
-
-    # Get the number of integer rings
-    num_circles_int = int(np.floor(num_circles_dec))
-
-    # Calculate the number of points per ring with the integer amoung of rings
-    num_points_kth_ring = np.round(
-        2*np.pi*(np.arange(0, num_circles_int+1))).astype(int)
-
-    # get the remainding amount of rays
-    remainder_rays = num_rays - np.sum(num_points_kth_ring)
-
-    # Get the proportion of points in each rung
-    proportion = num_points_kth_ring/np.sum(num_points_kth_ring)
-
-    # resolve this proportion to an integer value, and reverse it
-    num_rays_to_each_ring = np.ceil(proportion*remainder_rays)[::-1]
-
-    # We need to decide on where to stop adding the remainder of rays to the
-    # rest of the rings. We find this point by summing the rays in each ring
-    # from outside to inside, and then getting the index where it is greater
-    # than or equal to the remainder
-    index_to_stop_adding_rays = np.where(
-        np.cumsum(num_rays_to_each_ring) >= remainder_rays)[0][0]
-
-    # We then get the total number of rays to add
-    rays_to_add = np.cumsum(num_rays_to_each_ring)[
-        index_to_stop_adding_rays].astype(np.int32)
-
-    # The number of rays to add isn't always matching the remainder, so we
-    # collect them here with this line
-    final_sub = rays_to_add - remainder_rays
-
-    # Here we take them away so we get the number of rays we want
-    num_rays_to_each_ring[index_to_stop_adding_rays] -= final_sub
-
-    # Then we add all of these rays to the correct ring
-    num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
-        :index_to_stop_adding_rays+1
-    ].astype(int)
-
-    # Add one point for the centre, and take one away from the end
-    num_points_kth_ring[0] = 1
-    num_points_kth_ring[-1] = num_points_kth_ring[-1] - 1
-
-    # Make get the radii for the number of circles of rays we need
-    radii = np.linspace(0, outer_radius, num_circles_int+1)
-
-    # fill in the x and y coordinates to our ray array
-    idx = 0
-    for i in range(len(radii)):
-        for j in range(num_points_kth_ring[i]):
-            radius = radii[i]
-            t = j*(2 * np.pi / num_points_kth_ring[i])
-            r[0, idx] = radius*np.cos(t)
-            r[2, idx] = radius*np.sin(t)
-            idx += 1
-
-    return r, num_points_kth_ring
+from .utils import (
+    get_pixel_coords,
+    P2R, R2P,
+    circular_beam,
+)
 
 
 PositiveFloat: TypeAlias = float
@@ -159,14 +22,6 @@ class UsageError(Exception):
 
 class InvalidModelError(Exception):
     ...
-
-
-def P2R(radii: NDArray[np.float_], angles: NDArray[np.float_]) -> NDArray[np.complex_]:
-    return radii * np.exp(1j*angles)
-
-
-def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[np.float_]]:
-    return np.abs(x), np.angle(x)
 
 
 @dataclass
@@ -1230,11 +1085,3 @@ class STEMModel(Model):
             for x in range(sx):
                 pos = (y, x)
                 yield pos, self.scan_point(num_rays, pos)
-
-
-class GUIModel:
-    def __init__(self, model: Model):
-        self._model = model
-        self._gui_components = tuple(
-            c.gui_wrapper()(c) for c in self._model._components
-        )
