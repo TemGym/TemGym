@@ -161,11 +161,11 @@ class InvalidModelError(Exception):
     ...
 
 
-def P2R(radii, angles):
+def P2R(radii: NDArray[np.float_], angles: NDArray[np.float_]) -> NDArray[np.complex_]:
     return radii * np.exp(1j*angles)
 
 
-def R2P(x):
+def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[np.float_]]:
     return np.abs(x), np.angle(x)
 
 
@@ -554,6 +554,7 @@ class Detector(Component):
         shape: Tuple[int, int],
         rotation: float = 0.,
         flip_y: bool = False,
+        center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
         """
@@ -574,8 +575,26 @@ class Detector(Component):
         super().__init__(name=name, z=z)
         self.pixel_size = pixel_size
         self.shape = shape
-        self.rotation = rotation
+        self.rotation = rotation  # degrees
         self.flip_y = flip_y
+        self.center = center
+
+    def set_center_px(self, center_px: Tuple[int, int]):
+        """
+        For the desired image center in pixels (after any flip / rotation)
+        set the image center in the physical coordinates of the microscope
+
+        The continuous coordinate can be set directly on detector.center
+        """
+        iy, ix = center_px
+        sy, sx = self.shape
+        cont_y = (iy - sy // 2) * self.pixel_size
+        cont_x = (ix - sx // 2) * self.pixel_size
+        if self.flip_y:
+            cont_y = -1 * cont_y
+        mag, angle = R2P(cont_x + 1j * cont_y)
+        coord: complex = P2R(mag, angle + np.deg2rad(self.rotation))
+        self.center = coord.imag, coord.real
 
     def step(
         self, rays: Rays
@@ -1179,17 +1198,18 @@ class STEMModel(Model):
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx
         scan_position = self.sample.scan_position(scan_pixel_yx)
-        centreline = (0., 0.)
+        centerline = (0., 0.)
+        exit_axis = self.detector.center
 
         self.scan_coils.send_ray_through_points(
-            centreline,
-            (self.objective.ffp, *centreline),
+            centerline,
+            (self.objective.ffp, *centerline),
             (self.objective.z, *scan_position),
         )
         self.descan_coils.send_ray_through_points(
             scan_position,
-            (self.descan_coils.second.z + 0.01, *centreline),
-            (self.descan_coils.second.z + 0.02, *centreline),
+            (self.descan_coils.second.z + 0.01, *exit_axis),
+            (self.descan_coils.second.z + 0.02, *exit_axis),
         )
 
     def scan_point(self, num_rays: int, yx: Tuple[int, int]) -> Rays:
