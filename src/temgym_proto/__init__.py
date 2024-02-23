@@ -201,8 +201,8 @@ class Component(abc.ABC):
         raise NotImplementedError
 
     @staticmethod
-    def gui_wrapper() -> Type['ComponentGUIWrapper']:
-        raise NotImplementedError
+    def gui_wrapper() -> Optional[Type['ComponentGUIWrapper']]:
+        return None
 
 
 class Lens(Component):
@@ -256,6 +256,11 @@ class Lens(Component):
             location=self,
             path_length=rays.path_length
         )
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import LensGUI
+        return LensGUI
 
 
 class Sample(Component):
