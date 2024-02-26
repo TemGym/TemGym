@@ -1,9 +1,21 @@
 import abc
 from typing import (
-    Generator, Iterable, Tuple, Optional, Union, Type, TypeAlias, Self,
+    Generator, Iterable, Tuple, Optional, Union, Type,
     TYPE_CHECKING
 )
-from itertools import pairwise
+from typing_extensions import TypeAlias, Self
+try:
+    from itertools import pairwise
+except ImportError:
+    from itertools import tee
+    
+    def pairwise(iterable):
+        # Lifted from Python docs
+        # pairwise('ABCDEFG') --> AB BC CD DE EF FG
+        a, b = tee(iterable)
+        next(b, None)
+        return zip(a, b)
+
 import numpy as np
 from numpy.typing import NDArray
 from dataclasses import dataclass
