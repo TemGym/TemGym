@@ -8,7 +8,7 @@ try:
     from itertools import pairwise
 except ImportError:
     from itertools import tee
-    
+
     def pairwise(iterable):
         # Lifted from Python docs
         # pairwise('ABCDEFG') --> AB BC CD DE EF FG
