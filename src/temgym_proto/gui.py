@@ -13,6 +13,7 @@ from PyQt5.QtWidgets import (
     QCheckBox,
     QPushButton,
     QLineEdit,
+    QComboBox,
 )
 from PyQt5.QtGui import QDoubleValidator
 from pyqtgraph.Qt import QtCore
@@ -20,7 +21,6 @@ from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
 
-from functools import partial
 import numpy as np
 
 from . import Model, Component, Lens
@@ -233,128 +233,19 @@ class ModelGui():
             Initial y tilt of the beam in radians
         '''
         self.box = QGroupBox('Model Settings')
-        self.rayslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.rayslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.rayslider.setMinimum(4)
-        self.rayslider.setMaximum(15)
-        self.rayslider.setValue(int(np.log2(num_rays)))
-        self.rayslider.setTickPosition(QSlider.TicksBelow)
-
-        self.raylabel = QLabel(str(num_rays))
-        self.raylabel.setMinimumWidth(80)
-        self.modelraylabel = QLabel('Number of Rays')
 
         vbox = QVBoxLayout()
         vbox.addStretch()
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.rayslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.raylabel)
-
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(self.modelraylabel)
-        hbox_labels.addStretch()
-
-        vbox.addLayout(hbox_labels)
-        vbox.addLayout(hbox)
-
-        self.beamangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.beamangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.beamangleslider.setMinimum(0)
-        self.beamangleslider.setMaximum(157)
-        self.beamangleslider.setValue(int(round(gun_beam_semi_angle, 2)*100))
-        self.beamangleslider.setTickPosition(QSlider.TicksBelow)
-
-        self.beamanglelabel = QLabel(str(round(gun_beam_semi_angle, 2)))
-        self.beamanglelabel.setMinimumWidth(80)
-        self.modelbeamanglelabel = QLabel('Axial/Paralell Beam Semi Angle')
+        self.beamSelect = QComboBox()
+        self.beamSelect.addItem("Axial Beam")
+        self.beamSelect.addItem("Point Beam")
+        self.beamSelect.addItem("Paralell Beam")
+        self.beamSelectLabel = QLabel("Beam type")
 
         hbox = QHBoxLayout()
-        hbox.addWidget(self.beamangleslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.beamanglelabel)
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(self.modelbeamanglelabel)
-        hbox_labels.addStretch()
-        vbox.addLayout(hbox_labels)
-        vbox.addLayout(hbox)
-
-        self.beamwidthslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.beamwidthslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.beamwidthslider.setMinimum(-100)
-        self.beamwidthslider.setMaximum(99)
-        self.beamwidthslider.setValue(1)
-        self.beamwidthslider.setTickPosition(QSlider.TicksBelow)
-
-        self.beamwidthlabel = QLabel('0')
-        self.beamwidthlabel.setMinimumWidth(80)
-        self.modelbeamwidthlabel = QLabel('Paralell Beam Width')
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.beamwidthslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.beamwidthlabel)
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(self.modelbeamwidthlabel)
-        hbox_labels.addStretch()
-        vbox.addLayout(hbox_labels)
-        vbox.addLayout(hbox)
-
-        self.checkBoxAxial = QCheckBox("Axial Beam")
-
-        self.checkBoxPoint = QCheckBox("Point Beam")
-
-        self.checkBoxParalell = QCheckBox("Paralell Beam")
-
-        self.checkBoxParalell.stateChanged.connect(
-            partial(self.uncheck, self.checkBoxParalell))
-        self.checkBoxPoint.stateChanged.connect(
-            partial(self.uncheck, self.checkBoxPoint))
-        self.checkBoxAxial.stateChanged.connect(
-            partial(self.uncheck, self.checkBoxAxial))
-
-        hbox.addWidget(self.checkBoxAxial)
-        hbox.addWidget(self.checkBoxPoint)
-        hbox.addWidget(self.checkBoxParalell)
-
-        if beam_type == 'axial':
-            self.checkBoxAxial.setChecked(True)
-        elif beam_type == 'paralell':
-            self.checkBoxParalell.setChecked(True)
-        elif beam_type == 'point':
-            self.checkBoxPoint.setChecked(True)
-
-        hbox = QHBoxLayout()
-        hbox_labels = QHBoxLayout()
-        self.anglelabel = QLabel('Beam Tilt Offset')
-        hbox_labels.addWidget(self.anglelabel)
-
-        self.xanglelabel = QLabel(
-            'Beam Tilt X (Radians) = ' + "{:.3f}".format(beam_tilt_x))
-        self.xangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.xangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.xangleslider.setMinimum(-200)
-        self.xangleslider.setMaximum(200)
-        self.xangleslider.setValue(0)
-        self.xangleslider.setTickPosition(QSlider.TicksBelow)
-
-        self.yanglelabel = QLabel(
-            'Beam Tilt Y (Radians) = ' + "{:.3f}".format(beam_tilt_y))
-        self.yangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.yangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.yangleslider.setMinimum(-200)
-        self.yangleslider.setMaximum(200)
-        self.yangleslider.setValue(0)
-        self.yangleslider.setTickPosition(QSlider.TicksBelow)
-
-        hbox.addWidget(self.xangleslider)
-        hbox.addWidget(self.xanglelabel)
-
-        hbox.addWidget(self.yangleslider)
-        hbox.addWidget(self.yanglelabel)
-
-        vbox.addLayout(hbox_labels)
+        hbox.addWidget(self.beamSelectLabel)
+        hbox.addWidget(self.beamSelect)
         vbox.addLayout(hbox)
 
         self.view_label = QLabel('Set Camera View')
@@ -370,36 +261,9 @@ class ModelGui():
         hbox_push_buttons.addWidget(self.x_button)
         hbox_push_buttons.addSpacing(15)
         hbox_push_buttons.addWidget(self.y_button)
-
         vbox.addLayout(hbox_label)
         vbox.addLayout(hbox_push_buttons)
-
         self.box.setLayout(vbox)
-
-    def uncheck(self, btn):
-        '''Determines which button is checked, and unchecks others
-
-        Parameters
-        ----------
-        btn : Pyqt5 Button
-        '''
-        # checking if state is checked
-        if btn.isChecked():
-            # if first check box is selected
-            if btn == self.checkBoxAxial:
-                # making other check box to uncheck
-                self.checkBoxParalell.setChecked(False)
-                self.checkBoxPoint.setChecked(False)
-            # if second check box is selected
-            elif btn == self.checkBoxParalell:
-                # making other check box to uncheck
-                self.checkBoxAxial.setChecked(False)
-                self.checkBoxPoint.setChecked(False)
-            # if third check box is selected
-            elif btn == self.checkBoxPoint:
-                # making other check box to uncheck
-                self.checkBoxAxial.setChecked(False)
-                self.checkBoxParalell.setChecked(False)
 
 
 class LensGUI(ComponentGUIWrapper):
@@ -483,6 +347,90 @@ class LensGUI(ComponentGUIWrapper):
 
 
 class ParallelBeamGUI(ComponentGUIWrapper):
+    def __init__(self, beam):
+        super().__init__(beam)
+
+        num_rays = 64
+        self.box = QGroupBox('Beam Settings')
+        self.rayslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.rayslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.rayslider.setMinimum(4)
+        self.rayslider.setMaximum(15)
+        self.rayslider.setValue(int(np.log2(num_rays)))
+        self.rayslider.setTickPosition(QSlider.TicksBelow)
+
+        self.raylabel = QLabel(str(num_rays))
+        self.raylabel.setMinimumWidth(80)
+        self.modelraylabel = QLabel('Number of Rays')
+
+        self.anglelabel = QLabel('Beam Tilt Offset')
+
+        beam_tilt_y, beam_tilt_x = 0., 0.
+        self.xanglelabel = QLabel(
+            'Beam Tilt X (Radians) = ' + "{:.3f}".format(beam_tilt_x))
+        self.xangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.xangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.xangleslider.setMinimum(-200)
+        self.xangleslider.setMaximum(200)
+        self.xangleslider.setValue(0)
+        self.xangleslider.setTickPosition(QSlider.TicksBelow)
+
+        self.yanglelabel = QLabel(
+            'Beam Tilt Y (Radians) = ' + "{:.3f}".format(beam_tilt_y))
+        self.yangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.yangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.yangleslider.setMinimum(-200)
+        self.yangleslider.setMaximum(200)
+        self.yangleslider.setValue(0)
+        self.yangleslider.setTickPosition(QSlider.TicksBelow)
+
+        self.beamwidthslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.beamwidthslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.beamwidthslider.setMinimum(-100)
+        self.beamwidthslider.setMaximum(99)
+        self.beamwidthslider.setValue(1)
+        self.beamwidthslider.setTickPosition(QSlider.TicksBelow)
+
+        self.beamwidthlabel = QLabel('0')
+        self.beamwidthlabel.setMinimumWidth(80)
+        self.modelbeamwidthlabel = QLabel('Paralell Beam Width')
+
+        vbox = QVBoxLayout()
+        vbox.addStretch()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.rayslider)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.raylabel)
+        hbox_labels = QHBoxLayout()
+        hbox_labels.addWidget(self.modelraylabel)
+        hbox_labels.addStretch()
+        vbox.addLayout(hbox_labels)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.beamwidthslider)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.beamwidthlabel)
+        hbox_labels = QHBoxLayout()
+        hbox_labels.addWidget(self.modelbeamwidthlabel)
+        hbox_labels.addStretch()
+        vbox.addLayout(hbox_labels)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox_labels = QHBoxLayout()
+        hbox_labels.addWidget(self.anglelabel)
+        hbox.addWidget(self.xangleslider)
+        hbox.addWidget(self.xanglelabel)
+        hbox.addWidget(self.yangleslider)
+        hbox.addWidget(self.yanglelabel)
+        hbox_labels.addStretch()        
+        vbox.addLayout(hbox_labels)
+        vbox.addLayout(hbox)
+
+        self.box.setLayout(vbox)
+
     def get_geom(self):
         vertices = comp_geom.lens(
             self.component.radius,
