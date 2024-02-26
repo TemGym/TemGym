@@ -1,3 +1,5 @@
+from typing import List, Iterable
+
 import PyQt5
 from PyQt5.QtWidgets import (
     QMainWindow,
@@ -21,8 +23,13 @@ import pyqtgraph as pg
 from functools import partial
 import numpy as np
 
-
 from . import Model, Component, Lens
+from . import shapes as comp_geom
+from .utils import as_gl_lines
+
+
+LABEL_RADIUS = 0.3
+Z_ORIENT = -1
 
 
 class ComponentGUIWrapper:
@@ -30,6 +37,20 @@ class ComponentGUIWrapper:
         self.component = component
         self.box = QGroupBox(component.name)
         self.table = QGroupBox(component.name)
+
+    def get_label(self) -> gl.GLTextItem:
+        return gl.GLTextItem(
+            pos=np.array([
+                -LABEL_RADIUS,
+                LABEL_RADIUS,
+                Z_ORIENT * self.component.z
+            ]),
+            text=self.component.name,
+            color='w',
+        )
+
+    def get_geom(self) -> Iterable[gl.GLLinePlotItem]:
+        raise NotImplementedError()
 
 
 class GUIModel(QMainWindow):
@@ -47,6 +68,13 @@ class GUIModel(QMainWindow):
         '''
         super().__init__()
         self.model = model
+        self.gui_components: List[ComponentGUIWrapper] = []
+        # Loop through all components, and display the GUI for each
+        for component in self.model.components:
+            gui_component_c = component.gui_wrapper()
+            if gui_component_c is None:
+                continue
+            self.gui_components.append(gui_component_c(component))
 
         # Set some main window's properties
         self.setWindowTitle("TemGymBasic")
@@ -124,15 +152,11 @@ class GUIModel(QMainWindow):
         self.tem_window.addItem(self.ray_geometry)
         self.tem_window.setCameraParams(**self.initial_camera_params)
 
-        # # Loop through all of the model components, and add their geometry to the TEM window.
-        # for component in self.model.components:
-        #     for geometry in component.gl_points:
-        #         self.tem_window.addItem(geometry)
-
-        #         if component.type == 'Sample':
-        #             self.tem_window.addItem(component.sample_image_item)
-
-        #     self.tem_window.addItem(component.label)
+        # Loop through all of the model components, and add their geometry to the TEM window.
+        for component in self.gui_components:
+            for geometry in component.get_geom():
+                self.tem_window.addItem(geometry)
+            self.tem_window.addItem(component.get_label())
 
         # Add the ray geometry GLLinePlotItem to the list of geometries for that window
         self.tem_window.addItem(self.ray_geometry)
@@ -182,14 +206,7 @@ class GUIModel(QMainWindow):
 
         self.table_dock.addWidget(scroll, 1, 0)
 
-        # self.model.create_gui()
-
-        # Loop through all components, and display the GUI for each
-        for idx, component in enumerate(self.model.components, start=1):
-            gui_component_c = component.gui_wrapper()
-            if gui_component_c is None:
-                continue
-            gui_component = gui_component_c(component)
+        for idx, gui_component in enumerate(self.gui_components):
             self.gui_layout.addWidget(gui_component.box, idx)
             self.table_layout.addWidget(gui_component.table, 0)
 
@@ -449,3 +466,51 @@ class LensGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
         vbox.addLayout(hbox)
         self.table.setLayout(vbox)
+
+    def get_geom(self):
+        vertices = comp_geom.lens(
+            0.2,
+            Z_ORIENT * self.component.z,
+            64,
+        )
+        return [
+            gl.GLLinePlotItem(
+                pos=vertices.T,
+                color="white",
+                width=5
+            )
+        ]
+
+
+class ParallelBeamGUI(ComponentGUIWrapper):
+    def get_geom(self):
+        vertices = comp_geom.lens(
+            self.component.radius,
+            Z_ORIENT * self.component.z,
+            64,
+        )
+        return [
+            gl.GLLinePlotItem(
+                pos=vertices.T,
+                color="green",
+                width=2,
+            )
+        ]
+
+
+class DetectorGUI(ComponentGUIWrapper):
+    def get_geom(self):
+        vertices = comp_geom.square(
+            w=0.5,
+            x=0.,
+            y=0.,
+            z=Z_ORIENT * self.component.z,
+        )
+        mesh = gl.GLMeshItem(
+            vertexes=vertices,
+            smooth=True,
+            drawEdges=True,
+            drawFaces=False,
+        )
+        mesh.setColor("white")
+        return [mesh]

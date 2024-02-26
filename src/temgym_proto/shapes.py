@@ -22,14 +22,19 @@ def square(w, x, y, z):
     verts3D: ndarray
         vertices to draw a 3D model
     '''
-    vertices = np.array([[x + w/2, y + w/2], [x - w/2, y + w/2], [x - w/2, y - w/2],
-                        [x + w/2, y - w/2], [x + w/2, y + w/2]])
+    vertices = np.array(
+        [[x + w/2, y + w/2],
+         [x - w/2, y + w/2],
+         [x - w/2, y - w/2],
+         [x + w/2, y - w/2],
+         [x + w/2, y + w/2]]
+    )
 
     sample_dict = dict(vertices=vertices)
 
     sample_tri = tr.triangulate(sample_dict)
 
-    zverts = np.ones((sample_tri['triangles'].shape[0], 3, 1), dtype=np.float32)*z
+    zverts = z * np.ones((sample_tri['triangles'].shape[0], 3, 1), dtype=np.float32)
     verts_2D = sample_tri['vertices'][sample_tri['triangles']]
     verts_3D = np.dstack([verts_2D, zverts])
 

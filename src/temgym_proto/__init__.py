@@ -360,6 +360,11 @@ class ParallelBeam(Source):
         r, _ = circular_beam(num_rays, self.radius)
         return self._make_rays(r)
 
+    @staticmethod
+    def gui_wrapper():
+        from .gui import ParallelBeamGUI
+        return ParallelBeamGUI
+
 
 class XAxialBeam(ParallelBeam):
     def get_rays(self, num_rays: int) -> Rays:
@@ -505,6 +510,11 @@ class Detector(Component):
             1,
         )
         return image
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import DetectorGUI
+        return DetectorGUI
 
 
 class Deflector(Component):
