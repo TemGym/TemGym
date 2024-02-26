@@ -42,7 +42,7 @@ def as_gl_lines(all_rays: Iterable['Rays']):
         yvals,
         2,
         axis=1,
-    )    
+    )
     vertices[:, 0] = xvals.ravel()
     vertices[:, 1] = yvals.ravel()
     vertices[:, 2] = zpos

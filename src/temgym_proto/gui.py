@@ -425,7 +425,7 @@ class ParallelBeamGUI(ComponentGUIWrapper):
         hbox.addWidget(self.xanglelabel)
         hbox.addWidget(self.yangleslider)
         hbox.addWidget(self.yanglelabel)
-        hbox_labels.addStretch()        
+        hbox_labels.addStretch()
         vbox.addLayout(hbox_labels)
         vbox.addLayout(hbox)
 
