@@ -22,7 +22,8 @@ dependencies = [
   'numpy',
   'triangle',
   'PyQt5',
-  'matplotlib'
+  'matplotlib',
+  'typing-extensions',
 ]
 
 [project.urls]
