@@ -48,6 +48,41 @@ class GUIModel(QMainWindow):
         super().__init__()
         self.model = model
 
+        # Set some main window's properties
+        self.setWindowTitle("TemGymBasic")
+        self.resize(1600, 1200)
+
+        # Create Docks
+        self.tem_dock = Dock("3D View")
+        self.detector_dock = Dock("Detector", size=(5, 5))
+        self.gui_dock = Dock("GUI", size=(10, 3))
+        self.table_dock = Dock("Parameter Table", size=(5, 5))
+
+        self.centralWidget = DockArea()
+        self.setCentralWidget(self.centralWidget)
+        self.centralWidget.addDock(self.tem_dock, "left")
+        self.centralWidget.addDock(self.table_dock, "bottom", self.tem_dock)
+        self.centralWidget.addDock(self.gui_dock, "right")
+        self.centralWidget.addDock(self.detector_dock, "above", self.table_dock)
+
+        # Create the display and the buttons
+        self.create3DDisplay()
+        self.createDetectorDisplay()
+        self.createGUI()
+
+    def create3DDisplay(self):
+        '''Create the 3D Display
+        '''
+        # # create detector
+        # scale = 1.  # self.model.detector_size/2
+        # vertices = np.array([[1, 1, 0], [-1, 1, 0], [-1, -1, 0],
+        #                     [1, -1, 0], [1, 1, 0]]) * scale
+
+        # self.detector_outline = gl.GLLinePlotItem(pos=vertices, color="w", mode='line_strip')
+
+        # Create the 3D TEM Widnow, and plot the components in 3D
+        self.tem_window = gl.GLViewWidget()
+
         # Define Camera Parameters
         self.initial_camera_params = {'center': PyQt5.QtGui.QVector3D(0.5, 0.5, 0.0),
                                  'fov': 25, 'azimuth': -45.0, 'distance': 10, 'elevation': 25.0, }
@@ -58,45 +93,10 @@ class GUIModel(QMainWindow):
         self.y_camera_params = {'center': PyQt5.QtGui.QVector3D(0.0, 0.0, 0.5),
                            'fov': 7e-07, 'azimuth': 0, 'distance': 143358760, 'elevation': 0.0}
 
-        # Set some main window's properties
-        self.setWindowTitle("TemGymBasic")
-        self.resize(1600, 1200)
-        self.centralWidget = DockArea()
-        self.setCentralWidget(self.centralWidget)
-
-        # Create Docks
-        self.tem_dock = Dock("3D View")
-        self.detector_dock = Dock("Detector", size=(5, 5))
-        self.gui_dock = Dock("GUI", size=(10, 3))
-        self.table_dock = Dock("Parameter Table", size=(5, 5))
-
-        self.centralWidget.addDock(self.tem_dock, "left")
-        self.centralWidget.addDock(self.table_dock, "bottom", self.tem_dock)
-        self.centralWidget.addDock(self.gui_dock, "right")
-        self.centralWidget.addDock(self.detector_dock, "above", self.table_dock)
-
-        # create detector
-        scale = 1.  # self.model.detector_size/2
-        vertices = np.array([[1, 1, 0], [-1, 1, 0], [-1, -1, 0],
-                            [1, -1, 0], [1, 1, 0]]) * scale
-
-        self.detector_outline = gl.GLLinePlotItem(pos=vertices, color="w", mode='line_strip')
-
-        # Create the display and the buttons
-        self.create3DDisplay()
-        self.createDetectorDisplay()
-        self.createGUI()
-
-    def create3DDisplay(self):
-        '''Create the 3D Display
-        '''
-        # Create the 3D TEM Widnow, and plot the components in 3D
-        self.tem_window = gl.GLViewWidget()
-
         # Make an axis and addit to the 3D window. Also set up the ray geometry placeholder
         # and detector outline.
-        axis = gl.GLAxisItem()
-        self.tem_window.addItem(axis)
+        # axis = gl.GLAxisItem()
+        # self.tem_window.addItem(axis)
 
         pos = np.empty((4, 3))
         size = np.empty((4))
@@ -122,7 +122,6 @@ class GUIModel(QMainWindow):
         self.tem_window.setCameraPosition(distance=5)
         self.ray_geometry = gl.GLLinePlotItem(mode='lines', width=2)
         self.tem_window.addItem(self.ray_geometry)
-        self.tem_window.addItem(self.detector_outline)
         self.tem_window.setCameraParams(**self.initial_camera_params)
 
         # # Loop through all of the model components, and add their geometry to the TEM window.
