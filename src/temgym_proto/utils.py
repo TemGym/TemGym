@@ -1,9 +1,10 @@
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Tuple, Iterable
+from itertools import pairwise
 import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    from . import STEMModel
+    from . import STEMModel, Rays
 
 
 def P2R(radii: NDArray[np.float_], angles: NDArray[np.float_]) -> NDArray[np.complex_]:
@@ -12,6 +13,40 @@ def P2R(radii: NDArray[np.float_], angles: NDArray[np.float_]) -> NDArray[np.com
 
 def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[np.float_]]:
     return np.abs(x), np.angle(x)
+
+
+def as_gl_lines(all_rays: Iterable['Rays']):
+    if len(set(r.num for r in all_rays)) != 1:
+        # need to sort
+        raise NotImplementedError
+    num_rays = all_rays[0].num
+    zpos = tuple((r0.z, r1.z) for r0, r1 in pairwise(all_rays))
+    zpos = np.asarray(zpos).ravel()
+    zpos = np.tile(zpos, num_rays)
+    vertices = np.zeros(
+        (zpos.size, 3),
+        dtype=np.float32,
+    )
+    xvals = np.stack(tuple(
+        r.x for r in all_rays
+    ), axis=-1)
+    xvals = np.lib.stride_tricks.sliding_window_view(
+        xvals,
+        2,
+        axis=1,
+    )
+    yvals = np.stack(tuple(
+        r.y for r in all_rays
+    ), axis=-1)
+    yvals = np.lib.stride_tricks.sliding_window_view(
+        yvals,
+        2,
+        axis=1,
+    )    
+    vertices[:, 0] = xvals.ravel()
+    vertices[:, 1] = yvals.ravel()
+    vertices[:, 2] = zpos
+    return vertices
 
 
 def plot_rays(model: 'STEMModel'):
