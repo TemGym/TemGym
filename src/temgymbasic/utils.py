@@ -63,7 +63,7 @@ def as_gl_lines(all_rays: Iterable['Rays']):
 
 def plot_rays(model: 'STEMModel'):
     import matplotlib.pyplot as plt
-    from . import DoubleDeflector
+    from .components import DoubleDeflector
 
     # Iterate over components and their ray positions
     num_rays = 3
