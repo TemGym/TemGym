@@ -129,7 +129,7 @@ class GUIModel(QMainWindow):
         # self.tem_window.addItem(axis)
 
         pos = np.empty((4, 3))
-        size = np.empty((4))
+        size = np.empty(4)
         color = np.empty((4, 4))
 
         pos[0] = (1, 0, 0)
@@ -286,11 +286,11 @@ class LensGUI(ComponentGUIWrapper):
         self.fslider.setValue(1)
         self.fslider.setTickPosition(QSlider.TicksBelow)
 
-        self.flineedit = QLineEdit("{:.4f}".format(lens.f))
-        self.flineeditstep = QLineEdit("{:.4f}".format(0.1))
+        self.flineedit = QLineEdit(f"{lens.f:.4f}")
+        self.flineeditstep = QLineEdit(f"{0.1:.4f}")
 
-        self.fwobblefreqlineedit = QLineEdit("{:.4f}".format(1))
-        self.fwobbleamplineedit = QLineEdit("{:.4f}".format(0.5))
+        self.fwobblefreqlineedit = QLineEdit(f"{1:.4f}")
+        self.fwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
 
         qdoublevalidator = QDoubleValidator()
         self.flineedit.setValidator(qdoublevalidator)
@@ -323,7 +323,7 @@ class LensGUI(ComponentGUIWrapper):
 
         self.box.setLayout(vbox)
 
-        self.flabel_table = QLabel('Focal Length = ' + "{:.2f}".format(lens.f))
+        self.flabel_table = QLabel('Focal Length = ' + f"{lens.f:.2f}")
         self.flabel_table.setMinimumWidth(80)
         hbox = QHBoxLayout()
         hbox = QHBoxLayout()
@@ -369,7 +369,7 @@ class ParallelBeamGUI(ComponentGUIWrapper):
 
         beam_tilt_y, beam_tilt_x = 0., 0.
         self.xanglelabel = QLabel(
-            'Beam Tilt X (Radians) = ' + "{:.3f}".format(beam_tilt_x))
+            'Beam Tilt X (Radians) = ' + f"{beam_tilt_x:.3f}")
         self.xangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.xangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.xangleslider.setMinimum(-200)
@@ -378,7 +378,7 @@ class ParallelBeamGUI(ComponentGUIWrapper):
         self.xangleslider.setTickPosition(QSlider.TicksBelow)
 
         self.yanglelabel = QLabel(
-            'Beam Tilt Y (Radians) = ' + "{:.3f}".format(beam_tilt_y))
+            'Beam Tilt Y (Radians) = ' + f"{beam_tilt_y:.3f}")
         self.yangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.yangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.yangleslider.setMinimum(-200)
