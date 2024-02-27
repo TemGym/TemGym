@@ -19,8 +19,10 @@ repos:
   rev: "4.2"
   hooks:
   - id: pyroma
+    exclude: ^examples/
 - repo: https://github.com/asottile/pyupgrade
   rev: v3.15.1
   hooks:
     - id: pyupgrade
       args: ["--py37-plus"]
+      exclude: ^examples/
