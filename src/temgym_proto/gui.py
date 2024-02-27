@@ -1,4 +1,4 @@
-from typing import List, Iterable
+from typing import List, Iterable, TYPE_CHECKING
 
 import PyQt5
 from PyQt5.QtWidgets import (
@@ -23,9 +23,11 @@ import pyqtgraph as pg
 
 import numpy as np
 
-from . import Model, Component, Lens
 from . import shapes as comp_geom
-from .utils import as_gl_lines
+
+if TYPE_CHECKING:
+    from .model import Model
+    from . import components as comp
 
 
 LABEL_RADIUS = 0.3
@@ -33,7 +35,7 @@ Z_ORIENT = -1
 
 
 class ComponentGUIWrapper:
-    def __init__(self, component: Component):
+    def __init__(self, component: 'comp.Component'):
         self.component = component
         self.box = QGroupBox(component.name)
         self.table = QGroupBox(component.name)
@@ -57,7 +59,7 @@ class GUIModel(QMainWindow):
     '''
     Create the UI Window
     '''
-    def __init__(self, model: Model):
+    def __init__(self, model: 'Model'):
 
         '''Init important parameters
 
@@ -267,7 +269,7 @@ class ModelGui():
 
 
 class LensGUI(ComponentGUIWrapper):
-    def __init__(self, lens: Lens):
+    def __init__(self, lens: 'comp.Lens'):
         '''GUI for the Lens component
         ----------
         name : str
@@ -347,7 +349,7 @@ class LensGUI(ComponentGUIWrapper):
 
 
 class ParallelBeamGUI(ComponentGUIWrapper):
-    def __init__(self, beam):
+    def __init__(self, beam: 'comp.ParallelBeam'):
         super().__init__(beam)
 
         num_rays = 64

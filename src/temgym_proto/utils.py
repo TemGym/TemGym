@@ -1,10 +1,22 @@
 from typing import TYPE_CHECKING, Tuple, Iterable
-from itertools import pairwise
 import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
-    from . import STEMModel, Rays
+    from .model import STEMModel
+    from .rays import Rays
+
+try:
+    from itertools import pairwise
+except ImportError:
+    from itertools import tee
+
+    def pairwise(iterable):
+        # Lifted from Python docs
+        # pairwise('ABCDEFG') --> AB BC CD DE EF FG
+        a, b = tee(iterable)
+        next(b, None)
+        return zip(a, b)
 
 
 def P2R(radii: NDArray[np.float_], angles: NDArray[np.float_]) -> NDArray[np.complex_]:
