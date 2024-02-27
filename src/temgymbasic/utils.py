@@ -28,7 +28,7 @@ def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[np.float_]
 
 
 def as_gl_lines(all_rays: Iterable['Rays']):
-    if len(set(r.num for r in all_rays)) != 1:
+    if len({r.num for r in all_rays}) != 1:
         # need to sort
         raise NotImplementedError
     num_rays = all_rays[0].num
