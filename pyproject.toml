@@ -41,4 +41,4 @@ gui = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/AMCLab/TemGymBasic"
+"Homepage" = "https://github.com/TemGym/TemGym"
