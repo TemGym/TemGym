@@ -110,56 +110,46 @@ class TemGymWindow(QMainWindow):
     def create3DDisplay(self):
         '''Create the 3D Display
         '''
-        # # create detector
-        # scale = 1.  # self.model.detector_size/2
-        # vertices = np.array([[1, 1, 0], [-1, 1, 0], [-1, -1, 0],
-        #                     [1, -1, 0], [1, 1, 0]]) * scale
-
-        # self.detector_outline = gl.GLLinePlotItem(pos=vertices, color="w", mode='line_strip')
-
         # Create the 3D TEM Widnow, and plot the components in 3D
         self.tem_window = gl.GLViewWidget()
+        self.tem_window.setBackgroundColor((150, 150, 150, 255))
+
+        # Get the model mean height to centre the camera origin
+        mean_z = sum(c.z for c in self.model.components) / len(self.model.components)
+        mean_z *= Z_ORIENT
 
         # Define Camera Parameters
-        self.initial_camera_params = {'center': PyQt5.QtGui.QVector3D(0.5, 0.5, 0.0),
-                                 'fov': 25, 'azimuth': -45.0, 'distance': 10, 'elevation': 25.0, }
+        self.initial_camera_params = {
+            'center': PyQt5.QtGui.QVector3D(0.0, 0.0, mean_z),
+            'fov': 25,
+            'azimuth': -45.0,
+            'distance': 5,
+            'elevation': 25.0,
+        }
 
-        self.x_camera_params = {'center': PyQt5.QtGui.QVector3D(0.0, 0.0, 0.5),
-                           'fov': 7e-07, 'azimuth': 90.0, 'distance': 143358760, 'elevation': 0.0}
+        self.x_camera_params = {
+            'center': PyQt5.QtGui.QVector3D(0.0, 0.0, mean_z),
+            'fov': 25,
+            'azimuth': 90.0,
+            'distance': 5,
+            'elevation': 0.0,
+        }
 
-        self.y_camera_params = {'center': PyQt5.QtGui.QVector3D(0.0, 0.0, 0.5),
-                           'fov': 7e-07, 'azimuth': 0, 'distance': 143358760, 'elevation': 0.0}
-
-        # Make an axis and addit to the 3D window. Also set up the ray geometry placeholder
-        # and detector outline.
-        # axis = gl.GLAxisItem()
-        # self.tem_window.addItem(axis)
-
-        pos = np.empty((4, 3))
-        size = np.empty(4)
-        color = np.empty((4, 4))
-
-        pos[0] = (1, 0, 0)
-        size[0] = 0.1
-        color[0] = (1.0, 0.0, 0.0, 0.5)  # x
-        pos[1] = (0, 1, 0)
-        size[1] = 0.1
-        color[1] = (0.0, 1.0, 0.0, 0.5)  # y
-        pos[2] = (0, 0, 1)
-        size[2] = 0.1
-        color[2] = (0.0, 0.0, 1.0, 0.5)  # z
-        pos[3] = (0.125, 0.125, 0.5)
-        size[3] = 0.1
-        color[3] = (1.0, 1.0, 1.0, 0.5)  # z
-
-        # sp1 = gl.GLScatterPlotItem(pos=pos, size=size, color=color, pxMode=False)
-        # self.tem_window.addItem(sp1)
-
-        self.tem_window.setBackgroundColor((150, 150, 150, 255))
-        self.tem_window.setCameraPosition(distance=5)
-        self.ray_geometry = gl.GLLinePlotItem(mode='lines', width=2)
-        self.tem_window.addItem(self.ray_geometry)
+        self.y_camera_params = {
+            'center': PyQt5.QtGui.QVector3D(0.0, 0.0, mean_z),
+            'fov': 25,
+            'azimuth': 0,
+            'distance': 5,
+            'elevation': 0.0,
+        }
         self.tem_window.setCameraParams(**self.initial_camera_params)
+        self.tem_window.setCameraPosition(distance=5)
+
+        self.ray_geometry = gl.GLLinePlotItem(
+            mode='lines',
+            width=2
+        )
+        self.tem_window.addItem(self.ray_geometry)
 
         # Loop through all of the model components, and add their geometry to the TEM window.
         for component in self.gui_components:
