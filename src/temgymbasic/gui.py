@@ -104,7 +104,7 @@ class TemGymWindow(QMainWindow):
         self.createGUI()
 
         # Draw rays and det image
-        self.update_view()
+        self.update_rays()
 
     def create3DDisplay(self):
         '''Create the 3D Display
@@ -213,7 +213,7 @@ class TemGymWindow(QMainWindow):
             self.gui_layout.addWidget(gui_component.box, idx)
             self.table_layout.addWidget(gui_component.table, 0)
 
-    def update_view(self):
+    def update_rays(self):
         all_rays = tuple(self.model.run_iter(64))
         vertices = as_gl_lines(all_rays)
         vertices[:, 2] *= Z_ORIENT
