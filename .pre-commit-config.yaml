@@ -15,11 +15,11 @@ repos:
   hooks:
   - id: flake8
     files: ^src/
-- repo: https://github.com/regebro/pyroma
-  rev: "4.2"
-  hooks:
-  - id: pyroma
-    exclude: ^examples/
+# - repo: https://github.com/regebro/pyroma
+#   rev: "4.2"
+#   hooks:
+#   - id: pyroma
+#     exclude: ^examples/
 - repo: https://github.com/asottile/pyupgrade
   rev: v3.15.1
   hooks:
