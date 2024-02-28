@@ -80,6 +80,7 @@ class TemGymWindow(QMainWindow):
             if gui_component_c is None:
                 continue
             self.gui_components.append(gui_component_c(component))
+        assert isinstance(self.gui_components[0], SourceGUI)
 
         # Set some main window's properties
         self.setWindowTitle("TemGymBasic")
@@ -214,7 +215,9 @@ class TemGymWindow(QMainWindow):
             self.table_layout.addWidget(gui_component.table, 0)
 
     def update_rays(self):
-        all_rays = tuple(self.model.run_iter(64))
+        all_rays = tuple(self.model.run_iter(
+            self.gui_components[0].num_rays
+        ))
         vertices = as_gl_lines(all_rays)
         vertices[:, 2] *= Z_ORIENT
         self.ray_geometry.setData(
@@ -360,7 +363,13 @@ class LensGUI(ComponentGUIWrapper):
         ]
 
 
-class ParallelBeamGUI(ComponentGUIWrapper):
+class SourceGUI(ComponentGUIWrapper):
+    @property
+    def num_rays(self) -> int:
+        return self.rayslider.value()
+
+
+class ParallelBeamGUI(SourceGUI):
     def __init__(self, beam: 'comp.ParallelBeam'):
         super().__init__(beam)
 
@@ -368,9 +377,9 @@ class ParallelBeamGUI(ComponentGUIWrapper):
         self.box = QGroupBox('Beam Settings')
         self.rayslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.rayslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.rayslider.setMinimum(4)
-        self.rayslider.setMaximum(15)
-        self.rayslider.setValue(int(np.log2(num_rays)))
+        self.rayslider.setMinimum(1)
+        self.rayslider.setMaximum(512)
+        self.rayslider.setValue(num_rays)
         self.rayslider.setTickPosition(QSlider.TicksBelow)
 
         self.raylabel = QLabel(str(num_rays))
