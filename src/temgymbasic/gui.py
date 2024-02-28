@@ -143,7 +143,6 @@ class TemGymWindow(QMainWindow):
             'elevation': 0.0,
         }
         self.tem_window.setCameraParams(**self.initial_camera_params)
-        self.tem_window.setCameraPosition(distance=5)
 
         self.ray_geometry = gl.GLLinePlotItem(
             mode='lines',
