@@ -185,6 +185,11 @@ class STEMSample(Sample):
             as_int=as_int,
         )
 
+    @staticmethod
+    def gui_wrapper():
+        from .gui import STEMSampleGUI
+        return STEMSampleGUI
+
 
 class Source(Component):
     def __init__(
