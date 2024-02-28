@@ -480,7 +480,257 @@ class SampleGUI(ComponentGUIWrapper):
         return [mesh]
 
 
+class STEMSampleGUI(SampleGUI):
+    def __init__(self, stem_sample: 'comp.STEMSample'):
+        super().__init__(stem_sample)
+
+        self.scanpixelsslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.scanpixelsslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.scanpixelsslider.setMinimum(2)
+        self.scanpixelsslider.setMaximum(8)
+        self.scanpixelsslider.setValue(256)
+
+        self.scanpixelslabel = QLabel('Scan pixels = ' + str(int(self.scanpixelsslider.value())))
+        self.scanpixelslabel.setMinimumWidth(80)
+
+        self.overfocuslabel = QLabel('Overfocus = Not Set')
+        self.overfocuslabel.setMinimumWidth(80)
+
+        self.cameralengthlabel = QLabel('Camera length = Not Set')
+        self.cameralengthlabel.setMinimumWidth(80)
+
+        self.semiconvlabel = QLabel('Semi conv = Not Set')
+        self.semiconvlabel.setMinimumWidth(80)
+
+        self.scanpixelsizelabel = QLabel('Scan pixel size = Not Set')
+        self.scanpixelsizelabel.setMinimumWidth(80)
+
+        vbox = QVBoxLayout()
+        vbox.addStretch()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.scanpixelsslider)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.scanpixelslabel)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.overfocuslabel)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.semiconvlabel)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.scanpixelsizelabel)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.cameralengthlabel)
+
+        vbox.addLayout(hbox)
+
+        self.FOURDSTEM_experiment_button = QPushButton('Run 4D STEM Experiment')
+
+        hbox_push_buttons = QHBoxLayout()
+        hbox_push_buttons.addWidget(self.FOURDSTEM_experiment_button)
+        vbox.addLayout(hbox_push_buttons)
+
+        self.box.setLayout(vbox)
+
+
 class DoubleDeflectorGUI(ComponentGUIWrapper):
+    '''GUI for the double deflector component
+    '''
+    def __init__(self, d_deflector: 'comp.DoubleDeflector'):
+        super().__init__(d_deflector)
+
+        updefx = d_deflector.first.defx
+        updefy = d_deflector.first.defy
+        lowdefx = d_deflector.second.defx
+        lowdefy = d_deflector.second.defy
+
+        self.updefxslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.updefxslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.updefxslider.setMinimum(-10)
+        self.updefxslider.setMaximum(10)
+        self.updefxslider.setValue(1)
+        self.updefxslider.setTickPosition(QSlider.TicksBelow)
+        self.updefxlineedit = QLineEdit(f"{updefx:.4f}")
+        self.updefxlineeditstep = QLineEdit(f"{0.1:.4f}")
+
+        qdoublevalidator = QDoubleValidator()
+        self.updefxlineedit.setValidator(qdoublevalidator)
+        self.updefxlineeditstep.setValidator(qdoublevalidator)
+
+        self.updefyslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.updefyslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.updefyslider.setMinimum(-10)
+        self.updefyslider.setMaximum(10)
+        self.updefyslider.setValue(1)
+        self.updefyslider.setTickPosition(QSlider.TicksBelow)
+        self.updefylineedit = QLineEdit(f"{updefy:.4f}")
+        self.updefylineeditstep = QLineEdit(f"{0.1:.4f}")
+        self.updefylineedit.setValidator(qdoublevalidator)
+        self.updefylineeditstep.setValidator(qdoublevalidator)
+
+        hbox = QHBoxLayout()
+        hbox_lineedit = QHBoxLayout()
+        hbox_lineedit.addWidget(QLabel('Upper X Deflection = '))
+        hbox_lineedit.addWidget(self.updefxlineedit)
+        hbox_lineedit.addWidget(QLabel('Slider Step Upper X = '))
+        hbox_lineedit.addWidget(self.updefxlineeditstep)
+        hbox_lineedit.addWidget(QLabel('Upper Y Deflection = '))
+        hbox_lineedit.addWidget(self.updefylineedit)
+        hbox_lineedit.addWidget(QLabel('Slider Step Upper Y = '))
+        hbox_lineedit.addWidget(self.updefylineeditstep)
+
+        hbox_slider = QHBoxLayout()
+        hbox_slider.addWidget(self.updefxslider)
+        hbox_slider.addWidget(self.updefyslider)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox_lineedit)
+        vbox.addLayout(hbox_slider)
+        vbox.addStretch()
+
+        self.lowdefxslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.lowdefxslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.lowdefxslider.setMinimum(-10)
+        self.lowdefxslider.setMaximum(10)
+        self.lowdefxslider.setValue(1)
+        self.lowdefxslider.setTickPosition(QSlider.TicksBelow)
+        self.lowdefxlineedit = QLineEdit(f"{lowdefx:.4f}")
+        self.lowdefxlineeditstep = QLineEdit(f"{0.1:.4f}")
+        self.lowdefxlineedit.setValidator(qdoublevalidator)
+        self.lowdefxlineeditstep.setValidator(qdoublevalidator)
+
+        self.lowdefyslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.lowdefyslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.lowdefyslider.setMinimum(-10)
+        self.lowdefyslider.setMaximum(10)
+        self.lowdefyslider.setValue(1)
+        self.lowdefyslider.setTickPosition(QSlider.TicksBelow)
+        self.lowdefylineedit = QLineEdit(f"{lowdefy:.4f}")
+        self.lowdefylineeditstep = QLineEdit(f"{0.1:.4f}")
+        self.lowdefylineedit.setValidator(qdoublevalidator)
+        self.lowdefylineeditstep.setValidator(qdoublevalidator)
+
+        hbox = QHBoxLayout()
+        hbox_lineedit = QHBoxLayout()
+        hbox_lineedit.addWidget(QLabel('Lower X Deflection = '))
+        hbox_lineedit.addWidget(self.lowdefxlineedit)
+        hbox_lineedit.addWidget(QLabel('Slider Step Lower X = '))
+        hbox_lineedit.addWidget(self.lowdefxlineeditstep)
+        hbox_lineedit.addWidget(QLabel('Lower Y Deflection = '))
+        hbox_lineedit.addWidget(self.lowdefylineedit)
+        hbox_lineedit.addWidget(QLabel('Slider Step Lower Y = '))
+        hbox_lineedit.addWidget(self.lowdefylineeditstep)
+
+        hbox_slider = QHBoxLayout()
+        hbox_slider.addWidget(self.lowdefxslider)
+        hbox_slider.addWidget(self.lowdefyslider)
+
+        vbox.addLayout(hbox_lineedit)
+        vbox.addLayout(hbox_slider)
+        vbox.addStretch()
+
+        self.xbuttonwobble = QCheckBox("Wobble Upper Deflector X")
+        self.defxwobblefreqlineedit = QLineEdit(f"{1:.4f}")
+        self.defxwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
+        self.defxratiolabel = QLabel('Deflector X Response Ratio = ')
+        self.defxratiolineedit = QLineEdit(f"{0.0:.4f}")
+        self.defxratiolineeditstep = QLineEdit(f"{0.1:.4f}")
+
+        self.defxratiolineedit.setValidator(qdoublevalidator)
+        self.defxratiolineeditstep.setValidator(qdoublevalidator)
+
+        self.defxratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.defxratioslider.setMinimum(-10)
+        self.defxratioslider.setMaximum(10)
+        self.defxratioslider.setValue(1)
+        self.defxratioslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.defxratioslider.setTickPosition(QSlider.TicksBelow)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.xbuttonwobble)
+        hbox.addWidget(QLabel('Wobble X Frequency'))
+        hbox.addWidget(self.defxwobblefreqlineedit)
+        hbox.addWidget(QLabel('Wobble X Amplitude'))
+        hbox.addWidget(self.defxwobbleamplineedit)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.defxratiolabel)
+        hbox.addWidget(self.defxratiolineedit)
+        hbox.addWidget(QLabel('Def Ratio X Response Slider Step = '))
+        hbox.addWidget(self.defxratiolineeditstep)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.defxratioslider)
+        vbox.addLayout(hbox)
+
+        self.ybuttonwobble = QCheckBox("Wobble Upper Deflector Y")
+        self.defywobblefreqlineedit = QLineEdit(f"{1:.4f}")
+        self.defywobbleamplineedit = QLineEdit(f"{0.5:.4f}")
+        self.defyratiolabel = QLabel('Deflector Y Response Ratio = ')
+        self.defyratiolineedit = QLineEdit(f"{0.0:.4f}")
+        self.defyratiolineeditstep = QLineEdit(f"{0.1:.4f}")
+        self.defyratiolineedit.setValidator(qdoublevalidator)
+        self.defyratiolineeditstep.setValidator(qdoublevalidator)
+
+        self.defyratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.defyratioslider.setMinimum(-10)
+        self.defyratioslider.setMaximum(10)
+        self.defyratioslider.setValue(1)
+        self.defyratioslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.defyratioslider.setTickPosition(QSlider.TicksBelow)
+
+        self.usedefratio = QCheckBox("Use Def Ratio")
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.ybuttonwobble)
+        hbox.addWidget(QLabel('Wobble Y Frequency'))
+        hbox.addWidget(self.defywobblefreqlineedit)
+        hbox.addWidget(QLabel('Wobble Y Amplitude'))
+        hbox.addWidget(self.defywobbleamplineedit)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.defyratiolabel)
+        hbox.addWidget(self.defyratiolineedit)
+        hbox.addWidget(QLabel('Def Ratio Y Response Slider Step = '))
+        hbox.addWidget(self.defyratiolineeditstep)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.defyratioslider)
+        vbox.addLayout(hbox)
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.usedefratio)
+        vbox.addLayout(hbox)
+
+        self.box.setLayout(vbox)
+
+        hbox = QHBoxLayout()
+
+        self.updefxlabel_table = QLabel('Upper X Deflection = ' + f"{updefx:.2f}")
+        self.updefxlabel_table.setMinimumWidth(80)
+        self.updefylabel_table = QLabel('Upper Y Deflection = ' + f"{updefy:.2f}")
+        self.updefylabel_table.setMinimumWidth(80)
+        self.lowdefxlabel_table = QLabel('Lower X Deflection = ' + f"{lowdefx:.2f}")
+        self.lowdefxlabel_table.setMinimumWidth(80)
+        self.lowdefylabel_table = QLabel('Lower Y Deflection = ' + f"{lowdefy:.2f}")
+        self.lowdefylabel_table.setMinimumWidth(80)
+        self.defyratiolabel_table = QLabel('Y Deflector Ratio = ' + f"{1:.2f}")
+        self.defxratiolabel_table = QLabel('X Deflector Ratio = ' + f"{1:.2f}")
+
+        hbox_labels = QHBoxLayout()
+        hbox_labels.addWidget(self.updefxlabel_table)
+        hbox_labels.addWidget(self.updefylabel_table)
+        hbox_labels.addWidget(self.lowdefxlabel_table)
+        hbox_labels.addWidget(self.lowdefylabel_table)
+        hbox_labels.addWidget(self.defxratiolabel_table)
+        hbox_labels.addWidget(self.defyratiolabel_table)
+
+        vbox = QVBoxLayout()
+        vbox.addLayout(hbox_labels)
+        self.table.setLayout(vbox)
+
     def get_geom(self):
         elements = []
         phi = np.pi / 2
@@ -523,6 +773,46 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
 
 
 class DetectorGUI(ComponentGUIWrapper):
+    def __init__(self, detector: 'comp.Detector'):
+        super().__init__(detector)
+
+        self.pixelsizeslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.pixelsizeslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.pixelsizeslider.setMinimum(0)
+        self.pixelsizeslider.setMaximum(100)
+        self.pixelsizeslider.setValue(50)
+
+        self.pixelsizelabel = QLabel('Pixel size = ' + str(self.pixelsizeslider.value()))
+        self.pixelsizelabel.setMinimumWidth(80)
+
+        self.rotationslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.rotationslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.rotationslider.setMinimum(-180)
+        self.rotationslider.setMaximum(180)
+        self.rotationslider.setValue(0)
+
+        self.rotationlabel = QLabel('Rotation = ' + str(self.rotationslider.value()))
+        self.rotationlabel.setMinimumWidth(80)
+
+        vbox = QVBoxLayout()
+        vbox.addStretch()
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.pixelsizeslider)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.pixelsizelabel)
+
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.rotationslider)
+        hbox.addSpacing(15)
+        hbox.addWidget(self.rotationlabel)
+
+        vbox.addLayout(hbox)
+
+        self.box.setLayout(vbox)
+
     def get_geom(self):
         vertices = comp_geom.square(
             w=0.5,
