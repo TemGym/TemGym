@@ -1,7 +1,7 @@
 from typing import List, Iterable, TYPE_CHECKING
 
-import PyQt5
-from PyQt5.QtWidgets import (
+from PySide6.QtGui import QVector3D
+from PySide6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
     QWidget,
@@ -15,7 +15,7 @@ from PyQt5.QtWidgets import (
     QLineEdit,
     QComboBox,
 )
-from PyQt5.QtGui import QDoubleValidator
+from PySide6.QtGui import QDoubleValidator
 from pyqtgraph.Qt import QtCore
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph.opengl as gl
@@ -120,7 +120,7 @@ class TemGymWindow(QMainWindow):
 
         # Define Camera Parameters
         self.initial_camera_params = {
-            'center': PyQt5.QtGui.QVector3D(0.0, 0.0, mean_z),
+            'center': QVector3D(0.0, 0.0, mean_z),
             'fov': 25,
             'azimuth': -45.0,
             'distance': 5,
@@ -128,7 +128,7 @@ class TemGymWindow(QMainWindow):
         }
 
         self.x_camera_params = {
-            'center': PyQt5.QtGui.QVector3D(0.0, 0.0, mean_z),
+            'center': QVector3D(0.0, 0.0, mean_z),
             'fov': 25,
             'azimuth': 90.0,
             'distance': 5,
@@ -136,7 +136,7 @@ class TemGymWindow(QMainWindow):
         }
 
         self.y_camera_params = {
-            'center': PyQt5.QtGui.QVector3D(0.0, 0.0, mean_z),
+            'center': QVector3D(0.0, 0.0, mean_z),
             'fov': 25,
             'azimuth': 0,
             'distance': 5,
