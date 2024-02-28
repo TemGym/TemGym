@@ -24,6 +24,7 @@ import pyqtgraph as pg
 import numpy as np
 
 from . import shapes as comp_geom
+from .utils import as_gl_lines
 
 if TYPE_CHECKING:
     from .model import Model
@@ -55,7 +56,7 @@ class ComponentGUIWrapper:
         raise NotImplementedError()
 
 
-class GUIModel(QMainWindow):
+class TemGymWindow(QMainWindow):
     '''
     Create the UI Window
     '''
@@ -70,6 +71,8 @@ class GUIModel(QMainWindow):
         '''
         super().__init__()
         self.model = model
+        self.model_gui = ModelGUI()
+
         self.gui_components: List[ComponentGUIWrapper] = []
         # Loop through all components, and display the GUI for each
         for component in self.model.components:
@@ -99,6 +102,9 @@ class GUIModel(QMainWindow):
         self.create3DDisplay()
         self.createDetectorDisplay()
         self.createGUI()
+
+        # Draw rays and det image
+        self.update_view()
 
     def create3DDisplay(self):
         '''Create the 3D Display
@@ -194,31 +200,37 @@ class GUIModel(QMainWindow):
 
         self.gui_dock.addWidget(scroll, 1, 0)
 
-        self.model_gui = ModelGui(512, "point", 0.01, 0, 0)
         self.gui_layout.addWidget(self.model_gui.box, 0)
-
-        # if self.model.experiment is None:
-        #     self.gui_layout.addWidget(self.model.experiment_gui.box, 0)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(1)
         content = QWidget()
         scroll.setWidget(content)
         self.table_layout = QVBoxLayout(content)
-
         self.table_dock.addWidget(scroll, 1, 0)
 
         for idx, gui_component in enumerate(self.gui_components):
             self.gui_layout.addWidget(gui_component.box, idx)
             self.table_layout.addWidget(gui_component.table, 0)
 
+    def update_view(self):
+        all_rays = tuple(self.model.run_iter(64))
+        vertices = as_gl_lines(all_rays)
+        vertices[:, 2] *= Z_ORIENT
+        self.ray_geometry.setData(
+            pos=vertices,
+            color=(0, 0.8, 0, 0.05),
+        )
 
-class ModelGui():
+        if self.model.detector is not None:
+            image = self.model.detector.get_image(all_rays[-1])
+            self.spot_img.setImage(image)
+
+
+class ModelGUI():
     '''Overall GUI of the model
     '''
-    def __init__(
-        self, num_rays, beam_type, gun_beam_semi_angle, beam_tilt_x, beam_tilt_y
-    ):
+    def __init__(self):
         '''
 
         Parameters
