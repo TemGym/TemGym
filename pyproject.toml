@@ -40,7 +40,7 @@ gui = [
   'pyqtgraph',
   'pyopengl',
   'triangle',
-  'PyQt5',
+  'PySide6',
 ]
 
 [project.urls]
