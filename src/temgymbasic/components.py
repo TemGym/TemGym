@@ -139,6 +139,11 @@ class Sample(Component):
         rays.location = self
         yield rays
 
+    @staticmethod
+    def gui_wrapper():
+        from .gui import SampleGUI
+        return SampleGUI
+
 
 class STEMSample(Sample):
     def __init__(
@@ -564,6 +569,11 @@ class DoubleDeflector(Component):
             (pt2[0], pt2[2]),
             in_slope=in_slope[1],
         )
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import DoubleDeflectorGUI
+        return DoubleDeflectorGUI
 
 
 class Biprism(Component):
