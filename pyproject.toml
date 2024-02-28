@@ -34,6 +34,9 @@ dependencies = [
   'typing-extensions',
 ]
 
+[project.scripts]
+temgym = "temgymbasic.cli:main_window"
+
 [project.optional-dependencies]
 gui = [
   'matplotlib',
