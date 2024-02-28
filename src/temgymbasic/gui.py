@@ -469,6 +469,70 @@ class ParallelBeamGUI(SourceGUI):
         ]
 
 
+class SampleGUI(ComponentGUIWrapper):
+    def get_geom(self):
+        vertices = comp_geom.square(
+            w=0.25,
+            x=0.,
+            y=0.,
+            z=Z_ORIENT * self.component.z,
+        )
+
+        colors = np.ones((vertices.shape[0], 3, 4))
+        colors[..., 3] = 0.9
+
+        mesh = gl.GLMeshItem(
+            vertexes=vertices,
+            smooth=True,
+            vertexColors=colors,
+            drawEdges=False,
+            drawFaces=True,
+        )
+        return [mesh]
+
+
+class DoubleDeflectorGUI(ComponentGUIWrapper):
+    def get_geom(self):
+        elements = []
+        phi = np.pi / 2
+        radius = 0.25
+        n_arc = 64
+
+        arc1, arc2 = comp_geom.deflector(
+            r=radius,
+            phi=phi,
+            z=Z_ORIENT * self.component.entrance_z,
+            n_arc=n_arc,
+        )
+        elements.append(
+            gl.GLLinePlotItem(
+                pos=arc1.T, color="r", width=5
+            )
+        )
+        elements.append(
+            gl.GLLinePlotItem(
+                pos=arc2.T, color="b", width=5
+            )
+        )
+        arc1, arc2 = comp_geom.deflector(
+            r=radius,
+            phi=phi,
+            z=Z_ORIENT * self.component.exit_z,
+            n_arc=n_arc,
+        )
+        elements.append(
+            gl.GLLinePlotItem(
+                pos=arc1.T, color="r", width=5
+            )
+        )
+        elements.append(
+            gl.GLLinePlotItem(
+                pos=arc2.T, color="b", width=5
+            )
+        )
+        return elements
+
+
 class DetectorGUI(ComponentGUIWrapper):
     def get_geom(self):
         vertices = comp_geom.square(
@@ -477,11 +541,12 @@ class DetectorGUI(ComponentGUIWrapper):
             y=0.,
             z=Z_ORIENT * self.component.z,
         )
+        colors = np.ones((vertices.shape[0], 3, 4))
+        colors[..., 3] = 0.1
         mesh = gl.GLMeshItem(
             vertexes=vertices,
             smooth=True,
-            drawEdges=True,
-            drawFaces=False,
+            drawEdges=False,
+            drawFaces=True,
         )
-        mesh.setColor("white")
         return [mesh]
