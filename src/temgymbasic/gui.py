@@ -1,4 +1,4 @@
-from typing import List, Iterable, TYPE_CHECKING, Optional
+from typing import List, Iterable, TYPE_CHECKING
 from typing_extensions import Self
 
 from PySide6.QtGui import QVector3D
@@ -16,7 +16,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QComboBox,
-    QLayout,
 )
 from PySide6.QtGui import QDoubleValidator
 from pyqtgraph.Qt import QtCore
@@ -28,6 +27,7 @@ import numpy as np
 
 from . import shapes as comp_geom
 from .utils import as_gl_lines
+from .widgets import labelled_slider
 
 if TYPE_CHECKING:
     from .model import Model
@@ -279,67 +279,6 @@ class ModelGUI():
         self.box.setLayout(vbox)
 
 
-class QNumericLabel(QLabel):
-    def setPrefix(self, prefix: str):
-        self._prefix = prefix
-
-    @property
-    def prefix(self) -> str:
-        try:
-            return self._prefix
-        except AttributeError:
-            return ''
-
-    @Slot(int)
-    @Slot(float)
-    @Slot(complex)
-    def setText(self, v):
-        super().setText(f"{self.prefix}{v}")
-
-
-def slider_config(slider: QSlider, value: int, vmin: int, vmax: int):
-    slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-    slider.setMinimum(vmin)
-    slider.setMaximum(vmax)
-    slider.setValue(value)
-    slider.setTickPosition(QSlider.TicksBelow)
-
-
-def labelled_slider(
-    value: int,
-    vmin: int,
-    vmax: int,
-    name: Optional[str] = None,
-    prefix: str = '',
-    insert_into: Optional[QLayout] = None,
-    spacing: int = 15,
-):
-    slider = QSlider(QtCore.Qt.Orientation.Horizontal)
-    slider_config(slider, value, vmin, vmax)
-    slider_valuelabel = QNumericLabel(prefix + str(slider.value()))
-    slider_valuelabel.setPrefix(prefix)
-    slider_valuelabel.setMinimumWidth(80)
-    slider.valueChanged.connect(slider_valuelabel.setText)
-
-    hbox = QHBoxLayout()
-    hbox.addWidget(slider)
-    hbox.addSpacing(spacing)
-    hbox.addWidget(slider_valuelabel)
-    hboxes = [hbox]
-
-    if name is not None:
-        slider_namelabel = QLabel(name)
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(slider_namelabel)
-        hbox_labels.addStretch()
-        hboxes.insert(0, hbox_labels)
-
-    if insert_into is not None:
-        _ = [insert_into.addLayout(h) for h in hboxes]
-
-    return slider, hboxes
-
-
 class LensGUI(ComponentGUIWrapper):
     @property
     def lens(self) -> 'comp.Lens':
@@ -430,7 +369,7 @@ class ParallelBeamGUI(SourceGUI):
     def build(self, window: TemGymWindow) -> Self:
         num_rays = 64
         beam_tilt_y, beam_tilt_x = 0, 0
-        beam_radius = 10
+        beam_radius = 0.01
 
         vbox = QVBoxLayout()
         vbox.addStretch()
@@ -442,7 +381,9 @@ class ParallelBeamGUI(SourceGUI):
 
         hbox_angles = QHBoxLayout()
         vbox.addWidget(QLabel('Beam Tilt Offset'))
-        common_args = dict(vmin=-200, vmax=200, insert_into=hbox_angles, spacing=0)
+        common_args = dict(
+            vmin=-np.pi / 4, vmax=np.pi / 4, insert_into=hbox_angles, spacing=0, decimals=2,
+        )
         self.xangleslider, _ = labelled_slider(
             value=beam_tilt_x, prefix="Beam Tilt X (Radians) = ", **common_args
         )
@@ -452,7 +393,7 @@ class ParallelBeamGUI(SourceGUI):
         vbox.addLayout(hbox_angles)
 
         self.beamwidthslider, _ = labelled_slider(
-            beam_radius, 0, 100, name='Parallel Beam Width', insert_into=vbox,
+            beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=2
         )
 
         self.box.setLayout(vbox)
