@@ -460,22 +460,26 @@ class ParallelBeamGUI(SourceGUI):
 
 class SampleGUI(ComponentGUIWrapper):
     def get_geom(self):
-        vertices = comp_geom.square(
+        vertices, faces = comp_geom.square(
             w=0.25,
             x=0.,
             y=0.,
             z=Z_ORIENT * self.component.z,
         )
 
-        colors = np.ones((vertices.shape[0], 3, 4))
-        colors[..., 3] = 0.9
+        colors = np.ones((vertices.shape[0], 4))
+        colors[..., 3] = 0.1
 
         mesh = gl.GLMeshItem(
-            vertexes=vertices,
+            meshdata=gl.MeshData(
+                vertexes=vertices,
+                faces=faces,
+                vertexColors=colors,
+            ),
             smooth=True,
-            vertexColors=colors,
             drawEdges=False,
             drawFaces=True,
+            shader='shaded',
         )
         return [mesh]
 
@@ -814,18 +818,23 @@ class DetectorGUI(ComponentGUIWrapper):
         self.box.setLayout(vbox)
 
     def get_geom(self):
-        vertices = comp_geom.square(
+        vertices, faces = comp_geom.square(
             w=0.5,
             x=0.,
             y=0.,
             z=Z_ORIENT * self.component.z,
         )
-        colors = np.ones((vertices.shape[0], 3, 4))
-        colors[..., 3] = 0.1
+        colors = np.ones((vertices.shape[0], 4))
+        colors[..., 3] = 0.9
         mesh = gl.GLMeshItem(
-            vertexes=vertices,
-            smooth=True,
+            meshdata=gl.MeshData(
+                vertexes=vertices,
+                faces=faces,
+                vertexColors=colors,
+            ),
+            smooth=False,
             drawEdges=False,
             drawFaces=True,
+            shader='shaded',
         )
         return [mesh]
