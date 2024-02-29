@@ -1,6 +1,8 @@
 from typing import List, Iterable, TYPE_CHECKING
+from typing_extensions import Self
 
 from PySide6.QtGui import QVector3D
+from PySide6.QtCore import Slot
 from PySide6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
@@ -79,7 +81,10 @@ class TemGymWindow(QMainWindow):
             gui_component_c = component.gui_wrapper()
             if gui_component_c is None:
                 continue
-            self.gui_components.append(gui_component_c(component))
+            self.gui_components.append(
+                gui_component_c(component)
+                .build(self)
+            )
         assert isinstance(self.gui_components[0], SourceGUI)
 
         # Set some main window's properties
@@ -203,6 +208,7 @@ class TemGymWindow(QMainWindow):
             self.gui_layout.addWidget(gui_component.box, idx)
             self.table_layout.addWidget(gui_component.table, 0)
 
+    @Slot()
     def update_rays(self):
         all_rays = tuple(self.model.run_iter(
             self.gui_components[0].num_rays
@@ -272,17 +278,28 @@ class ModelGUI():
         self.box.setLayout(vbox)
 
 
-class LensGUI(ComponentGUIWrapper):
-    def __init__(self, lens: 'comp.Lens'):
-        '''GUI for the Lens component
-        ----------
-        name : str
-            Name of component
-        f : float
-            Focal length
-        '''
-        super().__init__(component=lens)
+class QNumericLabel(QLabel):
+    @Slot(int)
+    @Slot(float)
+    @Slot(complex)
+    def setText(self, v):
+        super().setText(f"{v}")
 
+
+def slider_config(slider: QSlider, value: int, vmin: int, vmax: int):
+    slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+    slider.setMinimum(vmin)
+    slider.setMaximum(vmax)
+    slider.setValue(value)
+    slider.setTickPosition(QSlider.TicksBelow)
+
+
+class LensGUI(ComponentGUIWrapper):
+    @property
+    def lens(self) -> 'comp.Lens':
+        return self.component
+
+    def build(self, window: TemGymWindow) -> Self:
         self.fslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.fslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.fslider.setMinimum(-10)
@@ -290,7 +307,7 @@ class LensGUI(ComponentGUIWrapper):
         self.fslider.setValue(1)
         self.fslider.setTickPosition(QSlider.TicksBelow)
 
-        self.flineedit = QLineEdit(f"{lens.f:.4f}")
+        self.flineedit = QLineEdit(f"{self.lens.f:.4f}")
         self.flineeditstep = QLineEdit(f"{0.1:.4f}")
 
         self.fwobblefreqlineedit = QLineEdit(f"{1:.4f}")
@@ -327,7 +344,7 @@ class LensGUI(ComponentGUIWrapper):
 
         self.box.setLayout(vbox)
 
-        self.flabel_table = QLabel('Focal Length = ' + f"{lens.f:.2f}")
+        self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
         self.flabel_table.setMinimumWidth(80)
         hbox = QHBoxLayout()
         hbox = QHBoxLayout()
@@ -336,6 +353,7 @@ class LensGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
         vbox.addLayout(hbox)
         self.table.setLayout(vbox)
+        return self
 
     def get_geom(self):
         vertices = comp_geom.lens(
@@ -359,53 +377,41 @@ class SourceGUI(ComponentGUIWrapper):
 
 
 class ParallelBeamGUI(SourceGUI):
-    def __init__(self, beam: 'comp.ParallelBeam'):
-        super().__init__(beam)
+    @property
+    def beam(self) -> 'comp.ParallelBeam':
+        return self.component
 
+    def build(self, window: TemGymWindow) -> Self:
         num_rays = 64
-        self.box = QGroupBox('Beam Settings')
+
         self.rayslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.rayslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.rayslider.setMinimum(1)
-        self.rayslider.setMaximum(512)
-        self.rayslider.setValue(num_rays)
-        self.rayslider.setTickPosition(QSlider.TicksBelow)
+        slider_config(self.rayslider, num_rays, 1, 512)
+        rayslider_namelabel = QLabel('Number of Rays')
+        rayslider_intlabel = QNumericLabel(str(num_rays))
+        rayslider_intlabel.setMinimumWidth(80)
+        self.rayslider.valueChanged.connect(window.update_rays)
+        self.rayslider.valueChanged.connect(rayslider_intlabel.setText)
 
-        self.raylabel = QLabel(str(num_rays))
-        self.raylabel.setMinimumWidth(80)
-        self.modelraylabel = QLabel('Number of Rays')
-
-        self.anglelabel = QLabel('Beam Tilt Offset')
+        angle_namelabel = QLabel('Beam Tilt Offset')
 
         beam_tilt_y, beam_tilt_x = 0., 0.
-        self.xanglelabel = QLabel(
-            'Beam Tilt X (Radians) = ' + f"{beam_tilt_x:.3f}")
+        xangle_valuelabel = QLabel(
+            'Beam Tilt X (Radians) = ' + f"{beam_tilt_x:.3f}"
+        )
         self.xangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.xangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.xangleslider.setMinimum(-200)
-        self.xangleslider.setMaximum(200)
-        self.xangleslider.setValue(0)
-        self.xangleslider.setTickPosition(QSlider.TicksBelow)
+        slider_config(self.xangleslider, 0, -200, 200)
 
-        self.yanglelabel = QLabel(
-            'Beam Tilt Y (Radians) = ' + f"{beam_tilt_y:.3f}")
+        yangle_valuelabel = QLabel(
+            'Beam Tilt Y (Radians) = ' + f"{beam_tilt_y:.3f}"
+        )
         self.yangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.yangleslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.yangleslider.setMinimum(-200)
-        self.yangleslider.setMaximum(200)
-        self.yangleslider.setValue(0)
-        self.yangleslider.setTickPosition(QSlider.TicksBelow)
+        slider_config(self.yangleslider, 0, -200, 200)
 
         self.beamwidthslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.beamwidthslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.beamwidthslider.setMinimum(-100)
-        self.beamwidthslider.setMaximum(99)
-        self.beamwidthslider.setValue(1)
-        self.beamwidthslider.setTickPosition(QSlider.TicksBelow)
-
-        self.beamwidthlabel = QLabel('0')
-        self.beamwidthlabel.setMinimumWidth(80)
-        self.modelbeamwidthlabel = QLabel('Paralell Beam Width')
+        slider_config(self.beamwidthslider, 0, 0, 100)
+        beamwidth_valuelabel = QLabel(str(self.beamwidthslider.value()))
+        beamwidth_valuelabel.setMinimumWidth(80)
+        beamwidth_namelabel = QLabel('Paralell Beam Width')
 
         vbox = QVBoxLayout()
         vbox.addStretch()
@@ -413,9 +419,9 @@ class ParallelBeamGUI(SourceGUI):
         hbox = QHBoxLayout()
         hbox.addWidget(self.rayslider)
         hbox.addSpacing(15)
-        hbox.addWidget(self.raylabel)
+        hbox.addWidget(rayslider_intlabel)
         hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(self.modelraylabel)
+        hbox_labels.addWidget(rayslider_namelabel)
         hbox_labels.addStretch()
         vbox.addLayout(hbox_labels)
         vbox.addLayout(hbox)
@@ -423,25 +429,26 @@ class ParallelBeamGUI(SourceGUI):
         hbox = QHBoxLayout()
         hbox.addWidget(self.beamwidthslider)
         hbox.addSpacing(15)
-        hbox.addWidget(self.beamwidthlabel)
+        hbox.addWidget(beamwidth_valuelabel)
         hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(self.modelbeamwidthlabel)
+        hbox_labels.addWidget(beamwidth_namelabel)
         hbox_labels.addStretch()
         vbox.addLayout(hbox_labels)
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
         hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(self.anglelabel)
+        hbox_labels.addWidget(angle_namelabel)
         hbox.addWidget(self.xangleslider)
-        hbox.addWidget(self.xanglelabel)
+        hbox.addWidget(xangle_valuelabel)
         hbox.addWidget(self.yangleslider)
-        hbox.addWidget(self.yanglelabel)
+        hbox.addWidget(yangle_valuelabel)
         hbox_labels.addStretch()
         vbox.addLayout(hbox_labels)
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
+        return self
 
     def get_geom(self):
         vertices = comp_geom.lens(
@@ -485,9 +492,11 @@ class SampleGUI(ComponentGUIWrapper):
 
 
 class STEMSampleGUI(SampleGUI):
-    def __init__(self, stem_sample: 'comp.STEMSample'):
-        super().__init__(stem_sample)
+    @property
+    def sample(self) -> 'comp.STEMSample':
+        return self.component
 
+    def build(self, window: TemGymWindow) -> Self:
         self.scanpixelsslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.scanpixelsslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.scanpixelsslider.setMinimum(2)
@@ -534,18 +543,19 @@ class STEMSampleGUI(SampleGUI):
         vbox.addLayout(hbox_push_buttons)
 
         self.box.setLayout(vbox)
+        return self
 
 
 class DoubleDeflectorGUI(ComponentGUIWrapper):
-    '''GUI for the double deflector component
-    '''
-    def __init__(self, d_deflector: 'comp.DoubleDeflector'):
-        super().__init__(d_deflector)
+    @property
+    def d_deflector(self) -> 'comp.DoubleDeflector':
+        return self.component
 
-        updefx = d_deflector.first.defx
-        updefy = d_deflector.first.defy
-        lowdefx = d_deflector.second.defx
-        lowdefy = d_deflector.second.defy
+    def build(self, window: TemGymWindow) -> Self:
+        updefx = self.d_deflector.first.defx
+        updefy = self.d_deflector.first.defy
+        lowdefx = self.d_deflector.second.defx
+        lowdefy = self.d_deflector.second.defy
 
         self.updefxslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.updefxslider.setTickPosition(QSlider.TickPosition.TicksBelow)
@@ -734,6 +744,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
         vbox.addLayout(hbox_labels)
         self.table.setLayout(vbox)
+        return self
 
     def get_geom(self):
         elements = []
@@ -777,9 +788,11 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
 
 
 class DetectorGUI(ComponentGUIWrapper):
-    def __init__(self, detector: 'comp.Detector'):
-        super().__init__(detector)
+    @property
+    def detector(self) -> 'comp.Detector':
+        return self.component
 
+    def build(self, window: TemGymWindow) -> Self:
         self.pixelsizeslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.pixelsizeslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.pixelsizeslider.setMinimum(0)
@@ -816,6 +829,7 @@ class DetectorGUI(ComponentGUIWrapper):
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
+        return self
 
     def get_geom(self):
         vertices, faces = comp_geom.square(
