@@ -22,22 +22,17 @@ def square(w, x, y, z):
         vertices to draw a 3D model
     '''
     vertices = np.array(
-        [[x + w/2, y + w/2],
-         [x - w/2, y + w/2],
-         [x - w/2, y - w/2],
-         [x + w/2, y - w/2],
-         [x + w/2, y + w/2]]
+        [[x + w/2, y + w/2, z],
+         [x - w/2, y + w/2, z],
+         [x - w/2, y - w/2, z],
+         [x + w/2, y - w/2, z]]
+    )
+    faces = np.array(
+        [[0, 1, 2],
+         [0, 2, 3]]
     )
 
-    sample_dict = dict(vertices=vertices)
-
-    sample_tri = tr.triangulate(sample_dict)
-
-    zverts = z * np.ones((sample_tri['triangles'].shape[0], 3, 1), dtype=np.float32)
-    verts_2D = sample_tri['vertices'][sample_tri['triangles']]
-    verts_3D = np.dstack([verts_2D, zverts])
-
-    return verts_3D
+    return vertices, faces
 
 
 def deflector(r, phi, z, n_arc):
