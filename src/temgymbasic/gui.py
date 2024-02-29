@@ -1,4 +1,4 @@
-from typing import List, Iterable, TYPE_CHECKING
+from typing import List, Iterable, TYPE_CHECKING, Optional
 from typing_extensions import Self
 
 from PySide6.QtGui import QVector3D
@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QLineEdit,
     QComboBox,
+    QLayout,
 )
 from PySide6.QtGui import QDoubleValidator
 from pyqtgraph.Qt import QtCore
@@ -279,11 +280,21 @@ class ModelGUI():
 
 
 class QNumericLabel(QLabel):
+    def setPrefix(self, prefix: str):
+        self._prefix = prefix
+
+    @property
+    def prefix(self) -> str:
+        try:
+            return self._prefix
+        except AttributeError:
+            return ''
+
     @Slot(int)
     @Slot(float)
     @Slot(complex)
     def setText(self, v):
-        super().setText(f"{v}")
+        super().setText(f"{self.prefix}{v}")
 
 
 def slider_config(slider: QSlider, value: int, vmin: int, vmax: int):
@@ -292,6 +303,41 @@ def slider_config(slider: QSlider, value: int, vmin: int, vmax: int):
     slider.setMaximum(vmax)
     slider.setValue(value)
     slider.setTickPosition(QSlider.TicksBelow)
+
+
+def labelled_slider(
+    value: int,
+    vmin: int,
+    vmax: int,
+    name: Optional[str] = None,
+    prefix: str = '',
+    insert_into: Optional[QLayout] = None,
+    spacing: int = 15,
+):
+    slider = QSlider(QtCore.Qt.Orientation.Horizontal)
+    slider_config(slider, value, vmin, vmax)
+    slider_valuelabel = QNumericLabel(prefix + str(slider.value()))
+    slider_valuelabel.setPrefix(prefix)
+    slider_valuelabel.setMinimumWidth(80)
+    slider.valueChanged.connect(slider_valuelabel.setText)
+
+    hbox = QHBoxLayout()
+    hbox.addWidget(slider)
+    hbox.addSpacing(spacing)
+    hbox.addWidget(slider_valuelabel)
+    hboxes = [hbox]
+
+    if name is not None:
+        slider_namelabel = QLabel(name)
+        hbox_labels = QHBoxLayout()
+        hbox_labels.addWidget(slider_namelabel)
+        hbox_labels.addStretch()
+        hboxes.insert(0, hbox_labels)
+
+    if insert_into is not None:
+        _ = [insert_into.addLayout(h) for h in hboxes]
+
+    return slider, hboxes
 
 
 class LensGUI(ComponentGUIWrapper):
@@ -383,69 +429,31 @@ class ParallelBeamGUI(SourceGUI):
 
     def build(self, window: TemGymWindow) -> Self:
         num_rays = 64
-
-        self.rayslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider_config(self.rayslider, num_rays, 1, 512)
-        rayslider_namelabel = QLabel('Number of Rays')
-        rayslider_intlabel = QNumericLabel(str(num_rays))
-        rayslider_intlabel.setMinimumWidth(80)
-        self.rayslider.valueChanged.connect(window.update_rays)
-        self.rayslider.valueChanged.connect(rayslider_intlabel.setText)
-
-        angle_namelabel = QLabel('Beam Tilt Offset')
-
-        beam_tilt_y, beam_tilt_x = 0., 0.
-        xangle_valuelabel = QLabel(
-            'Beam Tilt X (Radians) = ' + f"{beam_tilt_x:.3f}"
-        )
-        self.xangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider_config(self.xangleslider, 0, -200, 200)
-
-        yangle_valuelabel = QLabel(
-            'Beam Tilt Y (Radians) = ' + f"{beam_tilt_y:.3f}"
-        )
-        self.yangleslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider_config(self.yangleslider, 0, -200, 200)
-
-        self.beamwidthslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        slider_config(self.beamwidthslider, 0, 0, 100)
-        beamwidth_valuelabel = QLabel(str(self.beamwidthslider.value()))
-        beamwidth_valuelabel.setMinimumWidth(80)
-        beamwidth_namelabel = QLabel('Paralell Beam Width')
+        beam_tilt_y, beam_tilt_x = 0, 0
+        beam_radius = 10
 
         vbox = QVBoxLayout()
         vbox.addStretch()
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.rayslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(rayslider_intlabel)
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(rayslider_namelabel)
-        hbox_labels.addStretch()
-        vbox.addLayout(hbox_labels)
-        vbox.addLayout(hbox)
+        self.rayslider, _ = labelled_slider(
+            num_rays, 1, 512, name="Number of Rays", insert_into=vbox,
+        )
+        self.rayslider.valueChanged.connect(window.update_rays)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.beamwidthslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(beamwidth_valuelabel)
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(beamwidth_namelabel)
-        hbox_labels.addStretch()
-        vbox.addLayout(hbox_labels)
-        vbox.addLayout(hbox)
+        hbox_angles = QHBoxLayout()
+        vbox.addWidget(QLabel('Beam Tilt Offset'))
+        common_args = dict(vmin=-200, vmax=200, insert_into=hbox_angles, spacing=0)
+        self.xangleslider, _ = labelled_slider(
+            value=beam_tilt_x, prefix="Beam Tilt X (Radians) = ", **common_args
+        )
+        self.yangleslider, _ = labelled_slider(
+            value=beam_tilt_y, prefix="Beam Tilt Y (Radians) = ", **common_args
+        )
+        vbox.addLayout(hbox_angles)
 
-        hbox = QHBoxLayout()
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(angle_namelabel)
-        hbox.addWidget(self.xangleslider)
-        hbox.addWidget(xangle_valuelabel)
-        hbox.addWidget(self.yangleslider)
-        hbox.addWidget(yangle_valuelabel)
-        hbox_labels.addStretch()
-        vbox.addLayout(hbox_labels)
-        vbox.addLayout(hbox)
+        self.beamwidthslider, _ = labelled_slider(
+            beam_radius, 0, 100, name='Parallel Beam Width', insert_into=vbox,
+        )
 
         self.box.setLayout(vbox)
         return self
