@@ -146,8 +146,8 @@ class Model:
             if rays.component is component:
                 return rays
         return None
-
-
+    
+    
 class STEMModel(Model):
     def __init__(self):
         # Note a flip_y or flip_x can be achieved by setting
@@ -187,8 +187,9 @@ class STEMModel(Model):
                 radius=0.01,
             ),
             comp.DoubleDeflector(
-                first=comp.Deflector(z=0.1),
-                second=comp.Deflector(z=0.15),
+                first=comp.Deflector(z=0.1, name='Upper'),
+                second=comp.Deflector(z=0.15, name='Lower'),
+                name='Scan Coil',
             ),
             comp.Lens(
                 z=0.3,
@@ -196,10 +197,12 @@ class STEMModel(Model):
             ),
             comp.STEMSample(
                 z=0.5,
+                name='STEM Sample'
             ),
             comp.DoubleDeflector(
-                first=comp.Deflector(z=0.6),
-                second=comp.Deflector(z=0.625),
+                first=comp.Deflector(z=0.6, name='Upper'),
+                second=comp.Deflector(z=0.625, name='Lower'),
+                name='Descan Coil',
             ),
             comp.Detector(
                 z=1.,
@@ -239,6 +242,7 @@ class STEMModel(Model):
 
     def set_stem_params(
         self,
+        *,
         overfocus: Optional[float] = None,
         semiconv_angle: Optional[PositiveFloat] = None,
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
