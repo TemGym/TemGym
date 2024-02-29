@@ -146,8 +146,8 @@ class Model:
             if rays.component is component:
                 return rays
         return None
-    
-    
+
+
 class STEMModel(Model):
     def __init__(self):
         # Note a flip_y or flip_x can be achieved by setting
