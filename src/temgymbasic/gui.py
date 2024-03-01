@@ -1,5 +1,6 @@
 from typing import List, Iterable, TYPE_CHECKING
 from typing_extensions import Self
+import weakref
 
 from PySide6.QtGui import QVector3D
 from PySide6.QtCore import Slot
@@ -39,10 +40,22 @@ Z_ORIENT = -1
 
 
 class ComponentGUIWrapper:
-    def __init__(self, component: 'comp.Component'):
+    def __init__(self, component: 'comp.Component', window: 'TemGymWindow'):
         self.component = component
+        self.window = weakref.ref(window)
         self.box = QGroupBox(component.name)
         self.table = QGroupBox(component.name)
+
+    def try_update(self):
+        window = self.window()
+        if window is not None:
+            window.update_rays()
+
+    @Slot(int)
+    @Slot(float)
+    @Slot(str)
+    def try_update_slot(self, val):
+        self.try_update()
 
     def get_label(self) -> gl.GLTextItem:
         return gl.GLTextItem(
@@ -83,8 +96,7 @@ class TemGymWindow(QMainWindow):
             if gui_component_c is None:
                 continue
             self.gui_components.append(
-                gui_component_c(component)
-                .build(self)
+                gui_component_c(component, self).build()
             )
         assert isinstance(self.gui_components[0], SourceGUI)
 
@@ -284,60 +296,45 @@ class LensGUI(ComponentGUIWrapper):
     def lens(self) -> 'comp.Lens':
         return self.component
 
-    def build(self, window: TemGymWindow) -> Self:
-        self.fslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.fslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.fslider.setMinimum(-10)
-        self.fslider.setMaximum(10)
-        self.fslider.setValue(1)
-        self.fslider.setTickPosition(QSlider.TicksBelow)
+    @Slot(float)
+    def set_f(self, val: float):
+        if abs(val) < 1e-6:
+            return
+        self.lens.f = val
+        self.try_update()
 
-        self.flineedit = QLineEdit(f"{self.lens.f:.4f}")
-        self.flineeditstep = QLineEdit(f"{0.1:.4f}")
+    def build(self) -> Self:
+        qdoublevalidator = QDoubleValidator()
+        vbox = QVBoxLayout()
+
+        self.fslider, _ = labelled_slider(
+            self.lens.f, -5., 5., name="Focal Length", insert_into=vbox, decimals=2,
+        )
+        self.fslider.doubleValueChanged.connect(self.set_f)
 
         self.fwobblefreqlineedit = QLineEdit(f"{1:.4f}")
         self.fwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
-
-        qdoublevalidator = QDoubleValidator()
-        self.flineedit.setValidator(qdoublevalidator)
-        self.flineeditstep.setValidator(qdoublevalidator)
         self.fwobblefreqlineedit.setValidator(qdoublevalidator)
         self.fwobbleamplineedit.setValidator(qdoublevalidator)
-
         self.fwobble = QCheckBox('Wobble Lens Current')
-
-        hbox = QHBoxLayout()
-        hbox_lineedit = QHBoxLayout()
-        hbox_lineedit.addWidget(QLabel('Focal Length = '))
-        hbox_lineedit.addWidget(self.flineedit)
-        hbox_lineedit.addWidget(QLabel('Slider Step = '))
-        hbox_lineedit.addWidget(self.flineeditstep)
-        hbox_slider = QHBoxLayout()
-        hbox_slider.addWidget(self.fslider)
         hbox_wobble = QHBoxLayout()
         hbox_wobble.addWidget(self.fwobble)
         hbox_wobble.addWidget(QLabel('Wobble Frequency'))
         hbox_wobble.addWidget(self.fwobblefreqlineedit)
         hbox_wobble.addWidget(QLabel('Wobble Amplitude'))
         hbox_wobble.addWidget(self.fwobbleamplineedit)
-
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox_lineedit)
-        vbox.addLayout(hbox_slider)
         vbox.addLayout(hbox_wobble)
         vbox.addStretch()
-
         self.box.setLayout(vbox)
 
         self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
         self.flabel_table.setMinimumWidth(80)
         hbox = QHBoxLayout()
-        hbox = QHBoxLayout()
         hbox.addWidget(self.flabel_table)
-
         vbox = QVBoxLayout()
         vbox.addLayout(hbox)
         self.table.setLayout(vbox)
+
         return self
 
     def get_geom(self):
@@ -366,7 +363,20 @@ class ParallelBeamGUI(SourceGUI):
     def beam(self) -> 'comp.ParallelBeam':
         return self.component
 
-    def build(self, window: TemGymWindow) -> Self:
+    @Slot(float)
+    def set_radius(self, val):
+        self.beam.radius = val
+        self.try_update()
+
+    @Slot(float)
+    def set_tilt(self, val):
+        self.beam.tilt_yx = (
+            self.yangleslider.value(),
+            self.xangleslider.value(),
+        )
+        self.try_update()
+
+    def build(self) -> Self:
         num_rays = 64
         beam_tilt_y, beam_tilt_x = 0, 0
         beam_radius = 0.01
@@ -377,24 +387,26 @@ class ParallelBeamGUI(SourceGUI):
         self.rayslider, _ = labelled_slider(
             num_rays, 1, 512, name="Number of Rays", insert_into=vbox,
         )
-        self.rayslider.valueChanged.connect(window.update_rays)
+        self.rayslider.valueChanged.connect(self.try_update_slot)
 
-        hbox_angles = QHBoxLayout()
-        vbox.addWidget(QLabel('Beam Tilt Offset'))
         common_args = dict(
-            vmin=-np.pi / 4, vmax=np.pi / 4, insert_into=hbox_angles, spacing=0, decimals=2,
+            vmin=-np.pi / 4, vmax=np.pi / 4, spacing=0, decimals=2,
         )
-        self.xangleslider, _ = labelled_slider(
-            value=beam_tilt_x, prefix="Beam Tilt X (Radians) = ", **common_args
+        self.xangleslider, hbox_angles = labelled_slider(
+            value=beam_tilt_x, name="Beam Tilt X (rad)", **common_args
         )
         self.yangleslider, _ = labelled_slider(
-            value=beam_tilt_y, prefix="Beam Tilt Y (Radians) = ", **common_args
+            value=beam_tilt_y, name="Beam Tilt Y (rad)", **common_args,
+            insert_into=hbox_angles
         )
         vbox.addLayout(hbox_angles)
+        self.xangleslider.doubleValueChanged.connect(self.set_tilt)
+        self.yangleslider.doubleValueChanged.connect(self.set_tilt)
 
         self.beamwidthslider, _ = labelled_slider(
-            beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=2
+            beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=3
         )
+        self.beamwidthslider.doubleValueChanged.connect(self.set_radius)
 
         self.box.setLayout(vbox)
         return self
@@ -445,7 +457,7 @@ class STEMSampleGUI(SampleGUI):
     def sample(self) -> 'comp.STEMSample':
         return self.component
 
-    def build(self, window: TemGymWindow) -> Self:
+    def build(self) -> Self:
         self.scanpixelsslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.scanpixelsslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.scanpixelsslider.setMinimum(2)
@@ -500,172 +512,134 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
     def d_deflector(self) -> 'comp.DoubleDeflector':
         return self.component
 
-    def build(self, window: TemGymWindow) -> Self:
+    @Slot(float)
+    def set_updefx(self, val: float):
+        self.d_deflector.first.defx = val
+        self.try_update()
+
+    @Slot(float)
+    def set_updefy(self, val: float):
+        self.d_deflector.first.defy = val
+        self.try_update()
+
+    @Slot(float)
+    def set_lowdefx(self, val: float):
+        self.d_deflector.second.defx = val
+        self.try_update()
+
+    @Slot(float)
+    def set_lowdefy(self, val: float):
+        self.d_deflector.second.defy = val
+        self.try_update()
+
+    def build(self) -> Self:
         updefx = self.d_deflector.first.defx
         updefy = self.d_deflector.first.defy
         lowdefx = self.d_deflector.second.defx
         lowdefy = self.d_deflector.second.defy
 
-        self.updefxslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.updefxslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.updefxslider.setMinimum(-10)
-        self.updefxslider.setMaximum(10)
-        self.updefxslider.setValue(1)
-        self.updefxslider.setTickPosition(QSlider.TicksBelow)
-        self.updefxlineedit = QLineEdit(f"{updefx:.4f}")
-        self.updefxlineeditstep = QLineEdit(f"{0.1:.4f}")
-
-        qdoublevalidator = QDoubleValidator()
-        self.updefxlineedit.setValidator(qdoublevalidator)
-        self.updefxlineeditstep.setValidator(qdoublevalidator)
-
-        self.updefyslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.updefyslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.updefyslider.setMinimum(-10)
-        self.updefyslider.setMaximum(10)
-        self.updefyslider.setValue(1)
-        self.updefyslider.setTickPosition(QSlider.TicksBelow)
-        self.updefylineedit = QLineEdit(f"{updefy:.4f}")
-        self.updefylineeditstep = QLineEdit(f"{0.1:.4f}")
-        self.updefylineedit.setValidator(qdoublevalidator)
-        self.updefylineeditstep.setValidator(qdoublevalidator)
-
-        hbox = QHBoxLayout()
-        hbox_lineedit = QHBoxLayout()
-        hbox_lineedit.addWidget(QLabel('Upper X Deflection = '))
-        hbox_lineedit.addWidget(self.updefxlineedit)
-        hbox_lineedit.addWidget(QLabel('Slider Step Upper X = '))
-        hbox_lineedit.addWidget(self.updefxlineeditstep)
-        hbox_lineedit.addWidget(QLabel('Upper Y Deflection = '))
-        hbox_lineedit.addWidget(self.updefylineedit)
-        hbox_lineedit.addWidget(QLabel('Slider Step Upper Y = '))
-        hbox_lineedit.addWidget(self.updefylineeditstep)
-
-        hbox_slider = QHBoxLayout()
-        hbox_slider.addWidget(self.updefxslider)
-        hbox_slider.addWidget(self.updefyslider)
-
         vbox = QVBoxLayout()
-        vbox.addLayout(hbox_lineedit)
-        vbox.addLayout(hbox_slider)
-        vbox.addStretch()
 
-        self.lowdefxslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.lowdefxslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.lowdefxslider.setMinimum(-10)
-        self.lowdefxslider.setMaximum(10)
-        self.lowdefxslider.setValue(1)
-        self.lowdefxslider.setTickPosition(QSlider.TicksBelow)
-        self.lowdefxlineedit = QLineEdit(f"{lowdefx:.4f}")
-        self.lowdefxlineeditstep = QLineEdit(f"{0.1:.4f}")
-        self.lowdefxlineedit.setValidator(qdoublevalidator)
-        self.lowdefxlineeditstep.setValidator(qdoublevalidator)
-
-        self.lowdefyslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.lowdefyslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.lowdefyslider.setMinimum(-10)
-        self.lowdefyslider.setMaximum(10)
-        self.lowdefyslider.setValue(1)
-        self.lowdefyslider.setTickPosition(QSlider.TicksBelow)
-        self.lowdefylineedit = QLineEdit(f"{lowdefy:.4f}")
-        self.lowdefylineeditstep = QLineEdit(f"{0.1:.4f}")
-        self.lowdefylineedit.setValidator(qdoublevalidator)
-        self.lowdefylineeditstep.setValidator(qdoublevalidator)
-
-        hbox = QHBoxLayout()
-        hbox_lineedit = QHBoxLayout()
-        hbox_lineedit.addWidget(QLabel('Lower X Deflection = '))
-        hbox_lineedit.addWidget(self.lowdefxlineedit)
-        hbox_lineedit.addWidget(QLabel('Slider Step Lower X = '))
-        hbox_lineedit.addWidget(self.lowdefxlineeditstep)
-        hbox_lineedit.addWidget(QLabel('Lower Y Deflection = '))
-        hbox_lineedit.addWidget(self.lowdefylineedit)
-        hbox_lineedit.addWidget(QLabel('Slider Step Lower Y = '))
-        hbox_lineedit.addWidget(self.lowdefylineeditstep)
-
-        hbox_slider = QHBoxLayout()
-        hbox_slider.addWidget(self.lowdefxslider)
-        hbox_slider.addWidget(self.lowdefyslider)
-
-        vbox.addLayout(hbox_lineedit)
-        vbox.addLayout(hbox_slider)
-        vbox.addStretch()
-
-        self.xbuttonwobble = QCheckBox("Wobble Upper Deflector X")
-        self.defxwobblefreqlineedit = QLineEdit(f"{1:.4f}")
-        self.defxwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
-        self.defxratiolabel = QLabel('Deflector X Response Ratio = ')
-        self.defxratiolineedit = QLineEdit(f"{0.0:.4f}")
-        self.defxratiolineeditstep = QLineEdit(f"{0.1:.4f}")
-
-        self.defxratiolineedit.setValidator(qdoublevalidator)
-        self.defxratiolineeditstep.setValidator(qdoublevalidator)
-
-        self.defxratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.defxratioslider.setMinimum(-10)
-        self.defxratioslider.setMaximum(10)
-        self.defxratioslider.setValue(1)
-        self.defxratioslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.defxratioslider.setTickPosition(QSlider.TicksBelow)
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.xbuttonwobble)
-        hbox.addWidget(QLabel('Wobble X Frequency'))
-        hbox.addWidget(self.defxwobblefreqlineedit)
-        hbox.addWidget(QLabel('Wobble X Amplitude'))
-        hbox.addWidget(self.defxwobbleamplineedit)
+        common_args = dict(
+            vmin=-0.1, vmax=0.1, spacing=0, decimals=2,
+        )
+        self.updefxslider, hbox = labelled_slider(
+            value=updefx, name="Upper X Deflection", **common_args
+        )
+        self.updefyslider, _ = labelled_slider(
+            value=updefy, name="Upper Y Deflection", **common_args,
+            insert_into=hbox
+        )
         vbox.addLayout(hbox)
+        self.updefxslider.doubleValueChanged.connect(self.set_updefx)
+        self.updefyslider.doubleValueChanged.connect(self.set_updefy)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.defxratiolabel)
-        hbox.addWidget(self.defxratiolineedit)
-        hbox.addWidget(QLabel('Def Ratio X Response Slider Step = '))
-        hbox.addWidget(self.defxratiolineeditstep)
+        self.lowdefxslider, hbox = labelled_slider(
+            value=lowdefx, name="Lower X Deflection", **common_args
+        )
+        self.lowdefyslider, _ = labelled_slider(
+            value=lowdefy, name="Lower Y Deflection", **common_args,
+            insert_into=hbox
+        )
         vbox.addLayout(hbox)
+        self.lowdefxslider.doubleValueChanged.connect(self.set_lowdefx)
+        self.lowdefyslider.doubleValueChanged.connect(self.set_lowdefy)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.defxratioslider)
-        vbox.addLayout(hbox)
+        # self.xbuttonwobble = QCheckBox("Wobble Upper Deflector X")
+        # self.defxwobblefreqlineedit = QLineEdit(f"{1:.4f}")
+        # self.defxwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
+        # self.defxratiolabel = QLabel('Deflector X Response Ratio = ')
+        # self.defxratiolineedit = QLineEdit(f"{0.0:.4f}")
+        # self.defxratiolineeditstep = QLineEdit(f"{0.1:.4f}")
 
-        self.ybuttonwobble = QCheckBox("Wobble Upper Deflector Y")
-        self.defywobblefreqlineedit = QLineEdit(f"{1:.4f}")
-        self.defywobbleamplineedit = QLineEdit(f"{0.5:.4f}")
-        self.defyratiolabel = QLabel('Deflector Y Response Ratio = ')
-        self.defyratiolineedit = QLineEdit(f"{0.0:.4f}")
-        self.defyratiolineeditstep = QLineEdit(f"{0.1:.4f}")
-        self.defyratiolineedit.setValidator(qdoublevalidator)
-        self.defyratiolineeditstep.setValidator(qdoublevalidator)
+        # self.defxratiolineedit.setValidator(qdoublevalidator)
+        # self.defxratiolineeditstep.setValidator(qdoublevalidator)
 
-        self.defyratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.defyratioslider.setMinimum(-10)
-        self.defyratioslider.setMaximum(10)
-        self.defyratioslider.setValue(1)
-        self.defyratioslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.defyratioslider.setTickPosition(QSlider.TicksBelow)
+        # self.defxratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        # self.defxratioslider.setMinimum(-10)
+        # self.defxratioslider.setMaximum(10)
+        # self.defxratioslider.setValue(1)
+        # self.defxratioslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        # self.defxratioslider.setTickPosition(QSlider.TicksBelow)
 
-        self.usedefratio = QCheckBox("Use Def Ratio")
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.xbuttonwobble)
+        # hbox.addWidget(QLabel('Wobble X Frequency'))
+        # hbox.addWidget(self.defxwobblefreqlineedit)
+        # hbox.addWidget(QLabel('Wobble X Amplitude'))
+        # hbox.addWidget(self.defxwobbleamplineedit)
+        # vbox.addLayout(hbox)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.ybuttonwobble)
-        hbox.addWidget(QLabel('Wobble Y Frequency'))
-        hbox.addWidget(self.defywobblefreqlineedit)
-        hbox.addWidget(QLabel('Wobble Y Amplitude'))
-        hbox.addWidget(self.defywobbleamplineedit)
-        vbox.addLayout(hbox)
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.defxratiolabel)
+        # hbox.addWidget(self.defxratiolineedit)
+        # hbox.addWidget(QLabel('Def Ratio X Response Slider Step = '))
+        # hbox.addWidget(self.defxratiolineeditstep)
+        # vbox.addLayout(hbox)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.defyratiolabel)
-        hbox.addWidget(self.defyratiolineedit)
-        hbox.addWidget(QLabel('Def Ratio Y Response Slider Step = '))
-        hbox.addWidget(self.defyratiolineeditstep)
-        vbox.addLayout(hbox)
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.defxratioslider)
+        # vbox.addLayout(hbox)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.defyratioslider)
-        vbox.addLayout(hbox)
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.usedefratio)
-        vbox.addLayout(hbox)
+        # self.ybuttonwobble = QCheckBox("Wobble Upper Deflector Y")
+        # self.defywobblefreqlineedit = QLineEdit(f"{1:.4f}")
+        # self.defywobbleamplineedit = QLineEdit(f"{0.5:.4f}")
+        # self.defyratiolabel = QLabel('Deflector Y Response Ratio = ')
+        # self.defyratiolineedit = QLineEdit(f"{0.0:.4f}")
+        # self.defyratiolineeditstep = QLineEdit(f"{0.1:.4f}")
+        # self.defyratiolineedit.setValidator(qdoublevalidator)
+        # self.defyratiolineeditstep.setValidator(qdoublevalidator)
+
+        # self.defyratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        # self.defyratioslider.setMinimum(-10)
+        # self.defyratioslider.setMaximum(10)
+        # self.defyratioslider.setValue(1)
+        # self.defyratioslider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        # self.defyratioslider.setTickPosition(QSlider.TicksBelow)
+
+        # self.usedefratio = QCheckBox("Use Def Ratio")
+
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.ybuttonwobble)
+        # hbox.addWidget(QLabel('Wobble Y Frequency'))
+        # hbox.addWidget(self.defywobblefreqlineedit)
+        # hbox.addWidget(QLabel('Wobble Y Amplitude'))
+        # hbox.addWidget(self.defywobbleamplineedit)
+        # vbox.addLayout(hbox)
+
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.defyratiolabel)
+        # hbox.addWidget(self.defyratiolineedit)
+        # hbox.addWidget(QLabel('Def Ratio Y Response Slider Step = '))
+        # hbox.addWidget(self.defyratiolineeditstep)
+        # vbox.addLayout(hbox)
+
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.defyratioslider)
+        # vbox.addLayout(hbox)
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.usedefratio)
+        # vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
 
@@ -741,7 +715,7 @@ class DetectorGUI(ComponentGUIWrapper):
     def detector(self) -> 'comp.Detector':
         return self.component
 
-    def build(self, window: TemGymWindow) -> Self:
+    def build(self) -> Self:
         self.pixelsizeslider = QSlider(QtCore.Qt.Orientation.Horizontal)
         self.pixelsizeslider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.pixelsizeslider.setMinimum(0)
