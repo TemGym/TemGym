@@ -534,6 +534,11 @@ class STEMSampleGUI(SampleGUI):
             abs(self.ysize.getValue()),
             abs(self.xsize.getValue()),
         ))
+        ny, nx = self.sample.scan_shape
+        self.scanpos_x.setValue(min(nx - 1, self.scanpos_x.value()))
+        self.scanpos_y.setValue(min(ny - 1, self.scanpos_y.value()))
+        self.scanpos_x.setMaximum(nx)
+        self.scanpos_y.setMaximum(ny)
 
     @Slot(int)
     def set_scanpos(self, val):
@@ -626,17 +631,18 @@ class STEMSampleGUI(SampleGUI):
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
+        ny, nx = self.sample.scan_shape
         self.scanpos_x, _ = labelled_slider(
             value=0,
             vmin=0,
-            vmax=16,
+            vmax=nx - 1,
             name="ScanPos-X",
             insert_into=hbox,
         )
         self.scanpos_y, _ = labelled_slider(
             value=0,
             vmin=0,
-            vmax=16,
+            vmax=ny - 1,
             name="ScanPos-Y",
             insert_into=hbox,
         )
