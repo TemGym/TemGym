@@ -55,10 +55,13 @@ class ComponentGUIWrapper:
             return window.model
         return None
 
-    def try_update(self):
+    def try_update(self, rays: bool = True, geom: bool = False):
         window = self.window()
         if window is not None:
-            window.update_rays()
+            if rays:
+                window.update_rays()
+            if geom:
+                window.update_geometry()
 
     @Slot(int)
     @Slot(float)
@@ -132,6 +135,7 @@ class TemGymWindow(QMainWindow):
 
         # Draw rays and det image
         self.update_rays()
+        self.update_geometry()
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Escape, Qt.Key_Q):
@@ -178,16 +182,6 @@ class TemGymWindow(QMainWindow):
             mode='lines',
             width=2
         )
-        self.tem_window.addItem(self.ray_geometry)
-
-        # Loop through all of the model components, and add their geometry to the TEM window.
-        for component in self.gui_components:
-            for geometry in component.get_geom():
-                self.tem_window.addItem(geometry)
-            self.tem_window.addItem(component.get_label())
-
-        # Add the ray geometry GLLinePlotItem to the list of geometries for that window
-        self.tem_window.addItem(self.ray_geometry)
 
         # Add the window to the dock
         self.tem_dock.addWidget(self.tem_window)
@@ -259,6 +253,17 @@ class TemGymWindow(QMainWindow):
         if self.model.detector is not None:
             image = self.model.detector.get_image(all_rays[-1])
             self.spot_img.setImage(image)
+
+    @Slot()
+    def update_geometry(self):
+        self.tem_window.clear()
+        # Loop through all of the model components, and add their geometry to the TEM window.
+        for component in self.gui_components:
+            for geometry in component.get_geom():
+                self.tem_window.addItem(geometry)
+            self.tem_window.addItem(component.get_label())
+        # Add the ray geometry GLLinePlotItem to the list of geometries for that window
+        self.tem_window.addItem(self.ray_geometry)
 
 
 class ModelComponent(NamedTuple):
@@ -489,11 +494,13 @@ class STEMSampleGUI(SampleGUI):
     def sample(self) -> 'comp.STEMSample':
         return self.component
 
-    def set_stem_generic(self, **kwargs):
+    def set_stem_generic(self, update_kwargs=None, **kwargs):
+        if update_kwargs is None:
+            update_kwargs = {}
         model: 'STEMModel' = self.model
         if model is not None:
             model.set_stem_params(**kwargs)
-            self.try_update()
+            self.try_update(**update_kwargs)
 
     @Slot(float)
     def set_overfocus(self, val):
@@ -509,7 +516,10 @@ class STEMSampleGUI(SampleGUI):
 
     @Slot(float)
     def set_camera_length(self, val):
-        self.set_stem_generic(camera_length=val)
+        self.set_stem_generic(
+            update_kwargs=dict(geom=True),
+            camera_length=val,
+        )
 
     @Slot(float)
     def set_scanstep(self, val):
