@@ -281,6 +281,10 @@ class STEMModel(Model):
         self.move_to(self.scan_coord)
         return self
 
+    @property
+    def camera_length(self) -> float:
+        return self.detector.z - self.sample.z
+
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
             raise InvalidModelError("Overfocus point is before lens")
