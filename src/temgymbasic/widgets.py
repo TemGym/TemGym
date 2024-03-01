@@ -91,20 +91,20 @@ def labelled_slider(
     else:
         slider.valueChanged.connect(slider_valuelabel.setText)
 
-    hbox = QHBoxLayout()
-    hbox.addWidget(slider)
-    hbox.addSpacing(spacing)
-    hbox.addWidget(slider_valuelabel)
-    hboxes = [hbox]
+    if isinstance(insert_into, QHBoxLayout):
+        hbox = insert_into
+    else:
+        hbox = QHBoxLayout()
 
     if name is not None:
         slider_namelabel = QLabel(name)
-        hbox_labels = QHBoxLayout()
-        hbox_labels.addWidget(slider_namelabel)
-        hbox_labels.addStretch()
-        hboxes.insert(0, hbox_labels)
+        hbox.addWidget(slider_namelabel)
 
-    if insert_into is not None:
-        _ = [insert_into.addLayout(h) for h in hboxes]
+    hbox.addWidget(slider)
+    hbox.addSpacing(spacing)
+    hbox.addWidget(slider_valuelabel)
 
-    return slider, hboxes
+    if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
+        insert_into.addLayout(hbox)
+
+    return slider, hbox
