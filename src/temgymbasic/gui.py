@@ -216,7 +216,7 @@ class TemGymWindow(QMainWindow):
 
         self.gui_dock.addWidget(scroll, 1, 0)
 
-        self.gui_layout.addWidget(self.model_gui.box, 0)
+        self.gui_layout.addWidget(self.model_gui.box)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(1)
@@ -225,9 +225,11 @@ class TemGymWindow(QMainWindow):
         self.table_layout = QVBoxLayout(content)
         self.table_dock.addWidget(scroll, 1, 0)
 
-        for idx, gui_component in enumerate(self.gui_components):
-            self.gui_layout.addWidget(gui_component.box, idx)
-            self.table_layout.addWidget(gui_component.table, 0)
+        for gui_component in self.gui_components:
+            self.gui_layout.addWidget(gui_component.box)
+            self.table_layout.addWidget(gui_component.table)
+
+        self.gui_layout.addStretch()
 
     @Slot()
     def update_rays(self):
@@ -268,7 +270,6 @@ class ModelGUI():
         self.box = QGroupBox('Model Settings')
 
         vbox = QVBoxLayout()
-        vbox.addStretch()
 
         self.beamSelect = QComboBox()
         self.beamSelect.addItem("Axial Beam")
@@ -332,7 +333,6 @@ class LensGUI(ComponentGUIWrapper):
         hbox_wobble.addWidget(QLabel('Wobble Amplitude'))
         hbox_wobble.addWidget(self.fwobbleamplineedit)
         vbox.addLayout(hbox_wobble)
-        vbox.addStretch()
         self.box.setLayout(vbox)
 
         self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
@@ -386,11 +386,11 @@ class ParallelBeamGUI(SourceGUI):
 
     def build(self) -> Self:
         num_rays = 64
-        beam_tilt_y, beam_tilt_x = 0, 0
-        beam_radius = 0.01
+        beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
+        beam_radius = self.beam.radius
 
         vbox = QVBoxLayout()
-        vbox.addStretch()
+        # vbox.addStretch()
 
         self.rayslider, _ = labelled_slider(
             num_rays, 1, 512, name="Number of Rays", insert_into=vbox,
@@ -488,7 +488,6 @@ class STEMSampleGUI(SampleGUI):
         self.scanpixelsizelabel.setMinimumWidth(80)
 
         vbox = QVBoxLayout()
-        vbox.addStretch()
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.scanpixelsslider)
@@ -755,7 +754,7 @@ class DetectorGUI(ComponentGUIWrapper):
             self.detector.pixel_size, 0.001, 0.1, name="Pixel size",
             insert_into=vbox, decimals=3,
         )
-        self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
+        self.pixelsizeslider.doubleValueChanged.connect(self.set_pixelsize)
 
         self.rotationslider, _ = labelled_slider(
             self.detector.rotation, -180., 180., name="Rotation",
