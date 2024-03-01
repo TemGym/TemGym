@@ -1,13 +1,12 @@
 from typing import List, Iterable, TYPE_CHECKING, NamedTuple
 from typing_extensions import Self
 import weakref
-from contextlib import nullcontext
+from contextlib import nullcontext, contextmanager
 
 from PySide6.QtGui import QVector3D
 from PySide6.QtCore import (
     Slot,
     Qt,
-    QSignalBlocker,
 )
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -51,6 +50,7 @@ class ComponentGUIWrapper:
         self.window = weakref.ref(window)
         self.box = QGroupBox(component.name)
         self.table = QGroupBox(component.name)
+        self.blocked = False
 
     @property
     def model(self):
@@ -67,6 +67,8 @@ class ComponentGUIWrapper:
         return None
 
     def try_update(self, rays: bool = True, geom: bool = False):
+        if self.blocked:
+            return
         window = self.window()
         if window is not None:
             if rays:
@@ -97,10 +99,15 @@ class ComponentGUIWrapper:
     def get_geom(self) -> Iterable[gl.GLLinePlotItem]:
         raise NotImplementedError()
 
-    @staticmethod
-    def _get_blocker(block: bool):
+    @contextmanager
+    def _update_blocker(self, *args):
+        self.blocked = True
+        yield
+        self.blocked = False
+
+    def _get_blocker(self, block: bool):
         if block:
-            return QSignalBlocker
+            return self._update_blocker
         else:
             return nullcontext
 
