@@ -33,7 +33,7 @@ from .utils import as_gl_lines
 from .widgets import labelled_slider, LabelledIntField
 
 if TYPE_CHECKING:
-    from .model import Model
+    from .model import Model, STEMModel
     from . import components as comp
 
 
@@ -47,6 +47,13 @@ class ComponentGUIWrapper:
         self.window = weakref.ref(window)
         self.box = QGroupBox(component.name)
         self.table = QGroupBox(component.name)
+
+    @property
+    def model(self):
+        window = self.window()
+        if window is not None:
+            return window.model
+        return None
 
     def try_update(self):
         window = self.window()
@@ -482,6 +489,52 @@ class STEMSampleGUI(SampleGUI):
     def sample(self) -> 'comp.STEMSample':
         return self.component
 
+    def set_stem_generic(self, **kwargs):
+        model: 'STEMModel' = self.model
+        if model is not None:
+            model.set_stem_params(**kwargs)
+            self.try_update()
+
+    @Slot(float)
+    def set_overfocus(self, val):
+        self.set_stem_generic(overfocus=val)
+
+    @Slot(float)
+    def set_semiconv(self, val):
+        self.set_stem_generic(semiconv_angle=val)
+
+    @Slot(float)
+    def set_scan_rotation(self, val):
+        self.set_stem_generic(scan_rotation=np.deg2rad(val))
+
+    @Slot(float)
+    def set_camera_length(self, val):
+        self.set_stem_generic(camera_length=val)
+
+    @Slot(float)
+    def set_scanstep(self, val):
+        self.set_stem_generic(scan_step_yx=(
+            self.scanstep_y.value(),
+            self.scanstep_x.value(),
+        ))
+
+    @Slot(int)
+    def set_scanshape(self, val):
+        self.set_stem_generic(scan_shape=(
+            abs(self.ysize.getValue()),
+            abs(self.xsize.getValue()),
+        ))
+
+    @Slot(int)
+    def set_scanpos(self, val):
+        model: 'STEMModel' = self.model
+        if model is not None:
+            model.move_to((
+                abs(self.scanpos_y.value()),
+                abs(self.scanpos_x.value()),
+            ))
+            self.try_update()
+
     def build(self) -> Self:
         vbox = QVBoxLayout()
 
@@ -493,6 +546,8 @@ class STEMSampleGUI(SampleGUI):
             name="Overfocus",
             insert_into=vbox,
         )
+        self.overfocus_slider.doubleValueChanged.connect(self.set_overfocus)
+
         self.semiconv_slider, _ = labelled_slider(
             value=self.sample.semiconv_angle,
             vmin=0,
@@ -501,6 +556,20 @@ class STEMSampleGUI(SampleGUI):
             name="Semiconv (mrad)",
             insert_into=vbox,
         )
+        self.semiconv_slider.doubleValueChanged.connect(self.set_semiconv)
+
+        if self.model is not None:
+            camera_length = self.model.camera_length
+        self.cameralength_slider, _ = labelled_slider(
+            value=camera_length,
+            vmin=0.01,
+            vmax=1.,
+            decimals=2,
+            name="Camera length",
+            insert_into=vbox,
+        )
+        self.cameralength_slider.doubleValueChanged.connect(self.set_camera_length)
+
         self.scan_rotation_slider, _ = labelled_slider(
             value=np.rad2deg(self.sample.scan_rotation),
             vmin=-180.,
@@ -509,6 +578,7 @@ class STEMSampleGUI(SampleGUI):
             name="Scan rotation",
             insert_into=vbox,
         )
+        self.scan_rotation_slider.doubleValueChanged.connect(self.set_scan_rotation)
 
         hbox = QHBoxLayout()
         self.xsize = LabelledIntField(
@@ -519,6 +589,12 @@ class STEMSampleGUI(SampleGUI):
         )
         self.xsize.insert_into(hbox)
         self.ysize.insert_into(hbox)
+        self.xsize.lineEdit.textChanged.connect(self.set_scanshape)
+        self.ysize.lineEdit.textChanged.connect(self.set_scanshape)
+        hbox.addStretch()
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
         self.scanstep_x, _ = labelled_slider(
             value=self.sample.scan_step_yx[1],
             vmin=-0.05,
@@ -535,6 +611,8 @@ class STEMSampleGUI(SampleGUI):
             name="ScanStep-Y",
             insert_into=hbox,
         )
+        self.scanstep_x.doubleValueChanged.connect(self.set_scanstep)
+        self.scanstep_y.doubleValueChanged.connect(self.set_scanstep)
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
@@ -552,6 +630,8 @@ class STEMSampleGUI(SampleGUI):
             name="ScanPos-Y",
             insert_into=hbox,
         )
+        self.scanpos_x.valueChanged.connect(self.set_scanpos)
+        self.scanpos_y.valueChanged.connect(self.set_scanpos)
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
