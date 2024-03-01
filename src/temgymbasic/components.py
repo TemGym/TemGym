@@ -12,6 +12,7 @@ from . import (
     InvalidModelError,
     PositiveFloat,
     NonNegativeFloat,
+    Radians
 )
 from .rays import Rays
 from .utils import (
@@ -153,7 +154,7 @@ class STEMSample(Sample):
         semiconv_angle: PositiveFloat = 0.01,
         scan_shape: Tuple[int, int] = (8, 8),
         scan_step_yx: Tuple[float, float] = (0.01, 0.01),
-        scan_rotation: float = 0.,
+        scan_rotation: Radians = 0.,
         name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
@@ -292,7 +293,7 @@ class Detector(Component):
         z: float,
         pixel_size: float,
         shape: Tuple[int, int],
-        rotation: float = 0.,
+        rotation: Radians = 0.,
         flip_y: bool = False,
         center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
