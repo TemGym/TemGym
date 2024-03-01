@@ -1,9 +1,14 @@
 from typing import List, Iterable, TYPE_CHECKING, NamedTuple
 from typing_extensions import Self
 import weakref
+from contextlib import nullcontext
 
 from PySide6.QtGui import QVector3D
-from PySide6.QtCore import Slot
+from PySide6.QtCore import (
+    Slot,
+    Qt,
+    QSignalBlocker,
+)
 from PySide6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
@@ -21,7 +26,6 @@ from PySide6.QtGui import (
     QDoubleValidator,
     QKeyEvent,
 )
-from PySide6.QtCore import Qt
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
@@ -55,6 +59,13 @@ class ComponentGUIWrapper:
             return window.model
         return None
 
+    @property
+    def model_gui(self):
+        window = self.window()
+        if window is not None:
+            return window.model_gui
+        return None
+
     def try_update(self, rays: bool = True, geom: bool = False):
         window = self.window()
         if window is not None:
@@ -69,6 +80,9 @@ class ComponentGUIWrapper:
     def try_update_slot(self, val):
         self.try_update()
 
+    def sync(self, block: bool = True):
+        pass
+
     def get_label(self) -> gl.GLTextItem:
         return gl.GLTextItem(
             pos=np.array([
@@ -82,6 +96,13 @@ class ComponentGUIWrapper:
 
     def get_geom(self) -> Iterable[gl.GLLinePlotItem]:
         raise NotImplementedError()
+
+    @staticmethod
+    def _get_blocker(block: bool):
+        if block:
+            return QSignalBlocker
+        else:
+            return nullcontext
 
 
 class TemGymWindow(QMainWindow):
@@ -333,6 +354,9 @@ class ModelGUI(ComponentGUIWrapper):
     def finalize(self, window: TemGymWindow):
         pass
 
+    def sync(self, block: bool = True):
+        pass
+
 
 class STEMModelGUI(ModelGUI):
     def __init__(
@@ -341,6 +365,11 @@ class STEMModelGUI(ModelGUI):
         component=ModelComponent(name="STEMModel")
     ):
         super().__init__(component=component, window=window)
+        self.beam: ParallelBeamGUI = window.gui_components[0]
+        self.scan_coils: DoubleDeflectorGUI = window.gui_components[1]
+        self.lens: LensGUI = window.gui_components[2]
+        self.sample: STEMSampleGUI = window.gui_components[3]
+        self.descan_coils: DoubleDeflectorGUI = window.gui_components[4]
 
     def build(self):
         super().build()
@@ -348,24 +377,27 @@ class STEMModelGUI(ModelGUI):
         self.beamSelect.removeItem(1)
         return self
 
-    def finalize(self, window: TemGymWindow):
-        beam: ParallelBeamGUI = window.gui_components[0]
-        scan_coils: DoubleDeflectorGUI = window.gui_components[1]
-        lens: LensGUI = window.gui_components[2]
-        # sample: STEMSampleGUI = window.gui_components[3]
-        descan_coils: DoubleDeflectorGUI = window.gui_components[4]
+    def sync(self, block: bool = True):
+        self.beam.sync(block=block)
+        self.scan_coils.sync(block=block)
+        self.lens.sync(block=block)
+        self.sample.sync(block=block)
+        self.descan_coils.sync(block=block)
 
+    def finalize(self, window: TemGymWindow):
         for widget in (
-            beam.beamwidthslider,
-            scan_coils.updefxslider,
-            scan_coils.updefyslider,
-            scan_coils.lowdefxslider,
-            scan_coils.lowdefyslider,
-            lens.fslider,
-            descan_coils.updefxslider,
-            descan_coils.updefyslider,
-            descan_coils.lowdefxslider,
-            descan_coils.lowdefyslider,
+            self.beam.beamwidthslider,
+            self.beam.xangleslider,
+            self.beam.yangleslider,
+            self.scan_coils.updefxslider,
+            self.scan_coils.updefyslider,
+            self.scan_coils.lowdefxslider,
+            self.scan_coils.lowdefyslider,
+            self.lens.fslider,
+            self.descan_coils.updefxslider,
+            self.descan_coils.updefyslider,
+            self.descan_coils.lowdefxslider,
+            self.descan_coils.lowdefyslider,
         ):
             widget.setEnabled(False)
 
@@ -381,6 +413,11 @@ class LensGUI(ComponentGUIWrapper):
             return
         self.lens.f = val
         self.try_update()
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.fslider):
+            self.fslider.setValue(self.lens.f)
 
     def build(self) -> Self:
         qdoublevalidator = QDoubleValidator()
@@ -454,6 +491,15 @@ class ParallelBeamGUI(SourceGUI):
         )
         self.try_update()
 
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.beamwidthslider):
+            self.beamwidthslider.setValue(self.beam.radius)
+        with blocker(self.xangleslider):
+            self.xangleslider.setValue(self.beam.tilt_yx[1])
+        with blocker(self.yangleslider):
+            self.yangleslider.setValue(self.beam.tilt_yx[0])
+
     def build(self) -> Self:
         num_rays = 64
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
@@ -471,10 +517,10 @@ class ParallelBeamGUI(SourceGUI):
             vmin=-np.pi / 4, vmax=np.pi / 4, spacing=0, decimals=2,
         )
         self.xangleslider, hbox_angles = labelled_slider(
-            value=beam_tilt_x, name="Beam Tilt X (rad)", **common_args
+            value=beam_tilt_x, name="Beam Tilt X", **common_args
         )
         self.yangleslider, _ = labelled_slider(
-            value=beam_tilt_y, name="Beam Tilt Y (rad)", **common_args,
+            value=beam_tilt_y, name="Beam Tilt Y", **common_args,
             insert_into=hbox_angles
         )
         vbox.addLayout(hbox_angles)
@@ -542,6 +588,9 @@ class STEMSampleGUI(SampleGUI):
         if model is not None:
             model.set_stem_params(**kwargs)
             self.try_update(**update_kwargs)
+        model_gui: 'STEMModelGUI' = self.model_gui
+        if model_gui is not None:
+            model_gui.sync()
 
     @Slot(float)
     def set_overfocus(self, val):
@@ -578,8 +627,8 @@ class STEMSampleGUI(SampleGUI):
         ny, nx = self.sample.scan_shape
         self.scanpos_x.setValue(min(nx - 1, self.scanpos_x.value()))
         self.scanpos_y.setValue(min(ny - 1, self.scanpos_y.value()))
-        self.scanpos_x.setMaximum(nx)
-        self.scanpos_y.setMaximum(ny)
+        self.scanpos_x.setMaximum(nx - 1)
+        self.scanpos_y.setMaximum(ny - 1)
 
     @Slot(int)
     def set_scanpos(self, val):
@@ -590,6 +639,9 @@ class STEMSampleGUI(SampleGUI):
                 abs(self.scanpos_x.value()),
             ))
             self.try_update()
+        model_gui: 'STEMModelGUI' = self.model_gui
+        if model_gui is not None:
+            model_gui.sync()
 
     def build(self) -> Self:
         vbox = QVBoxLayout()
@@ -719,6 +771,17 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
     def set_lowdefy(self, val: float):
         self.d_deflector.second.defy = val
         self.try_update()
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.updefxslider):
+            self.updefxslider.setValue(self.d_deflector.first.defx)
+        with blocker(self.updefyslider):
+            self.updefyslider.setValue(self.d_deflector.first.defy)
+        with blocker(self.lowdefxslider):
+            self.lowdefxslider.setValue(self.d_deflector.second.defx)
+        with blocker(self.lowdefyslider):
+            self.lowdefyslider.setValue(self.d_deflector.second.defy)
 
     def build(self) -> Self:
         updefx = self.d_deflector.first.defx
@@ -927,6 +990,19 @@ class DetectorGUI(ComponentGUIWrapper):
             abs(self.xsize.getValue()),
         )
         self.try_update()
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.xsize):
+            self.xsize.lineEdit.setValue(str(self.detector.shape[1]))
+        with blocker(self.ysize):
+            self.ysize.lineEdit.setValue(str(self.detector.shape[0]))
+        with blocker(self.pixelsizeslider):
+            self.pixelsizeslider.setValue(self.detector.pixel_size)
+        with blocker(self.flipy_cbox):
+            self.flipy_cbox.setChecked(self.detector.flip_y)
+        with blocker(self.rotationslider):
+            self.rotationslider.setValue(np.rad2deg(self.detector.rotation))
 
     def build(self) -> Self:
         vbox = QVBoxLayout()
