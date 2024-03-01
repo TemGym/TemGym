@@ -1,4 +1,4 @@
-from typing import List, Iterable, TYPE_CHECKING
+from typing import List, Iterable, TYPE_CHECKING, NamedTuple
 from typing_extensions import Self
 import weakref
 
@@ -91,7 +91,6 @@ class TemGymWindow(QMainWindow):
         '''
         super().__init__()
         self.model = model
-        self.model_gui = ModelGUI()
 
         self.gui_components: List[ComponentGUIWrapper] = []
         # Loop through all components, and display the GUI for each
@@ -188,6 +187,15 @@ class TemGymWindow(QMainWindow):
         # Add the window to the dock
         self.tem_dock.addWidget(self.tem_window)
 
+    def set_camera_x(self):
+        self.tem_window.setCameraParams(**self.x_camera_params)
+
+    def set_camera_y(self):
+        self.tem_window.setCameraParams(**self.y_camera_params)
+
+    def set_camera_initial(self):
+        self.tem_window.setCameraParams(**self.initial_camera_params)
+
     def createDetectorDisplay(self):
         '''Create the detector display
         '''
@@ -207,23 +215,23 @@ class TemGymWindow(QMainWindow):
     def createGUI(self):
         '''Create the gui display
         '''
-        # Create the window which houses the GUI
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(1)
-        content = QWidget()
-        scroll.setWidget(content)
-        self.gui_layout = QVBoxLayout(content)
-
-        self.gui_dock.addWidget(scroll, 1, 0)
-
-        self.gui_layout.addWidget(self.model_gui.box)
-
         scroll = QScrollArea()
         scroll.setWidgetResizable(1)
         content = QWidget()
         scroll.setWidget(content)
         self.table_layout = QVBoxLayout(content)
         self.table_dock.addWidget(scroll, 1, 0)
+
+        # Create the window which houses the GUI
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(1)
+        content = QWidget()
+        scroll.setWidget(content)
+        self.gui_dock.addWidget(scroll, 1, 0)
+
+        self.gui_layout = QVBoxLayout(content)
+        self.model_gui = ModelGUI(self).build()
+        self.gui_layout.addWidget(self.model_gui.box)
 
         for gui_component in self.gui_components:
             self.gui_layout.addWidget(gui_component.box)
@@ -248,33 +256,22 @@ class TemGymWindow(QMainWindow):
             self.spot_img.setImage(image)
 
 
-class ModelGUI():
-    '''Overall GUI of the model
-    '''
-    def __init__(self):
-        '''
+class ModelComponent(NamedTuple):
+    name: str = "Model"
 
-        Parameters
-        ----------
-        num_rays : int
-            Number of rays in the model
-        beam_type : str
-            Type of initial beam: Axial, paralell of point.
-        gun_beam_semi_angle : float
-            Semi angle of the beam
-        beam_tilt_x : float
-            Initial x tilt of the beam in radians
-        beam_tilt_y : float
-            Initial y tilt of the beam in radians
-        '''
-        self.box = QGroupBox('Model Settings')
 
+class ModelGUI(ComponentGUIWrapper):
+    def __init__(self, window: TemGymWindow):
+        component = ModelComponent()
+        super().__init__(component, window)
+
+    def build(self):
         vbox = QVBoxLayout()
 
         self.beamSelect = QComboBox()
-        self.beamSelect.addItem("Axial Beam")
+        self.beamSelect.addItem("Parallel Beam")
         self.beamSelect.addItem("Point Beam")
-        self.beamSelect.addItem("Paralell Beam")
+        self.beamSelect.addItem("Axial Beam")
         self.beamSelectLabel = QLabel("Beam type")
 
         hbox = QHBoxLayout()
@@ -284,8 +281,11 @@ class ModelGUI():
 
         self.view_label = QLabel('Set Camera View')
         self.init_button = QPushButton('Initial View')
+        self.init_button.pressed.connect(self.set_camera_initial)
         self.x_button = QPushButton('X View')
+        self.x_button.pressed.connect(self.set_camera_x)
         self.y_button = QPushButton('Y View')
+        self.y_button.pressed.connect(self.set_camera_y)
 
         hbox_label = QHBoxLayout()
         hbox_label.addWidget(self.view_label)
@@ -298,6 +298,25 @@ class ModelGUI():
         vbox.addLayout(hbox_label)
         vbox.addLayout(hbox_push_buttons)
         self.box.setLayout(vbox)
+        return self
+
+    @Slot()
+    def set_camera_x(self):
+        window = self.window()
+        if window is not None:
+            window.set_camera_x()
+
+    @Slot()
+    def set_camera_y(self):
+        window = self.window()
+        if window is not None:
+            window.set_camera_y()
+
+    @Slot()
+    def set_camera_initial(self):
+        window = self.window()
+        if window is not None:
+            window.set_camera_initial()
 
 
 class LensGUI(ComponentGUIWrapper):
@@ -750,18 +769,6 @@ class DetectorGUI(ComponentGUIWrapper):
     def build(self) -> Self:
         vbox = QVBoxLayout()
 
-        self.pixelsizeslider, _ = labelled_slider(
-            self.detector.pixel_size, 0.001, 0.1, name="Pixel size",
-            insert_into=vbox, decimals=3,
-        )
-        self.pixelsizeslider.doubleValueChanged.connect(self.set_pixelsize)
-
-        self.rotationslider, _ = labelled_slider(
-            self.detector.rotation, -180., 180., name="Rotation",
-            insert_into=vbox, decimals=1,
-        )
-        self.rotationslider.valueChanged.connect(self.set_rotation)
-
         hbox = QHBoxLayout()
         self.xsize = LabelledIntField("X-dim", initial_value=self.detector.shape[1])
         self.ysize = LabelledIntField("Y-dim", initial_value=self.detector.shape[0])
@@ -769,11 +776,23 @@ class DetectorGUI(ComponentGUIWrapper):
         self.ysize.insert_into(hbox)
         self.xsize.lineEdit.textChanged.connect(self.set_shape)
         self.ysize.lineEdit.textChanged.connect(self.set_shape)
+        self.pixelsizeslider, _ = labelled_slider(
+            self.detector.pixel_size, 0.001, 0.1, name="Pixel size",
+            insert_into=hbox, decimals=3,
+        )
+        self.pixelsizeslider.doubleValueChanged.connect(self.set_pixelsize)
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
         self.flipy_cbox = QCheckBox("Flip-y")
         self.flipy_cbox.setChecked(self.detector.flip_y)
         self.flipy_cbox.stateChanged.connect(self.set_flip_y)
         hbox.addWidget(self.flipy_cbox)
-        hbox.addStretch()
+        self.rotationslider, _ = labelled_slider(
+            self.detector.rotation, -180., 180., name="Rotation",
+            insert_into=hbox, decimals=1,
+        )
+        self.rotationslider.valueChanged.connect(self.set_rotation)
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
