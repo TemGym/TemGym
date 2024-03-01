@@ -147,6 +147,11 @@ class Model:
                 return rays
         return None
 
+    @staticmethod
+    def gui_wrapper():
+        from .gui import ModelGUI
+        return ModelGUI
+
 
 class STEMModel(Model):
     def __init__(self):
@@ -328,3 +333,8 @@ class STEMModel(Model):
             for x in range(sx):
                 pos = (y, x)
                 yield pos, self.scan_point(num_rays, pos)
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import STEMModelGUI
+        return STEMModelGUI

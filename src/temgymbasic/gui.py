@@ -137,6 +137,9 @@ class TemGymWindow(QMainWindow):
         self.update_rays()
         self.update_geometry()
 
+        # Any model-specific GUI setup called in finalize
+        self.model_gui.finalize(self)
+
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Escape, Qt.Key_Q):
             self.close()
@@ -229,7 +232,7 @@ class TemGymWindow(QMainWindow):
         self.gui_dock.addWidget(scroll, 1, 0)
 
         self.gui_layout = QVBoxLayout(content)
-        self.model_gui = ModelGUI(self).build()
+        self.model_gui = self.model.gui_wrapper()(window=self).build()
         self.gui_layout.addWidget(self.model_gui.box)
 
         for gui_component in self.gui_components:
@@ -271,9 +274,8 @@ class ModelComponent(NamedTuple):
 
 
 class ModelGUI(ComponentGUIWrapper):
-    def __init__(self, window: TemGymWindow):
-        component = ModelComponent()
-        super().__init__(component, window)
+    def __init__(self, window: TemGymWindow, component=ModelComponent()):
+        super().__init__(component=component, window=window)
 
     def build(self):
         vbox = QVBoxLayout()
@@ -327,6 +329,45 @@ class ModelGUI(ComponentGUIWrapper):
         window = self.window()
         if window is not None:
             window.set_camera_initial()
+
+    def finalize(self, window: TemGymWindow):
+        pass
+
+
+class STEMModelGUI(ModelGUI):
+    def __init__(
+        self,
+        window: TemGymWindow,
+        component=ModelComponent(name="STEMModel")
+    ):
+        super().__init__(component=component, window=window)
+
+    def build(self):
+        super().build()
+        self.beamSelect.removeItem(2)
+        self.beamSelect.removeItem(1)
+        return self
+
+    def finalize(self, window: TemGymWindow):
+        beam: ParallelBeamGUI = window.gui_components[0]
+        scan_coils: DoubleDeflectorGUI = window.gui_components[1]
+        lens: LensGUI = window.gui_components[2]
+        # sample: STEMSampleGUI = window.gui_components[3]
+        descan_coils: DoubleDeflectorGUI = window.gui_components[4]
+
+        for widget in (
+            beam.beamwidthslider,
+            scan_coils.updefxslider,
+            scan_coils.updefyslider,
+            scan_coils.lowdefxslider,
+            scan_coils.lowdefyslider,
+            lens.fslider,
+            descan_coils.updefxslider,
+            descan_coils.updefyslider,
+            descan_coils.lowdefxslider,
+            descan_coils.lowdefyslider,
+        ):
+            widget.setEnabled(False)
 
 
 class LensGUI(ComponentGUIWrapper):
