@@ -18,7 +18,11 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QComboBox,
 )
-from PySide6.QtGui import QDoubleValidator
+from PySide6.QtGui import (
+    QDoubleValidator,
+    QKeyEvent,
+)
+from PySide6.QtCore import Qt
 from pyqtgraph.Qt import QtCore
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph.opengl as gl
@@ -28,7 +32,7 @@ import numpy as np
 
 from . import shapes as comp_geom
 from .utils import as_gl_lines
-from .widgets import labelled_slider
+from .widgets import labelled_slider, LabelledIntField
 
 if TYPE_CHECKING:
     from .model import Model
@@ -124,6 +128,10 @@ class TemGymWindow(QMainWindow):
 
         # Draw rays and det image
         self.update_rays()
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key_Escape:
+            self.close()
 
     def create3DDisplay(self):
         '''Create the 3D Display
@@ -715,40 +723,58 @@ class DetectorGUI(ComponentGUIWrapper):
     def detector(self) -> 'comp.Detector':
         return self.component
 
+    @Slot(float)
+    def set_pixelsize(self, val: float):
+        self.detector.pixel_size = val
+        self.try_update()
+
+    @Slot(float)
+    def set_rotation(self, val: float):
+        self.detector.rotation = np.deg2rad(val)
+        self.try_update()
+
+    @Slot(bool)
+    def set_flip_y(self, val: bool):
+        self.detector.flip_y = bool(val)
+        self.try_update()
+
+    @Slot(str)
+    @Slot(int)
+    @Slot(float)
+    def set_shape(self, val: bool):
+        self.detector.shape = (
+            abs(self.ysize.getValue()),
+            abs(self.xsize.getValue()),
+        )
+        self.try_update()
+
     def build(self) -> Self:
-        self.pixelsizeslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.pixelsizeslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.pixelsizeslider.setMinimum(0)
-        self.pixelsizeslider.setMaximum(100)
-        self.pixelsizeslider.setValue(50)
-
-        self.pixelsizelabel = QLabel('Pixel size = ' + str(self.pixelsizeslider.value()))
-        self.pixelsizelabel.setMinimumWidth(80)
-
-        self.rotationslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.rotationslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.rotationslider.setMinimum(-180)
-        self.rotationslider.setMaximum(180)
-        self.rotationslider.setValue(0)
-
-        self.rotationlabel = QLabel('Rotation = ' + str(self.rotationslider.value()))
-        self.rotationlabel.setMinimumWidth(80)
-
         vbox = QVBoxLayout()
-        vbox.addStretch()
+
+        self.pixelsizeslider, _ = labelled_slider(
+            self.detector.pixel_size, 0.001, 0.1, name="Pixel size",
+            insert_into=vbox, decimals=3,
+        )
+        self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
+
+        self.rotationslider, _ = labelled_slider(
+            self.detector.rotation, -180., 180., name="Rotation",
+            insert_into=vbox, decimals=1,
+        )
+        self.rotationslider.valueChanged.connect(self.set_rotation)
 
         hbox = QHBoxLayout()
-        hbox.addWidget(self.pixelsizeslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.pixelsizelabel)
-
-        vbox.addLayout(hbox)
-
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.rotationslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.rotationlabel)
-
+        self.xsize = LabelledIntField("X-dim", initial_value=self.detector.shape[1])
+        self.ysize = LabelledIntField("Y-dim", initial_value=self.detector.shape[0])
+        self.xsize.insert_into(hbox)
+        self.ysize.insert_into(hbox)
+        self.xsize.lineEdit.textChanged.connect(self.set_shape)
+        self.ysize.lineEdit.textChanged.connect(self.set_shape)
+        self.flipy_cbox = QCheckBox("Flip-y")
+        self.flipy_cbox.setChecked(self.detector.flip_y)
+        self.flipy_cbox.stateChanged.connect(self.set_flip_y)
+        hbox.addWidget(self.flipy_cbox)
+        hbox.addStretch()
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
