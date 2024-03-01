@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
     QScrollArea,
-    QSlider,
     QLabel,
     QHBoxLayout,
     QGroupBox,
@@ -23,7 +22,6 @@ from PySide6.QtGui import (
     QKeyEvent,
 )
 from PySide6.QtCore import Qt
-from pyqtgraph.Qt import QtCore
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
@@ -129,7 +127,7 @@ class TemGymWindow(QMainWindow):
         self.update_rays()
 
     def keyPressEvent(self, event: QKeyEvent):
-        if event.key() == Qt.Key_Escape:
+        if event.key() in (Qt.Key_Escape, Qt.Key_Q):
             self.close()
 
     def create3DDisplay(self):
@@ -485,49 +483,76 @@ class STEMSampleGUI(SampleGUI):
         return self.component
 
     def build(self) -> Self:
-        self.scanpixelsslider = QSlider(QtCore.Qt.Orientation.Horizontal)
-        self.scanpixelsslider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.scanpixelsslider.setMinimum(2)
-        self.scanpixelsslider.setMaximum(8)
-        self.scanpixelsslider.setValue(256)
-
-        self.scanpixelslabel = QLabel('Scan pixels = ' + str(int(self.scanpixelsslider.value())))
-        self.scanpixelslabel.setMinimumWidth(80)
-
-        self.overfocuslabel = QLabel('Overfocus = Not Set')
-        self.overfocuslabel.setMinimumWidth(80)
-
-        self.cameralengthlabel = QLabel('Camera length = Not Set')
-        self.cameralengthlabel.setMinimumWidth(80)
-
-        self.semiconvlabel = QLabel('Semi conv = Not Set')
-        self.semiconvlabel.setMinimumWidth(80)
-
-        self.scanpixelsizelabel = QLabel('Scan pixel size = Not Set')
-        self.scanpixelsizelabel.setMinimumWidth(80)
-
         vbox = QVBoxLayout()
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.scanpixelsslider)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.scanpixelslabel)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.overfocuslabel)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.semiconvlabel)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.scanpixelsizelabel)
-        hbox.addSpacing(15)
-        hbox.addWidget(self.cameralengthlabel)
+        self.overfocus_slider, _ = labelled_slider(
+            value=self.sample.overfocus,
+            vmin=-0.1,
+            vmax=0.1,
+            decimals=2,
+            name="Overfocus",
+            insert_into=vbox,
+        )
+        self.semiconv_slider, _ = labelled_slider(
+            value=self.sample.semiconv_angle,
+            vmin=0,
+            vmax=0.1,
+            decimals=2,
+            name="Semiconv (mrad)",
+            insert_into=vbox,
+        )
+        self.scan_rotation_slider, _ = labelled_slider(
+            value=np.rad2deg(self.sample.scan_rotation),
+            vmin=-180.,
+            vmax=180.,
+            decimals=1,
+            name="Scan rotation",
+            insert_into=vbox,
+        )
 
+        hbox = QHBoxLayout()
+        self.xsize = LabelledIntField(
+            "ScanShape-X", initial_value=self.sample.scan_shape[1]
+        )
+        self.ysize = LabelledIntField(
+            "ScanShape-Y", initial_value=self.sample.scan_shape[0]
+        )
+        self.xsize.insert_into(hbox)
+        self.ysize.insert_into(hbox)
+        self.scanstep_x, _ = labelled_slider(
+            value=self.sample.scan_step_yx[1],
+            vmin=-0.05,
+            vmax=0.05,
+            decimals=2,
+            name="ScanStep-X",
+            insert_into=hbox,
+        )
+        self.scanstep_y, _ = labelled_slider(
+            value=self.sample.scan_step_yx[1],
+            vmin=-0.05,
+            vmax=0.05,
+            decimals=2,
+            name="ScanStep-Y",
+            insert_into=hbox,
+        )
         vbox.addLayout(hbox)
 
-        self.FOURDSTEM_experiment_button = QPushButton('Run 4D STEM Experiment')
-
-        hbox_push_buttons = QHBoxLayout()
-        hbox_push_buttons.addWidget(self.FOURDSTEM_experiment_button)
-        vbox.addLayout(hbox_push_buttons)
+        hbox = QHBoxLayout()
+        self.scanpos_x, _ = labelled_slider(
+            value=0,
+            vmin=0,
+            vmax=16,
+            name="ScanPos-X",
+            insert_into=hbox,
+        )
+        self.scanpos_y, _ = labelled_slider(
+            value=0,
+            vmin=0,
+            vmax=16,
+            name="ScanPos-Y",
+            insert_into=hbox,
+        )
+        vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
         return self
@@ -789,7 +814,7 @@ class DetectorGUI(ComponentGUIWrapper):
         self.flipy_cbox.stateChanged.connect(self.set_flip_y)
         hbox.addWidget(self.flipy_cbox)
         self.rotationslider, _ = labelled_slider(
-            self.detector.rotation, -180., 180., name="Rotation",
+            np.rad2deg(self.detector.rotation), -180., 180., name="Rotation",
             insert_into=hbox, decimals=1,
         )
         self.rotationslider.valueChanged.connect(self.set_rotation)
