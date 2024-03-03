@@ -293,10 +293,53 @@ class STEMModel(Model):
     def set_obj_lens_f_from_overfocus(self):
         if self.sample.overfocus > (self.sample.z - self.objective.z):
             raise InvalidModelError("Overfocus point is before lens")
-        self.objective.f = self.sample.z - (self.objective.z + self.sample.overfocus)
+        self.objective.f = self._get_objective_f(self.sample.overfocus)
+
+    def _get_objective_f(self, overfocus: float):
+        return self.sample.z - (self.objective.z + overfocus)
+
+    def _overfocus_bounds(self):
+        # for each change to scan step or shape or rotation
+        # get max def values from corners and set def slider min/max
+        # foreach change in sample z or objective z get overfocus max,
+        # set minimum to minus max, calculate and set min/max objective f slider
+        # also set min/max beam radius to be in sync whatever they are
+        # could have a signal for geom changed which components could connect to
+        upper = self.sample.z - self.objective.z
+        return (None, (upper * 0.99))
+
+    def _minmax_def(self):
+        current_coord = self._scan_pixel_yx
+        ny, nx = self.sample.scan_shape
+        values = []
+        for c in (
+            (0, 0),
+            (ny, 0),
+            (0, nx),
+            (ny, nx),
+        ):
+            self.move_to(c)
+            values.append(
+                (
+                    self.scan_coils.first.defy,
+                    self.scan_coils.first.defx,
+                    self.scan_coils.second.defy,
+                    self.scan_coils.second.defx,
+                    self.descan_coils.first.defy,
+                    self.descan_coils.first.defx,
+                    self.descan_coils.second.defy,
+                    self.descan_coils.second.defx,
+                )
+            )
+        values = np.stack(values, axis=0)
+        self.move_to(current_coord)
+        return values.min(axis=0), values.max(axis=0)
 
     def set_beam_radius_from_semiconv(self):
-        self.source.radius = abs(self.objective.f) * np.tan(abs(self.sample.semiconv_angle))
+        self.source.radius = self._get_radius(self.sample.semiconv_angle)
+
+    def _get_radius(self, semiconv: float):
+        return abs(self.objective.f) * np.tan(abs(semiconv))
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx

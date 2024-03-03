@@ -102,7 +102,7 @@ class Lens(Component):
         ndarray
             Output Ray Transfer Matrix
         '''
-
+        f = f + 1e-6  # div-0
         return np.array(
             [[1,      0, 0,      0, 0],
              [-1 / f, 1, 0,      0, 0],
