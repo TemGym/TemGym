@@ -1,4 +1,4 @@
-from typing import List, Iterable, TYPE_CHECKING, NamedTuple
+from typing import List, Iterable, TYPE_CHECKING, NamedTuple, Optional
 from typing_extensions import Self
 import weakref
 from contextlib import nullcontext, contextmanager
@@ -378,6 +378,13 @@ class STEMModelGUI(ModelGUI):
         self.sample: STEMSampleGUI = window.gui_components[3]
         self.descan_coils: DoubleDeflectorGUI = window.gui_components[4]
 
+    @property
+    def model(self) -> Optional['STEMModel']:
+        window = self.window()
+        if window is not None:
+            return window.model
+        return None
+
     def build(self):
         super().build()
         self.beamSelect.removeItem(2)
@@ -385,6 +392,42 @@ class STEMModelGUI(ModelGUI):
         return self
 
     def sync(self, block: bool = True):
+        model = self.model
+        if model is not None:
+            _, overfocus_max = model._overfocus_bounds()
+            self.sample.overfocus_slider.setMinimum(-overfocus_max)
+            self.sample.overfocus_slider.setMaximum(overfocus_max)
+            min_f, max_f = sorted((
+                model._get_objective_f(overfocus_max),
+                model._get_objective_f(-overfocus_max),
+            ))
+            self.lens.fslider.setMinimum(min_f)
+            self.lens.fslider.setMaximum(max_f)
+            min_rad, max_rad = sorted((
+                model._get_radius(self.sample.semiconv_slider.minimum()),
+                model._get_radius(self.sample.semiconv_slider.maximum()),
+            ))
+            self.beam.beamwidthslider.setMinimum(min_rad)
+            self.beam.beamwidthslider.setMaximum(max_rad)
+
+            mindef, maxdef = self.model._minmax_def()
+            self.scan_coils.updefyslider.setMinimum(mindef[0])
+            self.scan_coils.updefxslider.setMinimum(mindef[1])
+            self.scan_coils.lowdefyslider.setMinimum(mindef[2])
+            self.scan_coils.lowdefxslider.setMinimum(mindef[3])
+            self.descan_coils.updefyslider.setMinimum(mindef[4])
+            self.descan_coils.updefxslider.setMinimum(mindef[5])
+            self.descan_coils.lowdefyslider.setMinimum(mindef[6])
+            self.descan_coils.lowdefxslider.setMinimum(mindef[7])
+            self.scan_coils.updefyslider.setMaximum(maxdef[0])
+            self.scan_coils.updefxslider.setMaximum(maxdef[1])
+            self.scan_coils.lowdefyslider.setMaximum(maxdef[2])
+            self.scan_coils.lowdefxslider.setMaximum(maxdef[3])
+            self.descan_coils.updefyslider.setMaximum(maxdef[4])
+            self.descan_coils.updefxslider.setMaximum(maxdef[5])
+            self.descan_coils.lowdefyslider.setMaximum(maxdef[6])
+            self.descan_coils.lowdefxslider.setMaximum(maxdef[7])
+
         self.beam.sync(block=block)
         self.scan_coils.sync(block=block)
         self.lens.sync(block=block)
@@ -407,6 +450,8 @@ class STEMModelGUI(ModelGUI):
             self.descan_coils.lowdefyslider,
         ):
             widget.setEnabled(False)
+
+        self.sync(block=False)
 
 
 class LensGUI(ComponentGUIWrapper):
@@ -665,10 +710,10 @@ class STEMSampleGUI(SampleGUI):
 
         self.semiconv_slider, _ = labelled_slider(
             value=self.sample.semiconv_angle,
-            vmin=0,
-            vmax=0.1,
-            decimals=2,
-            name="Semiconv (mrad)",
+            vmin=0.001,
+            vmax=0.100,
+            decimals=3,
+            name="Semiconv (rad)",
             insert_into=vbox,
         )
         self.semiconv_slider.doubleValueChanged.connect(self.set_semiconv)
