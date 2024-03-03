@@ -32,6 +32,14 @@ class DoubleSlider(QSlider):
     def value(self):
         return float(super().value()) / self._multi
 
+    def minimum(self):
+        val = super().minimum()
+        return val / self._multi
+
+    def maximum(self):
+        val = super().maximum()
+        return val / self._multi
+
     def setMinimum(self, value):
         return super().setMinimum(value * self._multi)
 
