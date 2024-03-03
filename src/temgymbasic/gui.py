@@ -52,6 +52,9 @@ class ComponentGUIWrapper:
         self.table = QGroupBox(component.name)
         self.blocked = False
 
+    def update_geometry(self):
+        pass
+
     @property
     def model(self):
         window = self.window()
@@ -162,8 +165,8 @@ class TemGymWindow(QMainWindow):
         self.createGUI()
 
         # Draw rays and det image
+        self.add_geometry()
         self.update_rays()
-        self.update_geometry()
 
         # Any model-specific GUI setup called in finalize
         self.model_gui.finalize(self)
@@ -283,10 +286,9 @@ class TemGymWindow(QMainWindow):
 
         if self.model.detector is not None:
             image = self.model.detector.get_image(all_rays[-1])
-            self.spot_img.setImage(image)
+            self.spot_img.setImage(image.T)
 
-    @Slot()
-    def update_geometry(self):
+    def add_geometry(self):
         self.tem_window.clear()
         # Loop through all of the model components, and add their geometry to the TEM window.
         for component in self.gui_components:
@@ -295,6 +297,11 @@ class TemGymWindow(QMainWindow):
             self.tem_window.addItem(component.get_label())
         # Add the ray geometry GLLinePlotItem to the list of geometries for that window
         self.tem_window.addItem(self.ray_geometry)
+
+    @Slot()
+    def update_geometry(self):
+        for component in self.gui_components:
+            component.update_geometry()
 
 
 class ModelComponent(NamedTuple):
@@ -593,19 +600,19 @@ class ParallelBeamGUI(SourceGUI):
             Z_ORIENT * self.component.z,
             64,
         )
-        return [
-            gl.GLLinePlotItem(
-                pos=vertices.T,
-                color="green",
-                width=2,
-            )
-        ]
+        self.geom = gl.GLLinePlotItem(
+            pos=vertices.T,
+            color="green",
+            width=2,
+        )
+        return [self.geom]
 
 
 class SampleGUI(ComponentGUIWrapper):
-    def get_geom(self):
-        vertices, faces = comp_geom.square(
+    def _get_mesh(self):
+        vertices, faces = comp_geom.rectangle(
             w=0.25,
+            h=0.25,
             x=0.,
             y=0.,
             z=Z_ORIENT * self.component.z,
@@ -613,19 +620,26 @@ class SampleGUI(ComponentGUIWrapper):
 
         colors = np.ones((vertices.shape[0], 4))
         colors[..., 3] = 0.1
+        return gl.MeshData(
+            vertexes=vertices,
+            faces=faces,
+            vertexColors=colors,
+        )
 
-        mesh = gl.GLMeshItem(
-            meshdata=gl.MeshData(
-                vertexes=vertices,
-                faces=faces,
-                vertexColors=colors,
-            ),
+    def get_geom(self):
+        self.geom = gl.GLMeshItem(
+            meshdata=self._get_mesh(),
             smooth=True,
             drawEdges=False,
             drawFaces=True,
             shader='shaded',
         )
-        return [mesh]
+        return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setMeshData(
+            meshdata=self._get_mesh(),
+        )
 
 
 class STEMSampleGUI(SampleGUI):
@@ -654,7 +668,10 @@ class STEMSampleGUI(SampleGUI):
 
     @Slot(float)
     def set_scan_rotation(self, val):
-        self.set_stem_generic(scan_rotation=np.deg2rad(val))
+        self.set_stem_generic(
+            scan_rotation=np.deg2rad(val),
+            update_kwargs=dict(geom=True),
+        )
 
     @Slot(float)
     def set_camera_length(self, val):
@@ -668,14 +685,16 @@ class STEMSampleGUI(SampleGUI):
         self.set_stem_generic(scan_step_yx=(
             self.scanstep_y.value(),
             self.scanstep_x.value(),
-        ))
+        ), update_kwargs=dict(geom=True),
+        )
 
     @Slot(int)
     def set_scanshape(self, val):
         self.set_stem_generic(scan_shape=(
             abs(self.ysize.getValue()),
             abs(self.xsize.getValue()),
-        ))
+        ), update_kwargs=dict(geom=True)
+        )
         ny, nx = self.sample.scan_shape
         self.scanpos_x.setValue(min(nx - 1, self.scanpos_x.value()))
         self.scanpos_y.setValue(min(ny - 1, self.scanpos_y.value()))
@@ -797,6 +816,25 @@ class STEMSampleGUI(SampleGUI):
 
         self.box.setLayout(vbox)
         return self
+
+    def _get_mesh(self):
+        sy, sx = self.sample.scan_shape
+        py, px = self.sample.scan_step_yx
+        vertices, faces = comp_geom.rectangle(
+            w=sx * px,
+            h=sy * py,
+            x=0.,
+            y=0.,
+            z=Z_ORIENT * self.component.z,
+            rotation=self.sample.scan_rotation
+        )
+        colors = np.ones((vertices.shape[0], 4))
+        colors[..., 3] = 0.1
+        return gl.MeshData(
+            vertexes=vertices,
+            faces=faces,
+            vertexColors=colors,
+        )
 
 
 class DoubleDeflectorGUI(ComponentGUIWrapper):
@@ -973,7 +1011,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         return self
 
     def get_geom(self):
-        elements = []
+        self.geom = []
         phi = np.pi / 2
         radius = 0.25
         n_arc = 64
@@ -984,12 +1022,12 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
             z=Z_ORIENT * self.component.entrance_z,
             n_arc=n_arc,
         )
-        elements.append(
+        self.geom.append(
             gl.GLLinePlotItem(
                 pos=arc1.T, color="r", width=5
             )
         )
-        elements.append(
+        self.geom.append(
             gl.GLLinePlotItem(
                 pos=arc2.T, color="b", width=5
             )
@@ -1000,17 +1038,17 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
             z=Z_ORIENT * self.component.exit_z,
             n_arc=n_arc,
         )
-        elements.append(
+        self.geom.append(
             gl.GLLinePlotItem(
                 pos=arc1.T, color="r", width=5
             )
         )
-        elements.append(
+        self.geom.append(
             gl.GLLinePlotItem(
                 pos=arc2.T, color="b", width=5
             )
         )
-        return elements
+        return self.geom
 
 
 class DetectorGUI(ComponentGUIWrapper):
@@ -1021,12 +1059,12 @@ class DetectorGUI(ComponentGUIWrapper):
     @Slot(float)
     def set_pixelsize(self, val: float):
         self.detector.pixel_size = val
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_rotation(self, val: float):
         self.detector.rotation = np.deg2rad(val)
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(bool)
     def set_flip_y(self, val: bool):
@@ -1041,7 +1079,7 @@ class DetectorGUI(ComponentGUIWrapper):
             abs(self.ysize.getValue()),
             abs(self.xsize.getValue()),
         )
-        self.try_update()
+        self.try_update(geom=True)
 
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
@@ -1082,30 +1120,42 @@ class DetectorGUI(ComponentGUIWrapper):
             np.rad2deg(self.detector.rotation), -180., 180., name="Rotation",
             insert_into=hbox, decimals=1,
         )
-        self.rotationslider.valueChanged.connect(self.set_rotation)
+        self.rotationslider.doubleValueChanged.connect(self.set_rotation)
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
         return self
 
-    def get_geom(self):
-        vertices, faces = comp_geom.square(
-            w=0.5,
+    def _get_mesh(self):
+        sy, sx = self.detector.shape
+        pixelsize = self.detector.pixel_size
+        vertices, faces = comp_geom.rectangle(
+            w=sx * pixelsize,
+            h=sy * pixelsize,
             x=0.,
             y=0.,
             z=Z_ORIENT * self.component.z,
+            rotation=self.detector.rotation
         )
         colors = np.ones((vertices.shape[0], 4))
         colors[..., 3] = 0.9
-        mesh = gl.GLMeshItem(
-            meshdata=gl.MeshData(
-                vertexes=vertices,
-                faces=faces,
-                vertexColors=colors,
-            ),
+        return gl.MeshData(
+            vertexes=vertices,
+            faces=faces,
+            vertexColors=colors,
+        )
+
+    def get_geom(self):
+        self.geom = gl.GLMeshItem(
+            meshdata=self._get_mesh(),
             smooth=False,
             drawEdges=False,
             drawFaces=True,
             shader='shaded',
         )
-        return [mesh]
+        return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setMeshData(
+            meshdata=self._get_mesh(),
+        )

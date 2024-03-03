@@ -1,8 +1,10 @@
 import numpy as np
 import triangle as tr
+from .utils import P2R, R2P
+from . import Radians
 
 
-def square(w, x, y, z):
+def rectangle(w, h, x, y, z, rotation: Radians = 0.):
     '''Generates vertices for a square 3D model. Used to represent the detector
 
     Parameters
@@ -21,17 +23,22 @@ def square(w, x, y, z):
     verts3D: ndarray
         vertices to draw a 3D model
     '''
+
     vertices = np.array(
-        [[x + w/2, y + w/2, z],
-         [x - w/2, y + w/2, z],
-         [x - w/2, y - w/2, z],
-         [x + w/2, y - w/2, z]]
+        [[x + w / 2, y + h / 2, z],
+         [x - w / 2, y + h / 2, z],
+         [x - w / 2, y - h / 2, z],
+         [x + w / 2, y - h / 2, z]]
     )
+    if rotation != 0.:
+        mag, ang = R2P(vertices[:, 0] + vertices[:, 1] * 1j)
+        _vertices = P2R(mag, ang + rotation)
+        vertices[:, 0] = _vertices.real
+        vertices[:, 1] = _vertices.imag
     faces = np.array(
         [[0, 1, 2],
          [0, 2, 3]]
     )
-
     return vertices, faces
 
 

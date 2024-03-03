@@ -123,7 +123,7 @@ class Rays:
             shape=shape,
             pixel_size=pixel_size,
             flip_y=flip_y,
-            scan_rotation=rotation,
+            scan_rotation=np.rad2deg(rotation),
         )
         if as_int:
             return np.round((yy, xx)).astype(int)
