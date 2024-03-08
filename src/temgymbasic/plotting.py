@@ -18,8 +18,8 @@ class PlotParams(NamedTuple):
     edge_lw: float = 1.
     ray_lw: float = 0.01
     label_fontsize: int = 12
-    figsize: Tuple[int, int] = (6, 12)
-    extent_scale: float = 1.3
+    figsize: Tuple[int, int] = (6, 6)
+    extent_scale: float = 1.1
 
 
 def plot_model(model, *, plot_params: PlotParams = PlotParams()):
@@ -34,9 +34,16 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
     min_x_idx = np.argmin(x[0, :])
     max_x_idx = np.argmax(x[0, :])
     aspect = p.figsize[1]/p.figsize[0]
-    detector_size_x = model.detector.pixel_size * model.detector.shape[1]
+    detector_range_x = model.detector.pixel_size * model.detector.shape[1] / 2
+    scan_range_x = model.sample.scan_step_yx[1]*model.sample.scan_shape[1] / 2
 
-    extent = p.extent_scale*np.max(x)
+    max_beam_x = np.max(np.abs(x))
+    component_x = max_beam_x * 1.3
+    max_x = np.max((component_x, detector_range_x, scan_range_x))
+
+    min_z = np.min([np.min(z)] + [c.z for c in model.components])
+    max_z = np.max([np.max(z)] + [c.z for c in model.components])
+    extent = p.extent_scale * max_x
 
     fig, ax = plt.subplots(figsize=p.figsize)
     ax.tick_params(axis='both', which='major', labelsize=14)
@@ -47,13 +54,15 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
     ax.spines['left'].set_visible(False)
     ax.grid(color='lightgrey', linestyle='--', linewidth=0.5)
     ax.grid(which='minor', color='#EEEEEE', linestyle=':', linewidth=0.5)
-    ax.set_yticks([])
-    ax.set_yticklabels([])
-    ax.get_xaxis().set_ticks(
-        [-detector_size_x/2, 0, detector_size_x/2])
-    ax.set_xlim([-detector_size_x, detector_size_x])
-    ax.set_ylim([model.components[-1].z, model.components[0].z])
-    ax.text(x[0, max_x_idx], model.components[0].z, model.components[0].name,
+    ax.get_yaxis().set_ticks(
+        # Use set to make it unique
+        tuple(frozenset([np.min(z), np.max(z)] + [c.z for c in model.components]))
+    )
+    ax.set_xlim([-max_x, max_x])
+    ax.set_ylim([max_z, min_z])
+
+    # Rays
+    ax.text(extent, model.components[0].z, model.components[0].name,
             fontsize=p.label_fontsize, zorder=1000)
     ax.plot(x, z,
         color=p.ray_color, linewidth=p.ray_lw, alpha=p.ray_alpha, zorder=1)
@@ -66,7 +75,7 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
 
     for component in model.components:
         if isinstance(component, DoubleDeflector):
-            radius = -detector_size_x/2
+            radius = -component_x
             ax.text(extent, component.first.z, component.first.name + ' ' + component.name,
                     fontsize=p.label_fontsize, va='bottom', zorder=1000)
             ax.plot([-radius, 0], [component.first.z, component.first.z],
@@ -84,7 +93,7 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
             ax.plot([-radius, radius], [component.second.z, component.second.z],
                     color='k', alpha=0.8, linewidth=p.component_lw+2, zorder=998)
         if isinstance(component, Deflector):
-            radius = -detector_size_x/2
+            radius = -component_x
             ax.text(extent, component.z, component.name, fontsize=p.label_fontsize,
                     va='bottom', zorder=1000)
             ax.plot([-radius, 0], [component.z, component.z],
@@ -94,7 +103,7 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
             ax.plot([-radius, radius], [component.z, component.z],
                     color='k', alpha=0.8, linewidth=p.component_lw+2, zorder=998)
         elif isinstance(component, Lens):
-            radius = -detector_size_x
+            radius = -component_x * 2
             ax.text(extent, component.z, component.name, fontsize=p.label_fontsize,
                     va='bottom', zorder=1000)
             ax.add_patch(mpl.patches.Arc((0, component.z), radius, height=0.03/aspect,
@@ -106,13 +115,12 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
         elif isinstance(component, Sample):
             ax.text(extent, component.z,
                 component.name, fontsize=p.label_fontsize, zorder=1000, va='bottom')
-            wx = model.sample.scan_step_yx[1]*model.sample.scan_shape[1]
-            ax.plot([0-wx/2, 0+wx/2], [component.z, component.z],
+            ax.plot([-scan_range_x, scan_range_x], [component.z, component.z],
                 color='dimgrey', alpha=0.8, linewidth=3)
         elif isinstance(component, Detector):
             ax.text(extent, component.z, component.name, fontsize=p.label_fontsize,
                     zorder=1000, va='bottom')
-            ax.plot([-detector_size_x/2, detector_size_x/2],
+            ax.plot([-detector_range_x, detector_range_x],
                     [component.z, component.z], color='dimgrey',
                     zorder=1000, alpha=1, linewidth=5)
         elif isinstance(component, Biprism):
