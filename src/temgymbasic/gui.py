@@ -1,4 +1,4 @@
-from typing import List, Iterable, TYPE_CHECKING, NamedTuple, Optional
+from typing import List, Iterable, TYPE_CHECKING, NamedTuple, Optional, Tuple
 from typing_extensions import Self
 import weakref
 from contextlib import nullcontext, contextmanager
@@ -42,6 +42,114 @@ if TYPE_CHECKING:
 
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
+
+
+class GridGeomParams(NamedTuple):
+    w: float
+    h: float
+    cx: float
+    cy: float
+    rotation: float
+    z: float
+    shape: Optional[Tuple[int, int]]
+
+
+class GridGeomMixin:
+    def _get_extents(self) -> GridGeomParams:
+        # (cx, cy, w, h, rotation, z)
+        raise NotImplementedError()
+
+    def _get_image(self):
+        return np.asarray(
+            (((255, 128, 128, 255),),),
+            dtype=np.uint8,
+        )
+
+    def _get_grid_verts(self):
+        geom = self._get_extents()
+        rotation = geom.rotation
+        shape = geom.shape
+        if shape is None or any(s <= 0 for s in shape):
+            return None
+        vertices = self._get_mesh(rotation=0.)
+        min_x, min_y, z = vertices.min(axis=0)
+        max_x, max_y, _ = vertices.max(axis=0)
+        ny, nx = shape
+        # this can be done with clever striding / reshaping
+        xvals = np.linspace(min_x, max_x, num=nx + 1, endpoint=True)[1:-1]
+        xfill = np.asarray((min_y, max_y))
+        xfill = np.tile(xfill, xvals.size)
+        xvals = np.repeat(xvals, 2)
+        yvals = np.linspace(min_y, max_y, num=ny + 1, endpoint=True)[1:-1]
+        yfill = np.asarray((min_x, max_x))
+        yfill = np.tile(yfill, yvals.size)
+        yvals = np.repeat(yvals, 2)
+
+        if rotation != 0.:
+            mag, ang = R2P(xvals + xfill * 1j)
+            xcplx = P2R(mag, ang + rotation)
+            xvals, xfill = xcplx.real, xcplx.imag
+            mag, ang = R2P(yfill + yvals * 1j)
+            ycplx = P2R(mag, ang + rotation)
+            yfill, yvals = ycplx.real, ycplx.imag
+
+        xlines = np.stack((xvals, xfill, np.full_like(xvals, z)), axis=1)
+        ylines = np.stack((yfill, yvals, np.full_like(yvals, z)), axis=1)
+        return np.concatenate((xlines, ylines), axis=0)
+
+    def get_geom(self):
+        vertices = self._get_mesh()
+        self.geom_border = gl.GLLinePlotItem(
+            pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
+            color=(0., 0., 0., 8.),
+            antialias=True,
+            mode='line_strip',
+        )
+        grid_verts = self._get_grid_verts()
+        if grid_verts is not None:
+            self.geom_grid = gl.GLLinePlotItem(
+                pos=grid_verts,
+                color=(0., 0., 0., 0.2),
+                antialias=True,
+                mode='lines',
+            )
+        self.geom_image = GLImageItem(
+            vertices,
+            self._get_image(),
+        )
+        return [self.geom_image, self.geom_grid, self.geom_border]
+
+    def update_geometry(self):
+        vertices = self._get_mesh()
+        self.geom_image.setVertices(
+            vertices,
+        )
+        grid_verts = self._get_grid_verts()
+        if grid_verts is not None:
+            self.geom_grid.setData(
+                pos=grid_verts,
+                color=(0., 0., 0., 0.3),
+                antialias=True,
+            )
+        self.geom_border.setData(
+            pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
+            color=(0., 0., 0., 1.),
+            antialias=True,
+        )
+
+    def _get_mesh(self, rotation=None):
+        geom = self._get_extents()
+        if rotation is None:
+            rotation = geom.rotation
+        vertices, _ = comp_geom.rectangle(
+            w=geom.w,
+            h=geom.h,
+            x=geom.cx,
+            y=geom.cy,
+            z=Z_ORIENT * geom.z,
+            rotation=rotation,
+        )
+        return vertices
 
 
 class ComponentGUIWrapper:
@@ -568,7 +676,7 @@ class ParallelBeamGUI(SourceGUI):
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
         common_args = dict(
-            vmin=-np.pi / 4, vmax=np.pi / 4, spacing=0, decimals=2,
+            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
         )
         self.xangleslider, hbox_angles = labelled_slider(
             value=beam_tilt_x, name="Beam Tilt X", **common_args
@@ -603,33 +711,16 @@ class ParallelBeamGUI(SourceGUI):
         return [self.geom]
 
 
-class SampleGUI(ComponentGUIWrapper):
-    def _get_mesh(self):
-        vertices, _ = comp_geom.rectangle(
+class SampleGUI(GridGeomMixin, ComponentGUIWrapper):
+    def _get_extents(self):
+        return GridGeomParams(
+            cx=0.,
+            cy=0.,
             w=0.25,
             h=0.25,
-            x=0.,
-            y=0.,
-            z=Z_ORIENT * self.component.z,
-        )
-        return vertices
-
-    def _get_image(self):
-        return np.asarray(
-            (((255, 128, 128, 255),),),
-            dtype=np.uint8,
-        )
-
-    def get_geom(self):
-        self.geom = GLImageItem(
-            self._get_mesh(),
-            self._get_image(),
-        )
-        return [self.geom]
-
-    def update_geometry(self):
-        self.geom.setVertices(
-            self._get_mesh(),
+            rotation=0.,
+            z=self.component.z,
+            shape=None,
         )
 
 
@@ -747,101 +838,84 @@ class STEMSampleGUI(SampleGUI):
             decimals=1,
             name="Scan rotation",
             insert_into=vbox,
+            tick_interval=10.,
         )
         self.scan_rotation_slider.valueChanged.connect(self.set_scan_rotation)
 
-        hbox = QHBoxLayout()
+        x_hbox = QHBoxLayout()
+        y_hbox = QHBoxLayout()
         self.xsize = LabelledIntField(
-            "ScanShape-X", initial_value=self.sample.scan_shape[1]
+            "Scan Dim-X", initial_value=self.sample.scan_shape[1]
         )
         self.ysize = LabelledIntField(
-            "ScanShape-Y", initial_value=self.sample.scan_shape[0]
+            "Scan Dim-Y", initial_value=self.sample.scan_shape[0]
         )
-        self.xsize.insert_into(hbox)
-        self.ysize.insert_into(hbox)
+        self.xsize.insert_into(x_hbox)
+        self.ysize.insert_into(y_hbox)
         self.xsize.lineEdit.textChanged.connect(self.set_scanshape)
         self.ysize.lineEdit.textChanged.connect(self.set_scanshape)
-        hbox.addStretch()
-        vbox.addLayout(hbox)
 
-        hbox = QHBoxLayout()
         self.scanstep_x, _ = labelled_slider(
             value=self.sample.scan_step_yx[1],
             vmin=-0.05,
             vmax=0.05,
             decimals=2,
-            name="ScanStep-X",
-            insert_into=hbox,
+            name="Step-X",
+            insert_into=x_hbox,
         )
         self.scanstep_y, _ = labelled_slider(
             value=self.sample.scan_step_yx[1],
             vmin=-0.05,
             vmax=0.05,
             decimals=2,
-            name="ScanStep-Y",
-            insert_into=hbox,
+            name="Step-Y",
+            insert_into=y_hbox,
         )
         self.scanstep_x.valueChanged.connect(self.set_scanstep)
         self.scanstep_y.valueChanged.connect(self.set_scanstep)
-        vbox.addLayout(hbox)
 
-        hbox = QHBoxLayout()
         ny, nx = self.sample.scan_shape
         self.scanpos_x, _ = labelled_slider(
             value=0,
             vmin=0,
             vmax=nx - 1,
-            name="ScanPos-X",
-            insert_into=hbox,
+            name="Pos-X",
+            insert_into=x_hbox,
         )
         self.scanpos_y, _ = labelled_slider(
             value=0,
             vmin=0,
             vmax=ny - 1,
-            name="ScanPos-Y",
-            insert_into=hbox,
+            name="Pos-Y",
+            insert_into=y_hbox,
         )
         self.scanpos_x.valueChanged.connect(self.set_scanpos)
         self.scanpos_y.valueChanged.connect(self.set_scanpos)
-        vbox.addLayout(hbox)
+
+        vbox.addLayout(x_hbox)
+        vbox.addLayout(y_hbox)
 
         self.box.setLayout(vbox)
         return self
 
-    def _get_mesh(self):
+    def _get_image(self):
+        return np.asarray(
+            (((0, 128, 255, 170),),),
+            dtype=np.uint8,
+        )
+
+    def _get_extents(self):
         sy, sx = self.sample.scan_shape
         py, px = self.sample.scan_step_yx
-        vertices, _ = comp_geom.rectangle(
+        return GridGeomParams(
+            cx=-1 * px / 2.,
+            cy=-1 * py / 2.,
             w=sx * px,
             h=sy * py,
-            x=-1 * px / 2.,
-            y=-1 * py / 2.,
-            z=Z_ORIENT * self.component.z,
-            rotation=self.sample.scan_rotation
+            rotation=self.sample.scan_rotation,
+            z=self.component.z,
+            shape=self.sample.scan_shape,
         )
-        return vertices
-
-    def _get_image(self):
-        sy, sx = self.sample.scan_shape
-        npix = 5
-        img = np.full((npix * sy + 1, npix * sx + 1, 4), 190, dtype=np.uint8)
-        img[:, :, 3] = 255
-        img[::npix, :, :3] = 0
-        img[:, ::npix, :3] = 0
-        img[-1, :, :3] = 0
-        img[:, -1, :3] = 0
-        return img
-
-    def update_geometry(self):
-        grid_changed = self.geom.data.shape[:2] != self.sample.scan_shape
-        self.geom.setVertices(
-            self._get_mesh(),
-            update=not grid_changed,
-        )
-        if grid_changed:
-            self.geom.setData(
-                self._get_image(),
-            )
 
 
 class DoubleDeflectorGUI(ComponentGUIWrapper):
@@ -889,7 +963,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
 
         common_args = dict(
-            vmin=-0.1, vmax=0.1, spacing=0, decimals=2,
+            vmin=-0.1, vmax=0.1, decimals=2,
         )
         self.updefxslider, hbox = labelled_slider(
             value=updefx, name="Upper X Deflection", **common_args
@@ -1058,7 +1132,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         return self.geom
 
 
-class DetectorGUI(ComponentGUIWrapper):
+class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
     @property
     def detector(self) -> 'comp.Detector':
         return self.component
@@ -1125,7 +1199,7 @@ class DetectorGUI(ComponentGUIWrapper):
         hbox.addWidget(self.flipy_cbox)
         self.rotationslider, _ = labelled_slider(
             np.rad2deg(self.detector.rotation), -180., 180., name="Rotation",
-            insert_into=hbox, decimals=1,
+            insert_into=hbox, decimals=1, tick_interval=10.,
         )
         self.rotationslider.valueChanged.connect(self.set_rotation)
         vbox.addLayout(hbox)
@@ -1133,82 +1207,22 @@ class DetectorGUI(ComponentGUIWrapper):
         self.box.setLayout(vbox)
         return self
 
-    def _get_mesh(self, rotation=None):
-        if rotation is None:
-            rotation = self.detector.rotation
+    def _get_image(self):
+        return np.asarray(
+            (((10, 190, 100, 170),),),
+            dtype=np.uint8,
+        )
+
+    def _get_extents(self):
         sy, sx = self.detector.shape
         pixelsize = self.detector.pixel_size
-        vertices, _ = comp_geom.rectangle(
+        # cx, cy, w, h, rotation, z, px_shape
+        return GridGeomParams(
+            cx=-1 * pixelsize / 2.,
+            cy=-1 * pixelsize / 2.,
             w=sx * pixelsize,
             h=sy * pixelsize,
-            x=-pixelsize / 2.,
-            y=-pixelsize / 2.,
-            z=Z_ORIENT * self.component.z,
-            rotation=rotation,
-        )
-        return vertices
-
-    def _get_grid_verts(self):
-        vertices = self._get_mesh(rotation=0.)
-        min_x, min_y, z = vertices.min(axis=0)
-        max_x, max_y, _ = vertices.max(axis=0)
-        ny, nx = self.detector.shape
-        # this can be done with clever striding / reshaping
-        xvals = np.linspace(min_x, max_x, num=nx + 1, endpoint=True)[1:-1]
-        xfill = np.asarray((min_y, max_y))
-        xfill = np.tile(xfill, xvals.size)
-        xvals = np.repeat(xvals, 2)
-        yvals = np.linspace(min_y, max_y, num=ny + 1, endpoint=True)[1:-1]
-        yfill = np.asarray((min_x, max_x))
-        yfill = np.tile(yfill, yvals.size)
-        yvals = np.repeat(yvals, 2)
-
-        if self.detector.rotation != 0.:
-            mag, ang = R2P(xvals + xfill * 1j)
-            xcplx = P2R(mag, ang + self.detector.rotation)
-            xvals, xfill = xcplx.real, xcplx.imag
-            mag, ang = R2P(yfill + yvals * 1j)
-            ycplx = P2R(mag, ang + self.detector.rotation)
-            yfill, yvals = ycplx.real, ycplx.imag
-
-        xlines = np.stack((xvals, xfill, np.full_like(xvals, z)), axis=1)
-        ylines = np.stack((yfill, yvals, np.full_like(yvals, z)), axis=1)
-        return np.concatenate((xlines, ylines), axis=0)
-
-    def get_geom(self):
-        img = np.full((1, 1, 4), 190, dtype=np.uint8)
-        img[..., 0] = 100
-        vertices = self._get_mesh()
-        self.geom_border = gl.GLLinePlotItem(
-            pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
-            color=(0., 0., 0., 1.),
-            antialias=True,
-            mode='line_strip',
-        )
-        self.geom_grid = gl.GLLinePlotItem(
-            pos=self._get_grid_verts(),
-            color=(0., 0., 0., 0.3),
-            antialias=True,
-            mode='lines',
-        )
-        self.geom_image = GLImageItem(
-            vertices,
-            img,
-        )
-        return [self.geom_image, self.geom_grid, self.geom_border]
-
-    def update_geometry(self):
-        vertices = self._get_mesh()
-        self.geom_image.setVertices(
-            vertices,
-        )
-        self.geom_grid.setData(
-            pos=self._get_grid_verts(),
-            color=(0., 0., 0., 0.3),
-            antialias=True,
-        )
-        self.geom_border.setData(
-            pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
-            color=(0., 0., 0., 1.),
-            antialias=True,
+            rotation=self.detector.rotation,
+            z=self.component.z,
+            shape=self.detector.shape,
         )
