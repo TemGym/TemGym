@@ -610,13 +610,16 @@ class SampleGUI(ComponentGUIWrapper):
         )
         return vertices
 
+    def _get_image(self):
+        return np.asarray(
+            (((255, 128, 128, 255),),),
+            dtype=np.uint8,
+        )
+
     def get_geom(self):
         self.geom = GLImageItem(
             self._get_mesh(),
-            np.asarray(
-                (((255, 128, 128, 255),),),
-                dtype=np.uint8,
-            )
+            self._get_image(),
         )
         return [self.geom]
 
@@ -813,6 +816,28 @@ class STEMSampleGUI(SampleGUI):
             rotation=self.sample.scan_rotation
         )
         return vertices
+
+    def _get_image(self):
+        sy, sx = self.sample.scan_shape
+        npix = 5
+        img = np.full((npix * sy + 1, npix * sx + 1, 4), 190, dtype=np.uint8)
+        img[:, :, 3] = 255
+        img[::npix, :, :3] = 0
+        img[:, ::npix, :3] = 0
+        img[-1, :, :3] = 0
+        img[:, -1, :3] = 0
+        return img
+
+    def update_geometry(self):
+        grid_changed = self.geom.data.shape[:2] != self.sample.scan_shape
+        self.geom.setVertices(
+            self._get_mesh(),
+            update=not grid_changed,
+        )
+        if grid_changed:
+            self.geom.setData(
+                self._get_image(),
+            )
 
 
 class DoubleDeflectorGUI(ComponentGUIWrapper):
@@ -1118,12 +1143,13 @@ class DetectorGUI(ComponentGUIWrapper):
         return vertices
 
     def get_geom(self):
+        img = np.full((4, 4, 4), 128, dtype=np.uint8)
+        # img[::4, :, :3] = 0
+        # img[:, ::4, :3] = 0
+
         self.geom = GLImageItem(
             self._get_mesh(),
-            np.asarray(
-                (((190, 190, 190, 255),),),
-                dtype=np.uint8,
-            )
+            img,
         )
         return [self.geom]
 

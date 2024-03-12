@@ -135,10 +135,10 @@ class GLImageItem(GLGraphicsItem):
         self._needUpdate = True
         self.update()
 
-    def setVertices(self, vertices):
+    def setVertices(self, vertices, update: bool = True):
         self.vertices = vertices
-        self._needUpdate = True
-        self.update()
+        if update:
+            self.update()
 
     def _updateTexture(self):
         gl.glBindTexture(GL_TEXTURE_2D, self.texture)
