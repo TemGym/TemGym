@@ -36,11 +36,13 @@ import numpy as np
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 
 
-def slider_config(slider: QSlider, value: int, vmin: int, vmax: int):
+def slider_config(slider: QSlider, value: int, vmin: int, vmax: int, tick_interval: Optional[int]):
     slider.setTickPosition(QSlider.TickPosition.TicksBelow)
     vmin, vmax = sorted((vmin, vmax))
     slider.setRange(vmin, max(vmax, vmin + 1e-5))
     slider.setValue(value)
+    if tick_interval is not None:
+        slider.setTickInterval(tick_interval)
 
 
 def labelled_slider(
@@ -48,16 +50,15 @@ def labelled_slider(
     vmin: int,
     vmax: int,
     name: Optional[str] = None,
-    prefix: str = '',
     insert_into: Optional[QLayout] = None,
-    spacing: int = 15,
     decimals: int = 0,
+    tick_interval: Optional[int] = None,
 ):
     if decimals > 0:
         slider = QLabeledDoubleSlider(QtCore.Qt.Orientation.Horizontal)
     else:
         slider = QLabeledSlider(QtCore.Qt.Orientation.Horizontal)
-    slider_config(slider, value, vmin, vmax)
+    slider_config(slider, value, vmin, vmax, tick_interval)
 
     if isinstance(insert_into, QHBoxLayout):
         hbox = insert_into
