@@ -32,7 +32,7 @@ import pyqtgraph as pg
 import numpy as np
 
 from . import shapes as comp_geom
-from .utils import as_gl_lines
+from .utils import as_gl_lines, P2R, R2P
 from .widgets import labelled_slider, LabelledIntField, GLImageItem
 
 if TYPE_CHECKING:
@@ -290,12 +290,16 @@ class TemGymWindow(QMainWindow):
 
     def add_geometry(self):
         self.tem_window.clear()
-        # Loop through all of the model components, and add their geometry to the TEM window.
-        for component in self.gui_components:
+        # Loop through all of the model components
+        # and add their geometry to the TEM window.
+        # FIXME Add in reverse to simulate better depth stacking
+        for component in reversed(self.gui_components):
             for geometry in component.get_geom():
                 self.tem_window.addItem(geometry)
+        # Add labels next so they appear above geometry
+        for component in reversed(self.gui_components):
             self.tem_window.addItem(component.get_label())
-        # Add the ray geometry GLLinePlotItem to the list of geometries for that window
+        # Add the ray geometry last so it is always on top
         self.tem_window.addItem(self.ray_geometry)
 
     @Slot()
@@ -1129,7 +1133,9 @@ class DetectorGUI(ComponentGUIWrapper):
         self.box.setLayout(vbox)
         return self
 
-    def _get_mesh(self):
+    def _get_mesh(self, rotation=None):
+        if rotation is None:
+            rotation = self.detector.rotation
         sy, sx = self.detector.shape
         pixelsize = self.detector.pixel_size
         vertices, _ = comp_geom.rectangle(
@@ -1138,22 +1144,71 @@ class DetectorGUI(ComponentGUIWrapper):
             x=-pixelsize / 2.,
             y=-pixelsize / 2.,
             z=Z_ORIENT * self.component.z,
-            rotation=self.detector.rotation
+            rotation=rotation,
         )
         return vertices
 
-    def get_geom(self):
-        img = np.full((4, 4, 4), 128, dtype=np.uint8)
-        # img[::4, :, :3] = 0
-        # img[:, ::4, :3] = 0
+    def _get_grid_verts(self):
+        vertices = self._get_mesh(rotation=0.)
+        min_x, min_y, z = vertices.min(axis=0)
+        max_x, max_y, _ = vertices.max(axis=0)
+        ny, nx = self.detector.shape
+        # this can be done with clever striding / reshaping
+        xvals = np.linspace(min_x, max_x, num=nx + 1, endpoint=True)[1:-1]
+        xfill = np.asarray((min_y, max_y))
+        xfill = np.tile(xfill, xvals.size)
+        xvals = np.repeat(xvals, 2)
+        yvals = np.linspace(min_y, max_y, num=ny + 1, endpoint=True)[1:-1]
+        yfill = np.asarray((min_x, max_x))
+        yfill = np.tile(yfill, yvals.size)
+        yvals = np.repeat(yvals, 2)
 
-        self.geom = GLImageItem(
-            self._get_mesh(),
+        if self.detector.rotation != 0.:
+            mag, ang = R2P(xvals + xfill * 1j)
+            xcplx = P2R(mag, ang + self.detector.rotation)
+            xvals, xfill = xcplx.real, xcplx.imag
+            mag, ang = R2P(yfill + yvals * 1j)
+            ycplx = P2R(mag, ang + self.detector.rotation)
+            yfill, yvals = ycplx.real, ycplx.imag
+
+        xlines = np.stack((xvals, xfill, np.full_like(xvals, z)), axis=1)
+        ylines = np.stack((yfill, yvals, np.full_like(yvals, z)), axis=1)
+        return np.concatenate((xlines, ylines), axis=0)
+
+    def get_geom(self):
+        img = np.full((1, 1, 4), 190, dtype=np.uint8)
+        img[..., 0] = 100
+        vertices = self._get_mesh()
+        self.geom_border = gl.GLLinePlotItem(
+            pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
+            color=(0., 0., 0., 1.),
+            antialias=True,
+            mode='line_strip',
+        )
+        self.geom_grid = gl.GLLinePlotItem(
+            pos=self._get_grid_verts(),
+            color=(0., 0., 0., 0.3),
+            antialias=True,
+            mode='lines',
+        )
+        self.geom_image = GLImageItem(
+            vertices,
             img,
         )
-        return [self.geom]
+        return [self.geom_image, self.geom_grid, self.geom_border]
 
     def update_geometry(self):
-        self.geom.setVertices(
-            self._get_mesh(),
+        vertices = self._get_mesh()
+        self.geom_image.setVertices(
+            vertices,
+        )
+        self.geom_grid.setData(
+            pos=self._get_grid_verts(),
+            color=(0., 0., 0., 0.3),
+            antialias=True,
+        )
+        self.geom_border.setData(
+            pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
+            color=(0., 0., 0., 1.),
+            antialias=True,
         )
