@@ -15,6 +15,25 @@ from PySide6.QtGui import (
 )
 
 from superqt import QLabeledDoubleSlider, QLabeledSlider
+import OpenGL.GL as gl
+from OpenGL.GL import (
+    GL_PROXY_TEXTURE_2D,
+    GL_TEXTURE_WIDTH,
+    GL_RGBA,
+    GL_UNSIGNED_BYTE,
+    GL_TEXTURE_2D,
+    GL_TEXTURE_MIN_FILTER,
+    GL_LINEAR,
+    GL_NEAREST,
+    GL_TEXTURE_WRAP_S,
+    GL_CLAMP_TO_BORDER,
+    GL_TEXTURE_WRAP_T,
+    GL_TEXTURE_MAG_FILTER,
+    GL_QUADS,
+)
+import numpy as np
+
+from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
 
 
 def slider_config(slider: QSlider, value: int, vmin: int, vmax: int):
@@ -93,3 +112,82 @@ class LabelledIntField(QWidget):
         layout.addWidget(self.label)
         layout.addWidget(self.lineEdit)
         return self
+
+
+class GLImageItem(GLGraphicsItem):
+    def __init__(self, vertices, data, smooth=False, glOptions='translucent', parentItem=None):
+        self.smooth = smooth
+        self._needUpdate = False
+        super().__init__(parentItem=parentItem)
+        self.setData(data)
+        self.setVertices(vertices)
+        self.setGLOptions(glOptions)
+        self.texture = None
+
+    def initializeGL(self):
+        if self.texture is not None:
+            return
+        gl.glEnable(GL_TEXTURE_2D)
+        self.texture = gl.glGenTextures(1)
+
+    def setData(self, data):
+        self.data = data
+        self._needUpdate = True
+        self.update()
+
+    def setVertices(self, vertices):
+        self.vertices = vertices
+        self._needUpdate = True
+        self.update()
+
+    def _updateTexture(self):
+        gl.glBindTexture(GL_TEXTURE_2D, self.texture)
+        if self.smooth:
+            gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR)
+            gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        else:
+            gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
+            gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
+        gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER)
+        gl.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER)
+        # glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER)
+        shape = self.data.shape
+
+        # Test texture dimensions first
+        gl.glTexImage2D(
+            GL_PROXY_TEXTURE_2D, 0, GL_RGBA, shape[0], shape[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, None
+        )
+        if gl.glGetTexLevelParameteriv(GL_PROXY_TEXTURE_2D, 0, GL_TEXTURE_WIDTH) == 0:
+            raise Exception(
+                "OpenGL failed to create 2D texture "
+                "(%dx%d); too large for this hardware." % shape[:2]
+            )
+
+        data = np.ascontiguousarray(self.data.transpose((1, 0, 2)))
+        gl.glTexImage2D(
+            GL_TEXTURE_2D, 0, GL_RGBA, shape[0], shape[1], 0, GL_RGBA, GL_UNSIGNED_BYTE, data
+        )
+        gl.glDisable(GL_TEXTURE_2D)
+
+    def paint(self):
+        if self._needUpdate:
+            self._updateTexture()
+            self._needUpdate = False
+        gl.glEnable(GL_TEXTURE_2D)
+        gl.glBindTexture(GL_TEXTURE_2D, self.texture)
+
+        self.setupGLState()
+
+        gl.glColor4f(1, 1, 1, 1)
+
+        gl.glBegin(GL_QUADS)
+        gl.glTexCoord2f(0, 0)
+        gl.glVertex3f(*self.vertices[0])
+        gl.glTexCoord2f(1, 0)
+        gl.glVertex3f(*self.vertices[1])
+        gl.glTexCoord2f(1, 1)
+        gl.glVertex3f(*self.vertices[2])
+        gl.glTexCoord2f(0, 1)
+        gl.glVertex3f(*self.vertices[3])
+        gl.glEnd()
+        gl.glDisable(GL_TEXTURE_2D)

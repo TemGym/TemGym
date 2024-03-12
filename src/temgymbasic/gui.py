@@ -33,7 +33,7 @@ import numpy as np
 
 from . import shapes as comp_geom
 from .utils import as_gl_lines
-from .widgets import labelled_slider, LabelledIntField
+from .widgets import labelled_slider, LabelledIntField, GLImageItem
 
 if TYPE_CHECKING:
     from .model import Model, STEMModel
@@ -601,35 +601,28 @@ class ParallelBeamGUI(SourceGUI):
 
 class SampleGUI(ComponentGUIWrapper):
     def _get_mesh(self):
-        vertices, faces = comp_geom.rectangle(
+        vertices, _ = comp_geom.rectangle(
             w=0.25,
             h=0.25,
             x=0.,
             y=0.,
             z=Z_ORIENT * self.component.z,
         )
-
-        colors = np.ones((vertices.shape[0], 4))
-        colors[..., 3] = 0.1
-        return gl.MeshData(
-            vertexes=vertices,
-            faces=faces,
-            vertexColors=colors,
-        )
+        return vertices
 
     def get_geom(self):
-        self.geom = gl.GLMeshItem(
-            meshdata=self._get_mesh(),
-            smooth=True,
-            drawEdges=False,
-            drawFaces=True,
-            shader='shaded',
+        self.geom = GLImageItem(
+            self._get_mesh(),
+            np.asarray(
+                (((255, 128, 128, 255),),),
+                dtype=np.uint8,
+            )
         )
         return [self.geom]
 
     def update_geometry(self):
-        self.geom.setMeshData(
-            meshdata=self._get_mesh(),
+        self.geom.setVertices(
+            self._get_mesh(),
         )
 
 
@@ -811,21 +804,15 @@ class STEMSampleGUI(SampleGUI):
     def _get_mesh(self):
         sy, sx = self.sample.scan_shape
         py, px = self.sample.scan_step_yx
-        vertices, faces = comp_geom.rectangle(
+        vertices, _ = comp_geom.rectangle(
             w=sx * px,
             h=sy * py,
-            x=0.,
-            y=0.,
+            x=-1 * px / 2.,
+            y=-1 * py / 2.,
             z=Z_ORIENT * self.component.z,
             rotation=self.sample.scan_rotation
         )
-        colors = np.ones((vertices.shape[0], 4))
-        colors[..., 3] = 0.1
-        return gl.MeshData(
-            vertexes=vertices,
-            faces=faces,
-            vertexColors=colors,
-        )
+        return vertices
 
 
 class DoubleDeflectorGUI(ComponentGUIWrapper):
@@ -1120,33 +1107,27 @@ class DetectorGUI(ComponentGUIWrapper):
     def _get_mesh(self):
         sy, sx = self.detector.shape
         pixelsize = self.detector.pixel_size
-        vertices, faces = comp_geom.rectangle(
+        vertices, _ = comp_geom.rectangle(
             w=sx * pixelsize,
             h=sy * pixelsize,
-            x=0.,
-            y=0.,
+            x=-pixelsize / 2.,
+            y=-pixelsize / 2.,
             z=Z_ORIENT * self.component.z,
             rotation=self.detector.rotation
         )
-        colors = np.ones((vertices.shape[0], 4))
-        colors[..., 3] = 0.9
-        return gl.MeshData(
-            vertexes=vertices,
-            faces=faces,
-            vertexColors=colors,
-        )
+        return vertices
 
     def get_geom(self):
-        self.geom = gl.GLMeshItem(
-            meshdata=self._get_mesh(),
-            smooth=False,
-            drawEdges=False,
-            drawFaces=True,
-            shader='shaded',
+        self.geom = GLImageItem(
+            self._get_mesh(),
+            np.asarray(
+                (((190, 190, 190, 255),),),
+                dtype=np.uint8,
+            )
         )
         return [self.geom]
 
     def update_geometry(self):
-        self.geom.setMeshData(
-            meshdata=self._get_mesh(),
+        self.geom.setVertices(
+            self._get_mesh(),
         )
