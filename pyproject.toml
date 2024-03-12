@@ -44,6 +44,7 @@ gui = [
   'pyopengl',
   'triangle',
   'PySide6',
+  'superqt',
 ]
 
 [project.urls]

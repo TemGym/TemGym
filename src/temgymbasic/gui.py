@@ -402,38 +402,28 @@ class STEMModelGUI(ModelGUI):
         model = self.model
         if model is not None:
             _, overfocus_max = model._overfocus_bounds()
-            self.sample.overfocus_slider.setMinimum(-overfocus_max)
-            self.sample.overfocus_slider.setMaximum(overfocus_max)
+            self.sample.overfocus_slider.setRange(-overfocus_max, overfocus_max)
             min_f, max_f = sorted((
                 model._get_objective_f(overfocus_max),
                 model._get_objective_f(-overfocus_max),
             ))
-            self.lens.fslider.setMinimum(min_f)
-            self.lens.fslider.setMaximum(max_f)
+            self.lens.fslider.setRange(min_f, max_f)
+
             min_rad, max_rad = sorted((
                 model._get_radius(self.sample.semiconv_slider.minimum()),
                 model._get_radius(self.sample.semiconv_slider.maximum()),
             ))
-            self.beam.beamwidthslider.setMinimum(min_rad)
-            self.beam.beamwidthslider.setMaximum(max_rad)
+            self.beam.beamwidthslider.setRange(min_rad, max_rad)
 
             mindef, maxdef = self.model._minmax_def()
-            self.scan_coils.updefyslider.setMinimum(mindef[0])
-            self.scan_coils.updefxslider.setMinimum(mindef[1])
-            self.scan_coils.lowdefyslider.setMinimum(mindef[2])
-            self.scan_coils.lowdefxslider.setMinimum(mindef[3])
-            self.descan_coils.updefyslider.setMinimum(mindef[4])
-            self.descan_coils.updefxslider.setMinimum(mindef[5])
-            self.descan_coils.lowdefyslider.setMinimum(mindef[6])
-            self.descan_coils.lowdefxslider.setMinimum(mindef[7])
-            self.scan_coils.updefyslider.setMaximum(maxdef[0])
-            self.scan_coils.updefxslider.setMaximum(maxdef[1])
-            self.scan_coils.lowdefyslider.setMaximum(maxdef[2])
-            self.scan_coils.lowdefxslider.setMaximum(maxdef[3])
-            self.descan_coils.updefyslider.setMaximum(maxdef[4])
-            self.descan_coils.updefxslider.setMaximum(maxdef[5])
-            self.descan_coils.lowdefyslider.setMaximum(maxdef[6])
-            self.descan_coils.lowdefxslider.setMaximum(maxdef[7])
+            self.scan_coils.updefyslider.setRange(mindef[0], maxdef[0])
+            self.scan_coils.updefxslider.setRange(mindef[1], maxdef[1])
+            self.scan_coils.lowdefyslider.setRange(mindef[2], maxdef[2])
+            self.scan_coils.lowdefxslider.setRange(mindef[3], maxdef[3])
+            self.descan_coils.updefyslider.setRange(mindef[4], maxdef[4])
+            self.descan_coils.updefxslider.setRange(mindef[5], maxdef[5])
+            self.descan_coils.lowdefyslider.setRange(mindef[6], maxdef[6])
+            self.descan_coils.lowdefxslider.setRange(mindef[7], maxdef[7])
 
         self.beam.sync(block=block)
         self.scan_coils.sync(block=block)
@@ -457,6 +447,7 @@ class STEMModelGUI(ModelGUI):
             self.descan_coils.lowdefyslider,
         ):
             widget.setEnabled(False)
+            widget.valueChanged.disconnect()
 
         self.sync(block=False)
 
@@ -485,7 +476,7 @@ class LensGUI(ComponentGUIWrapper):
         self.fslider, _ = labelled_slider(
             self.lens.f, -5., 5., name="Focal Length", insert_into=vbox, decimals=2,
         )
-        self.fslider.doubleValueChanged.connect(self.set_f)
+        self.fslider.valueChanged.connect(self.set_f)
 
         self.fwobblefreqlineedit = QLineEdit(f"{1:.4f}")
         self.fwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
@@ -583,13 +574,13 @@ class ParallelBeamGUI(SourceGUI):
             insert_into=hbox_angles
         )
         vbox.addLayout(hbox_angles)
-        self.xangleslider.doubleValueChanged.connect(self.set_tilt)
-        self.yangleslider.doubleValueChanged.connect(self.set_tilt)
+        self.xangleslider.valueChanged.connect(self.set_tilt)
+        self.yangleslider.valueChanged.connect(self.set_tilt)
 
         self.beamwidthslider, _ = labelled_slider(
             beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=3
         )
-        self.beamwidthslider.doubleValueChanged.connect(self.set_radius)
+        self.beamwidthslider.valueChanged.connect(self.set_radius)
 
         self.box.setLayout(vbox)
         return self
@@ -725,7 +716,7 @@ class STEMSampleGUI(SampleGUI):
             name="Overfocus",
             insert_into=vbox,
         )
-        self.overfocus_slider.doubleValueChanged.connect(self.set_overfocus)
+        self.overfocus_slider.valueChanged.connect(self.set_overfocus)
 
         self.semiconv_slider, _ = labelled_slider(
             value=self.sample.semiconv_angle,
@@ -735,7 +726,7 @@ class STEMSampleGUI(SampleGUI):
             name="Semiconv (rad)",
             insert_into=vbox,
         )
-        self.semiconv_slider.doubleValueChanged.connect(self.set_semiconv)
+        self.semiconv_slider.valueChanged.connect(self.set_semiconv)
 
         if self.model is not None:
             camera_length = self.model.camera_length
@@ -747,7 +738,7 @@ class STEMSampleGUI(SampleGUI):
             name="Camera length",
             insert_into=vbox,
         )
-        self.cameralength_slider.doubleValueChanged.connect(self.set_camera_length)
+        self.cameralength_slider.valueChanged.connect(self.set_camera_length)
 
         self.scan_rotation_slider, _ = labelled_slider(
             value=np.rad2deg(self.sample.scan_rotation),
@@ -757,7 +748,7 @@ class STEMSampleGUI(SampleGUI):
             name="Scan rotation",
             insert_into=vbox,
         )
-        self.scan_rotation_slider.doubleValueChanged.connect(self.set_scan_rotation)
+        self.scan_rotation_slider.valueChanged.connect(self.set_scan_rotation)
 
         hbox = QHBoxLayout()
         self.xsize = LabelledIntField(
@@ -790,8 +781,8 @@ class STEMSampleGUI(SampleGUI):
             name="ScanStep-Y",
             insert_into=hbox,
         )
-        self.scanstep_x.doubleValueChanged.connect(self.set_scanstep)
-        self.scanstep_y.doubleValueChanged.connect(self.set_scanstep)
+        self.scanstep_x.valueChanged.connect(self.set_scanstep)
+        self.scanstep_y.valueChanged.connect(self.set_scanstep)
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
@@ -892,8 +883,8 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
             insert_into=hbox
         )
         vbox.addLayout(hbox)
-        self.updefxslider.doubleValueChanged.connect(self.set_updefx)
-        self.updefyslider.doubleValueChanged.connect(self.set_updefy)
+        self.updefxslider.valueChanged.connect(self.set_updefx)
+        self.updefyslider.valueChanged.connect(self.set_updefy)
 
         self.lowdefxslider, hbox = labelled_slider(
             value=lowdefx, name="Lower X Deflection", **common_args
@@ -903,8 +894,8 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
             insert_into=hbox
         )
         vbox.addLayout(hbox)
-        self.lowdefxslider.doubleValueChanged.connect(self.set_lowdefx)
-        self.lowdefyslider.doubleValueChanged.connect(self.set_lowdefy)
+        self.lowdefxslider.valueChanged.connect(self.set_lowdefx)
+        self.lowdefyslider.valueChanged.connect(self.set_lowdefy)
 
         # self.xbuttonwobble = QCheckBox("Wobble Upper Deflector X")
         # self.defxwobblefreqlineedit = QLineEdit(f"{1:.4f}")
@@ -1105,10 +1096,10 @@ class DetectorGUI(ComponentGUIWrapper):
         self.xsize.lineEdit.textChanged.connect(self.set_shape)
         self.ysize.lineEdit.textChanged.connect(self.set_shape)
         self.pixelsizeslider, _ = labelled_slider(
-            self.detector.pixel_size, 0.001, 0.1, name="Pixel size",
+            self.detector.pixel_size, 0.001, 0.03, name="Pixel size",
             insert_into=hbox, decimals=3,
         )
-        self.pixelsizeslider.doubleValueChanged.connect(self.set_pixelsize)
+        self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
         vbox.addLayout(hbox)
 
         hbox = QHBoxLayout()
@@ -1120,7 +1111,7 @@ class DetectorGUI(ComponentGUIWrapper):
             np.rad2deg(self.detector.rotation), -180., 180., name="Rotation",
             insert_into=hbox, decimals=1,
         )
-        self.rotationslider.doubleValueChanged.connect(self.set_rotation)
+        self.rotationslider.valueChanged.connect(self.set_rotation)
         vbox.addLayout(hbox)
 
         self.box.setLayout(vbox)
