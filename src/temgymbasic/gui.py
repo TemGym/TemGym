@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
+RAY_COLOR = (0., 0.8, 0.)
 
 
 class GridGeomParams(NamedTuple):
@@ -389,7 +390,7 @@ class TemGymWindow(QMainWindow):
         vertices[:, 2] *= Z_ORIENT
         self.ray_geometry.setData(
             pos=vertices,
-            color=(0, 0.8, 0, 0.05),
+            color=RAY_COLOR + (0.05,),
         )
 
         if self.model.detector is not None:
@@ -643,7 +644,7 @@ class ParallelBeamGUI(SourceGUI):
     @Slot(float)
     def set_radius(self, val):
         self.beam.radius = val
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_tilt(self, val):
@@ -697,18 +698,28 @@ class ParallelBeamGUI(SourceGUI):
         self.box.setLayout(vbox)
         return self
 
-    def get_geom(self):
-        vertices = comp_geom.lens(
-            self.component.radius,
+    def _get_geom(self):
+        return comp_geom.lens(
+            self.beam.radius,
             Z_ORIENT * self.component.z,
             64,
-        )
+        ).T
+
+    def get_geom(self):
         self.geom = gl.GLLinePlotItem(
-            pos=vertices.T,
-            color="green",
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
             width=2,
+            antialias=True,
         )
         return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setData(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            antialias=True,
+        )
 
 
 class SampleGUI(GridGeomMixin, ComponentGUIWrapper):
@@ -746,7 +757,10 @@ class STEMSampleGUI(SampleGUI):
 
     @Slot(float)
     def set_semiconv(self, val):
-        self.set_stem_generic(semiconv_angle=val)
+        self.set_stem_generic(
+            update_kwargs=dict(geom=True),
+            semiconv_angle=val,
+        )
 
     @Slot(float)
     def set_scan_rotation(self, val):
