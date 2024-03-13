@@ -753,7 +753,10 @@ class STEMSampleGUI(SampleGUI):
 
     @Slot(float)
     def set_overfocus(self, val):
-        self.set_stem_generic(overfocus=val)
+        self.set_stem_generic(
+            update_kwargs=dict(geom=True),
+            overfocus=val,
+        )
 
     @Slot(float)
     def set_semiconv(self, val):
