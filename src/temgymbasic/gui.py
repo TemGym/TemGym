@@ -1243,3 +1243,37 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
             z=self.component.z,
             shape=self.detector.shape,
         )
+
+
+class ApertureGUI(ComponentGUIWrapper):
+    @property
+    def aperture(self) -> 'comp.Aperture':
+        return self.component
+
+    def build(self) -> Self:
+        vbox = QVBoxLayout()
+
+        hbox = QHBoxLayout()
+        self.inner_radiusslider, _ = labelled_slider(
+            self.aperture.radius_inner, 0.0, 0.25,
+            name="Inner radius", insert_into=hbox, decimals=2,
+        )
+        self.outer_radiusslider, _ = labelled_slider(
+            self.aperture.radius_outer, 0.0, 0.25,
+            name="Outer radius", insert_into=hbox, decimals=2,
+        )
+        vbox.addLayout(hbox)
+
+        hbox = QHBoxLayout()
+        self.xpos_slider, _ = labelled_slider(
+            self.aperture.x, -0.25, -0.25,
+            name="Pos-X", insert_into=hbox, decimals=2,
+        )
+        self.ypos_slider, _ = labelled_slider(
+            self.aperture.y, -0.25, -0.25,
+            name="Pos-Y", insert_into=hbox, decimals=2,
+        )
+        vbox.addLayout(hbox)
+
+        self.box.setLayout(vbox)
+        return self
