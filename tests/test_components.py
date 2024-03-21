@@ -40,3 +40,4 @@ def test_interface(component, random_rays):
     except TypeError:
         location = out_rays.location
     assert location is comp
+    assert out_rays.num <= random_rays.num
