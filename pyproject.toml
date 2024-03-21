@@ -10,7 +10,7 @@ only-packages = true
 name = "temgymbasic"
 version = "0.7.0.0.dev0"
 authors = [
-  { name="David Landers", email="davidlanders2009@hotmail.com" },
+  { name="David Landers", email="davidlandersresearch@gmail.com" },
   { name="Matthew Bryan", email="matthewbryan52@gmail.com" },
   { name="Dieter Weber", email="d.weber@fz-juelich.de" },
 ]
@@ -31,7 +31,12 @@ classifiers = [
 requires-python = ">=3.7"
 dependencies = [
   'numpy',
+  'pyopengl',
+  'pyqtgraph',
+  'triangle',
+  'pyside6',
   'typing-extensions',
+  'superqt',
 ]
 
 [project.scripts]

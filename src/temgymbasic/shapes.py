@@ -100,17 +100,19 @@ def lens(r, z, n_arc):
     return points_circle
 
 
-def biprism(r, z, theta):
+def biprism(z, r, theta, offset):
     '''Wire model geometry for biprism
 
     Parameters
     ----------
+    z : float
+        z position of wire
     r : float
         Radius of wire
-    z : float
-        Z position of wire
     theta : float
-        Angle of wire - Two options, 0 or np.pi/2
+        Angle of wire
+    offset : float
+        offset of wire along x-axis
 
     Returns
     -------
@@ -121,7 +123,7 @@ def biprism(r, z, theta):
     R = r*np.ones(np.size(THETA))
     Z = z*np.ones(np.size(THETA))
 
-    points = np.array([R*np.cos(THETA), R*np.sin(THETA), Z])
+    points = np.array([offset + R*np.cos(THETA), 0. + R*np.sin(THETA), Z])
 
     return points
 
