@@ -1252,6 +1252,7 @@ class ApertureGUI(ComponentGUIWrapper):
         return self.component
 
     def build(self) -> Self:
+
         vbox = QVBoxLayout()
 
         hbox = QHBoxLayout()
@@ -1278,3 +1279,93 @@ class ApertureGUI(ComponentGUIWrapper):
 
         self.box.setLayout(vbox)
         return self
+
+
+class BiprismGUI(ComponentGUIWrapper):
+    @property
+    def biprism(self) -> 'comp.Biprism':
+        return self.component
+
+    @Slot(float)
+    def set_deflection(self, val: float):
+        self.biprism.deflection = val
+        self.try_update()
+    
+    @Slot(float)
+    def set_offset(self, val: float):
+        self.biprism.offset = val
+        self.try_update(geom=True)
+
+    @Slot(float)
+    def set_rotation(self, val: float):
+        self.biprism.rotation = val
+        self.try_update(geom=True)
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.deflection_slider):
+            self.deflection_slider.setValue(self.biprism.deflection)
+        with blocker(self.offset_slider):
+            self.offset_slider.setValue(self.biprism.offset)
+        with blocker(self.rotation_slider):
+            self.rotation_slider.setValue(self.biprism.rotation)
+
+    def build(self) -> Self:
+        deflection = self.biprism.deflection
+        offset = self.biprism.offset
+        rotation = self.biprism.rotation
+
+        vbox = QVBoxLayout()
+
+        hbox = QHBoxLayout()
+        common_args = dict(
+            vmin=-0.5, vmax=0.5, decimals=2,
+        )
+        self.deflection_slider, hbox = labelled_slider(
+            value=deflection, name="Deflection", **common_args
+        )
+        self.offset_slider, _ = labelled_slider(
+            offset, -0.25, 0.25,
+            name="X-Offset", insert_into=hbox, decimals=2,
+        )
+        self.rotation_slider, _ = labelled_slider(
+            rotation, -np.pi, np.pi,
+            name="Rotation", insert_into=hbox, decimals=2,
+        )
+
+        self.deflection_slider.valueChanged.connect(self.set_deflection)
+        self.offset_slider.valueChanged.connect(self.set_offset)
+        self.rotation_slider.valueChanged.connect(self.set_rotation)
+
+        vbox.addLayout(hbox)
+        self.box.setLayout(vbox)
+
+        return self
+
+    def _get_geom(self):
+        return comp_geom.biprism(
+            Z_ORIENT*self.biprism.z,
+            1,
+            self.biprism.rotation,
+            self.biprism.offset,
+        ).T
+
+    def get_geom(self):
+        self.geom = gl.GLLinePlotItem(
+            pos=self._get_geom(),
+            color='white',
+            width=5,
+            antialias=True,
+        )
+        return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setData(
+            pos=self._get_geom(),
+            color='white',
+            antialias=True,
+        )
+
+        
+
+

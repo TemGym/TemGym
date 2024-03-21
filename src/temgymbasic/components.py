@@ -635,8 +635,9 @@ class Biprism(Component):
     def __init__(
         self,
         z: float,
-        x: float = 0.,
-        defx: float = 0.,
+        offset: float = 0.,
+        rotation: float = 0.,
+        deflection: float = 0.,
         name: Optional[str] = None,
     ):
         '''
@@ -645,31 +646,61 @@ class Biprism(Component):
         ----------
         z : float
             Position of component in optic axis
-        x: float
-            Central position of biprism in x dimension
+        offset: float
+            Offset distance of biprism line
+        rotation: float
+            Rotation of biprism in z-plane
         name : str, optional
             Name of this component which will be displayed by GUI, by default ''
         defx : float, optional
             deflection kick in slope units to the incoming ray x angle, by default 0.5
         '''
         super().__init__(z=z, name=name)
-        self.defx = defx
-        self.x = x
+        self.deflection = deflection
+        self.offset = offset
+        self.rotation = rotation
 
     def step(
         self, rays: Rays,
     ) -> Generator[Rays, None, None]:
+        deflection = self.deflection
+        offset = self.offset
+        rot = self.rotation
         pos_x = rays.x
-        x_dist = (pos_x - self.x)
-        x_sign = np.sign(x_dist)
-        rays.data[1] = rays.data[1] + self.defx*x_sign
+        pos_y = rays.y
+        rays_v = np.array([pos_x, pos_y]).T
+        r = 1  # Just used for creating the biprism vector
+
+        biprism_loc_v = np.array([offset, 0.0])
+        biprism_v = np.array([r*np.cos(rot), r*np.sin(rot)])
+
+        rays_v_centred = rays_v - biprism_loc_v
+
+        dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
+        projection = np.outer(dot_product, biprism_v)
+        rejection = projection - rays_v_centred
+        rejection_norm = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
+        # If the ray position is located at [zero, zero],
+        # rejection_norm returns a nan, so we convert it to a zero, zero.
+        rejection_norm = np.nan_to_num(rejection_norm)
+
+        xdeflection_mag = rejection_norm[:, 0]
+        ydeflection_mag = rejection_norm[:, 1]
+
+        rays.data[1] += xdeflection_mag*deflection
+        rays.data[3] += ydeflection_mag*deflection
 
         yield Rays(
             data=rays.data,
             indices=rays.indices,
-            path_length=rays.path_length + np.abs(self.defx)*x_dist,
+            path_length=rays.path_length,
             location=self,
         )
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import BiprismGUI
+        return BiprismGUI
 
 
 class Aperture(Component):
