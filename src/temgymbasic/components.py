@@ -678,10 +678,11 @@ class Biprism(Component):
 
         dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
         projection = np.outer(dot_product, biprism_v)
+
         rejection = projection - rays_v_centred
         rejection_norm = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
-        # If the ray position is located at [zero, zero],
-        # rejection_norm returns a nan, so we convert it to a zero, zero.
+        # If the ray position is located at [zero, zero], rejection_norm returns a nan,
+        # so we convert it to a zero, zero.
         rejection_norm = np.nan_to_num(rejection_norm)
 
         xdeflection_mag = rejection_norm[:, 0]
