@@ -1,22 +1,32 @@
-
+import sys
+from temgymbasic.model import (
+    Model,
+)
 from temgymbasic import components as comp
-from temgymbasic.model import Model
-from temgymbasic.run import run_pyqt
-from PyQt5.QtWidgets import QApplication
-import os
-import sys 
 
-def main():
-    components = [comp.Lens(name = 'Lens', z = 0.5, f = -0.5)]
-    
-    model_ = Model(components, beam_z = 1.0, beam_type = 'point', num_rays = 32, gun_beam_semi_angle = 0.15)
-    
-    viewer = run_pyqt(model_)  
-    
-    return viewer 
+from PySide6.QtWidgets import QApplication
+from temgymbasic.gui import TemGymWindow
 
-if __name__ == '__main__':
-    AppWindow = QApplication(sys.argv)
-    viewer = main()   
-    viewer.show() 
-    AppWindow.exec_()
+components = (
+    comp.ParallelBeam(
+        z=0.0,
+        radius=0.01,
+    ),
+    comp.Biprism(
+        z=0.5,
+        offset=0.0,
+        rotation=0.0,
+        deflection=0.1,
+    ),
+    comp.Detector(
+        z=1.,
+        pixel_size=0.01,
+        shape=(128, 128),
+    ),
+)
+
+model = Model(components)
+AppWindow = QApplication(sys.argv)
+viewer = TemGymWindow(model)
+viewer.show()
+AppWindow.exec()
