@@ -1,10 +1,14 @@
 from typing import TYPE_CHECKING, Tuple, Iterable
+from typing_extensions import TypeAlias
 import numpy as np
 from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from .model import STEMModel
     from .rays import Rays
+    from . import Degrees, Radians
+
+RadiansNP: TypeAlias = np.float_
 
 try:
     from itertools import pairwise
@@ -19,11 +23,11 @@ except ImportError:
         return zip(a, b)
 
 
-def P2R(radii: NDArray[np.float_], angles: NDArray[np.float_]) -> NDArray[np.complex_]:
+def P2R(radii: NDArray[np.float_], angles: NDArray[RadiansNP]) -> NDArray[np.complex_]:
     return radii * np.exp(1j*angles)
 
 
-def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[np.float_]]:
+def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[RadiansNP]]:
     return np.abs(x), np.angle(x)
 
 
@@ -127,7 +131,7 @@ def _identity():
     return np.eye(2)
 
 
-def _rotate(radians):
+def _rotate(radians: 'Radians'):
     # From libertem.corrections.coordinates v0.11.1
     # https://en.wikipedia.org/wiki/Rotation_matrix
     # y, x instead of x, y
@@ -137,12 +141,14 @@ def _rotate(radians):
     ])
 
 
-def _rotate_deg(degrees):
+def _rotate_deg(degrees: 'Degrees'):
     # From libertem.corrections.coordinates v0.11.1
-    return _rotate(np.pi/180*degrees)
+    return _rotate(np.pi / 180 * degrees)
 
 
-def get_pixel_coords(rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation=0.):
+def get_pixel_coords(
+    rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation: 'Degrees' = 0.,
+):
     if flip_y:
         transform = _flip_y()
     else:
