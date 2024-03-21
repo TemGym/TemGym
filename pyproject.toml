@@ -31,7 +31,12 @@ classifiers = [
 requires-python = ">=3.7"
 dependencies = [
   'numpy',
+  'pyopengl',
+  'pyqtgraph',
+  'triangle',
+  'pyside6',
   'typing-extensions',
+  'superqt',
 ]
 
 [project.scripts]
