@@ -8,6 +8,7 @@ from numpy.typing import NDArray
 
 from . import (
     PositiveFloat,
+    Degrees,
 )
 from .utils import (
     get_pixel_coords,
@@ -113,7 +114,7 @@ class Rays:
         shape: Tuple[int, int],
         pixel_size: 'PositiveFloat',
         flip_y: bool = False,
-        rotation: float = 0.,
+        rotation: Degrees = 0.,
         as_int: bool = True
     ) -> Tuple[NDArray, NDArray]:
         """Returns in yy, xx!"""
@@ -123,7 +124,7 @@ class Rays:
             shape=shape,
             pixel_size=pixel_size,
             flip_y=flip_y,
-            scan_rotation=np.rad2deg(rotation),
+            scan_rotation=rotation,
         )
         if as_int:
             return np.round((yy, xx)).astype(int)
@@ -134,7 +135,7 @@ class Rays:
         shape: Tuple[int, int],
         pixel_size: PositiveFloat,
         flip_y: bool = False,
-        rotation: float = 0.
+        rotation: Degrees = 0.
     ):
         from .components import Detector
         det = Detector(

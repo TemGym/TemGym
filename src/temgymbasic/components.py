@@ -12,7 +12,8 @@ from . import (
     InvalidModelError,
     PositiveFloat,
     NonNegativeFloat,
-    Radians
+    Radians,
+    Degrees,
 )
 from .rays import Rays
 from .utils import (
@@ -102,7 +103,6 @@ class Lens(Component):
         ndarray
             Output Ray Transfer Matrix
         '''
-        f = f + 1e-6  # div-0
         return np.array(
             [[1,      0, 0,      0, 0],
              [-1 / f, 1, 0,      0, 0],
@@ -154,7 +154,7 @@ class STEMSample(Sample):
         semiconv_angle: PositiveFloat = 0.01,
         scan_shape: Tuple[int, int] = (8, 8),
         scan_step_yx: Tuple[float, float] = (0.01, 0.01),
-        scan_rotation: Radians = 0.,
+        scan_rotation: Degrees = 0.,
         name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
@@ -162,7 +162,23 @@ class STEMSample(Sample):
         self.semiconv_angle = semiconv_angle
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
-        self.scan_rotation = scan_rotation
+        self.scan_rotation = scan_rotation  # converts to radians in setter
+
+    @property
+    def scan_rotation(self) -> Degrees:
+        return np.rad2deg(self.scan_rotation_rad)
+
+    @scan_rotation.setter
+    def scan_rotation(self, val: Degrees):
+        self.scan_rotation_rad: Radians = np.deg2rad(val)
+
+    @property
+    def scan_rotation_rad(self) -> Radians:
+        return self._scan_rotation
+
+    @scan_rotation_rad.setter
+    def scan_rotation_rad(self, val: Radians):
+        self._scan_rotation = val
 
     def scan_position(self, yx: Tuple[int, int]) -> Tuple[float, float]:
         y, x = yx
@@ -171,9 +187,9 @@ class STEMSample(Sample):
         sy, sx = self.scan_shape
         scan_position_x = (x - sx / 2.) * scan_step_x
         scan_position_y = (y - sy / 2.) * scan_step_y
-        if self.scan_rotation != 0.:
+        if self.scan_rotation_rad != 0.:
             pos_r, pos_a = R2P(scan_position_x + scan_position_y * 1j)
-            pos_c = P2R(pos_r, pos_a + self.scan_rotation)
+            pos_c = P2R(pos_r, pos_a + self.scan_rotation_rad)
             scan_position_y, scan_position_x = pos_c.imag, pos_c.real
         return (scan_position_y, scan_position_x)
 
@@ -293,7 +309,7 @@ class Detector(Component):
         z: float,
         pixel_size: float,
         shape: Tuple[int, int],
-        rotation: Radians = 0.,
+        rotation: Degrees = 0.,
         flip_y: bool = False,
         center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
@@ -316,9 +332,25 @@ class Detector(Component):
         super().__init__(name=name, z=z)
         self.pixel_size = pixel_size
         self.shape = shape
-        self.rotation = rotation  # degrees
+        self.rotation = rotation  # converts to radians in setter
         self.flip_y = flip_y
         self.center = center
+
+    @property
+    def rotation(self) -> Degrees:
+        return np.rad2deg(self.rotation_rad)
+
+    @rotation.setter
+    def rotation(self, val: Degrees):
+        self.rotation_rad: Radians = np.deg2rad(val)
+
+    @property
+    def rotation_rad(self) -> Radians:
+        return self._rotation
+
+    @rotation_rad.setter
+    def rotation_rad(self, val: Radians):
+        self._rotation = val
 
     def set_center_px(self, center_px: Tuple[int, int]):
         """
@@ -334,7 +366,7 @@ class Detector(Component):
         if self.flip_y:
             cont_y = -1 * cont_y
         mag, angle = R2P(cont_x + 1j * cont_y)
-        coord: complex = P2R(mag, angle + np.deg2rad(self.rotation))
+        coord: complex = P2R(mag, angle + self.rotation_rad)
         self.center = coord.imag, coord.real
 
     def step(

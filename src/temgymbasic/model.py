@@ -9,7 +9,7 @@ from . import (
     UsageError,
     InvalidModelError,
 )
-from . import components as comp
+from . import components as comp, Degrees
 from .rays import Rays
 from .utils import pairwise
 
@@ -252,7 +252,7 @@ class STEMModel(Model):
         semiconv_angle: Optional[PositiveFloat] = None,
         scan_step_yx: Optional[Tuple[PositiveFloat, PositiveFloat]] = None,
         scan_shape: Optional[Tuple[int, int]] = None,
-        scan_rotation: Optional[float] = None,
+        scan_rotation: Optional['Degrees'] = None,
         camera_length: Optional[float] = None,
     ) -> Self:
         """
