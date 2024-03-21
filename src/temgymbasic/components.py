@@ -474,6 +474,23 @@ class DoubleDeflector(Component):
         self._second = second
         self._validate_component()
 
+    @classmethod
+    def from_params(
+        cls,
+        z: float,
+        distance: float = 0.1,
+        name: Optional[str] = None
+    ):
+        return cls(
+            Deflector(
+                z - distance / 2.
+            ),
+            Deflector(
+                z + distance / 2.
+            ),
+            name=name,
+        )
+
     def _validate_component(self):
         if self.first.z >= self.second.z:
             raise InvalidModelError("First deflector must be before second")
