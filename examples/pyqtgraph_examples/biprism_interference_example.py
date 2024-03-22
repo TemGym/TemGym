@@ -29,7 +29,7 @@ components = (
         rotation=np.pi/2,
         deflection=deflection,
     ),
-        comp.Biprism(
+    comp.Biprism(
         z=0.75,
         offset=0.0,
         rotation=np.pi/2,

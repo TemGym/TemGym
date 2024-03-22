@@ -30,6 +30,7 @@ b = 0.5
 d=2*a*deflection
 spacing = (a+b)/d*wavelength
 print(spacing)
+
 components = (
     comp.PointBeam(
         z=0.0,
@@ -50,9 +51,9 @@ components = (
     ),
 )
 
-num_rays = 2**18
+num_rays = 2*20
 model = Model(components)
-rays = tuple(model.run_iter(num_rays=2**20))
+rays = tuple(model.run_iter(num_rays=num_rays))
 image = model.detector.get_image_intensity(rays[-1])
 
 plt.figure()
