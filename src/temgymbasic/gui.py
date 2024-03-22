@@ -642,7 +642,6 @@ class SourceGUI(ComponentGUIWrapper):
     def num_rays(self) -> int:
         return self.rayslider.value()
 
-
 class ParallelBeamGUI(SourceGUI):
     @property
     def beam(self) -> 'comp.ParallelBeam':
@@ -708,6 +707,68 @@ class ParallelBeamGUI(SourceGUI):
     def _get_geom(self):
         return comp_geom.lens(
             self.beam.radius,
+            Z_ORIENT * self.component.z,
+            64,
+        ).T
+
+    def get_geom(self):
+        self.geom = gl.GLLinePlotItem(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            width=2,
+            antialias=True,
+        )
+        return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setData(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            antialias=True,
+        )
+
+class PointBeamGUI(SourceGUI):
+    @property
+    def beam(self) -> 'comp.PointBeam':
+        return self.component
+
+    @Slot(float)
+    def set_semi_angle(self, val):
+        self.beam.semi_angle = val
+        self.try_update(geom=True)
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.beamsemiangleslider):
+            self.beamsemiangleslider.setValue(self.beam.semi_angle)
+
+    def build(self) -> Self:
+        num_rays = 2**20
+        beam_semi_angle = self.beam.semi_angle
+
+        vbox = QVBoxLayout()
+        # vbox.addStretch()
+
+        self.rayslider, _ = labelled_slider(
+            num_rays, 1, 2**20, name="Number of Rays", insert_into=vbox,
+        )
+        self.rayslider.valueChanged.connect(self.try_update_slot)
+
+        common_args = dict(
+            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
+        )
+
+        self.beamsemiangleslider, _ = labelled_slider(
+            beam_semi_angle, 0.0001, 0.1, name='Point Beam Semi Angle', insert_into=vbox, decimals=3
+        )
+        self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
+
+        self.box.setLayout(vbox)
+        return self
+
+    def _get_geom(self):
+        return comp_geom.lens(
+            0.,
             Z_ORIENT * self.component.z,
             64,
         ).T
