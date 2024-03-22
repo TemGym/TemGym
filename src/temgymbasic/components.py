@@ -694,7 +694,7 @@ class Biprism(Component):
         yield Rays(
             data=rays.data,
             indices=rays.indices,
-            path_length=rays.path_length,
+            path_length=rays.path_length + deflection*rays.data[0]*np.sign(xdeflection_mag),
             location=self,
         )
 
