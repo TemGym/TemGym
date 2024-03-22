@@ -276,7 +276,6 @@ class XAxialBeam(ParallelBeam):
         )
         return self._make_rays(r)
 
-
 class RadialSpikesBeam(ParallelBeam):
     def get_rays(self, num_rays: int) -> Rays:
         xvals = np.linspace(
@@ -346,6 +345,24 @@ class XPointBeam(PointBeam):
             )
         return self._make_rays(r)
 
+        return self._make_rays(r)
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import PointBeamGUI
+        return PointBeamGUI
+class XPointBeam(PointBeam):
+    def get_rays(self, num_rays: int) -> Rays:
+        r = np.zeros((5, num_rays))
+        if self.random == True:
+            r[1, :] = np.random.uniform(
+                -self.semi_angle, self.semi_angle, size=num_rays
+            )
+        else:
+            r[1, :] = np.linspace(
+                -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
+            )
+        return self._make_rays(r)
 
 class Detector(Component):
     def __init__(
@@ -461,6 +478,49 @@ class Detector(Component):
             1,
         )
         return image
+    
+    def get_image_intensity(self, rays: Rays) -> NDArray:
+
+        
+        # Convert rays from detector positions to pixel positions
+        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
+        sy, sx = self.shape
+        mask = np.logical_and(
+            np.logical_and(
+                0 <= pixel_coords_y,
+                pixel_coords_y < sy
+            ),
+            np.logical_and(
+                0 <= pixel_coords_x,
+                pixel_coords_x < sx
+            )
+        )
+        image = np.zeros(
+            self.shape,
+            dtype=np.complex128,
+        )
+
+        # Compute the complex wavefronts for each ray - arbitrary wavefront for now
+        wavefronts = np.exp(-1j * 2 * np.pi / rays.wavelength * rays.path_length)
+
+        # Use only the wavefronts for rays that hit the detector
+        valid_wavefronts = wavefronts[mask]
+
+        flat_icds = np.ravel_multi_index(
+            [
+                pixel_coords_y[mask],
+                pixel_coords_x[mask],
+            ],
+            image.shape
+        )
+        # Increment at each pixel for each ray that hits
+        np.add.at(
+            image.ravel(),
+            flat_icds,
+            valid_wavefronts,
+        )
+        return image
+
 
     def get_image_intensity(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
