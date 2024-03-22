@@ -25,21 +25,21 @@ class PlotParams(NamedTuple):
 def plot_model(model, *, plot_params: PlotParams = PlotParams()):
     p = plot_params
     rays = tuple(model.run_iter(num_rays=p.num_rays))
-    if isinstance(model.components[0], XAxialBeam):
-        raise NotImplementedError
+
     if isinstance(model.components[0], RadialSpikesBeam):
         raise NotImplementedError
+    
     x = np.stack(tuple(r.x for r in rays), axis=0)
     z = np.asarray(tuple(r.z for r in rays))
     min_x_idx = np.argmin(x[0, :])
     max_x_idx = np.argmax(x[0, :])
     aspect = p.figsize[1]/p.figsize[0]
+
     detector_range_x = model.detector.pixel_size * model.detector.shape[1] / 2
-    scan_range_x = model.sample.scan_step_yx[1]*model.sample.scan_shape[1] / 2
 
     max_beam_x = np.max(np.abs(x))
     component_x = max_beam_x * 1.3
-    max_x = np.max((component_x, detector_range_x, scan_range_x))
+    max_x = np.max((component_x, detector_range_x))
 
     min_z = np.min([np.min(z)] + [c.z for c in model.components])
     max_z = np.max([np.max(z)] + [c.z for c in model.components])
@@ -124,7 +124,9 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
                     [component.z, component.z], color='dimgrey',
                     zorder=1000, alpha=1, linewidth=5)
         elif isinstance(component, Biprism):
-            raise NotImplementedError
+            radius = -component_x
+            ax.add_patch(plt.Circle((0, component.z), 0.001,
+                         edgecolor='k', facecolor='w', zorder=1000))
         elif isinstance(component, Aperture):
             raise NotImplementedError
 
