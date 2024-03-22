@@ -18,7 +18,7 @@ from . import (
 from .rays import Rays
 from .utils import (
     P2R, R2P,
-    circular_beam,
+    make_beam,
 )
 
 if TYPE_CHECKING:
@@ -210,10 +210,16 @@ class STEMSample(Sample):
 
 class Source(Component):
     def __init__(
-        self, z: float, tilt_yx: Tuple[float, float] = (0., 0.), name: Optional[str] = None
+        self, z: float,
+        wavelength: float,
+        random: bool = False,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: Optional[str] = None,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
+        self.wavelength = wavelength
+        self.random = random
 
     @abc.abstractmethod
     def get_rays(self, num_rays: int) -> Rays:
@@ -225,7 +231,7 @@ class Source(Component):
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
         return Rays(
-            data=r, indices=indices, location=self, path_length=np.zeros((r.shape[1],))
+            data=r, indices=indices, location=self, path_length=np.zeros((r.shape[1],)), wavelength=self.wavelength,
         )
 
     def step(
@@ -240,15 +246,16 @@ class ParallelBeam(Source):
     def __init__(
         self,
         z: float,
+        wavelength: float,
         radius: float = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(z=z, tilt_yx=tilt_yx, name=name)
+        super().__init__(z=z, wavelength=wavelength, tilt_yx=tilt_yx, name=name)
         self.radius = radius
 
     def get_rays(self, num_rays: int) -> Rays:
-        r, _ = circular_beam(num_rays, self.radius)
+        r, _ = make_beam(num_rays, self.radius, 'circular_beam')
         return self._make_rays(r)
 
     @staticmethod
@@ -264,7 +271,6 @@ class XAxialBeam(ParallelBeam):
             -self.radius, self.radius, num=num_rays, endpoint=True
         )
         return self._make_rays(r)
-
 
 class RadialSpikesBeam(ParallelBeam):
     def get_rays(self, num_rays: int) -> Rays:
@@ -286,22 +292,52 @@ class RadialSpikesBeam(ParallelBeam):
         return self._make_rays(r)
 
 
-# class PointSource(Source):
-#     def __init__(
-#         self,
-#         z: float,
-#         semi_angle: Optional[float] = 0.,
-#         tilt_yx: Tuple[float, float] = (0., 0.),
-#         name: Optional[str] = None,
-#     ):
-#         super().__init__(name=name, z=z)
-#         self.semi_angle = semi_angle
-#         self.tilt_yx = tilt_yx
+class PointBeam(Source):
+    def __init__(
+        self,
+        z: float,
+        wavelength: float,
+        random: bool,
+        semi_angle: Optional[float] = 0.,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: Optional[str] = None,
+        
+    ):
+        super().__init__(name=name, z=z, wavelength=wavelength)
+        self.semi_angle = semi_angle
+        self.tilt_yx = tilt_yx
+        self.random = random
 
-#     def get_rays(self, num_rays: int) -> Rays:
-#         r, _ = point_beam(num_rays, self.semi_angle)
-#         return self._make_rays(r)
+    def get_rays(self, num_rays: int) -> Rays:
+        r = np.zeros((5, num_rays))
+        if self.random == True:
+            r[1, :] = np.random.uniform(
+                -self.semi_angle, self.semi_angle, size=num_rays
+            )
+            r[3, :] = np.random.uniform(
+                -self.semi_angle, self.semi_angle, size=num_rays
+            )
+        else:
+            r, _ = make_beam(num_rays, self.semi_angle, 'point_beam')
 
+        return self._make_rays(r)
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import PointBeamGUI
+        return PointBeamGUI
+class XPointBeam(PointBeam):
+    def get_rays(self, num_rays: int) -> Rays:
+        r = np.zeros((5, num_rays))
+        if self.random == True:
+            r[1, :] = np.random.uniform(
+                -self.semi_angle, self.semi_angle, size=num_rays
+            )
+        else:
+            r[1, :] = np.linspace(
+                -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
+            )
+        return self._make_rays(r)
 
 class Detector(Component):
     def __init__(
@@ -417,6 +453,49 @@ class Detector(Component):
             1,
         )
         return image
+    
+    def get_image_intensity(self, rays: Rays) -> NDArray:
+
+        
+        # Convert rays from detector positions to pixel positions
+        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
+        sy, sx = self.shape
+        mask = np.logical_and(
+            np.logical_and(
+                0 <= pixel_coords_y,
+                pixel_coords_y < sy
+            ),
+            np.logical_and(
+                0 <= pixel_coords_x,
+                pixel_coords_x < sx
+            )
+        )
+        image = np.zeros(
+            self.shape,
+            dtype=np.complex128,
+        )
+
+        # Compute the complex wavefronts for each ray - arbitrary wavefront for now
+        wavefronts = np.exp(-1j * 2 * np.pi / rays.wavelength * rays.path_length)
+
+        # Use only the wavefronts for rays that hit the detector
+        valid_wavefronts = wavefronts[mask]
+
+        flat_icds = np.ravel_multi_index(
+            [
+                pixel_coords_y[mask],
+                pixel_coords_x[mask],
+            ],
+            image.shape
+        )
+        # Increment at each pixel for each ray that hits
+        np.add.at(
+            image.ravel(),
+            flat_icds,
+            valid_wavefronts,
+        )
+        return image
+
 
     @staticmethod
     def gui_wrapper():
@@ -694,8 +773,9 @@ class Biprism(Component):
         yield Rays(
             data=rays.data,
             indices=rays.indices,
-            path_length=rays.path_length + deflection*rays.data[0]*np.sign(xdeflection_mag),
+            path_length=rays.path_length + xdeflection_mag*deflection*rays.data[0] + ydeflection_mag*deflection*rays.data[2],
             location=self,
+            wavelength=rays.wavelength
         )
 
     @staticmethod
