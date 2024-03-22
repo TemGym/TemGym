@@ -14,57 +14,47 @@ class PlotParams(NamedTuple):
     ray_color: str = 'dimgray'
     fill_color: str = 'aquamarine'
     fill_color_pair: Tuple[str, str] = ('khaki', 'deepskyblue')
-    fill_alpha: float = 0.0
+    fill_alpha: float = 0.5
     ray_alpha: float = 1.
     component_lw: float = 1.
     edge_lw: float = 1.
-    ray_lw: float = 1.
+    ray_lw: float = 0.1
     label_fontsize: int = 12
     figsize: Tuple[int, int] = (6, 6)
     extent_scale: float = 1.1
 
+wavelength = 0.001
+deflection = 0.1
+a = 0.5
+b = 0.5
+d=2*a*deflection
+spacing = (a+b)/d*wavelength
+print(spacing)
 components = (
-    comp.XAxialBeam(
+    comp.PointBeam(
         z=0.0,
-        radius=0.01,
+        wavelength=wavelength,
+        semi_angle=0.1,
+        random=True,
     ),
     comp.Biprism(
-        z=0.5,
+        z=a,
         offset=0.0,
         rotation=np.pi/2,
-        deflection=0.1,
+        deflection=deflection,
     ),
     comp.Detector(
-        z=1.,
-        pixel_size=0.01,
-        shape=(128, 128),
+        z=a+b,
+        pixel_size=0.0005,
+        shape=(200, 200),
     ),
 )
 
-num_rays = 10
-plot_params = PlotParams(num_rays = num_rays)
-
+num_rays = 2**18
 model = Model(components)
-fig, ax = plot_model(model, plot_params=plot_params)
-rays = tuple(model.run_iter(num_rays=num_rays))
-print(rays[1].path_length[1], rays[1].path_length[2])
-x = np.stack(tuple(r.x for r in rays), axis=0)
-z = np.asarray(tuple(r.z for r in rays))
-opl = np.asarray(tuple(r.path_length for r in rays))
+rays = tuple(model.run_iter(num_rays=2**20))
+image = model.detector.get_image_intensity(rays[-1])
 
-opls = np.linspace(0, 1, 11)
-
-for idx in range(num_rays):
-
-    # Interpolation for x and z as functions of path length
-    z_of_L = interp1d(opl[:, idx], z, kind='linear')
-    x_of_z = interp1d(z, x[:, idx]) 
-
-    # Find x and z for the given path length L'
-    z_prime = z_of_L(opls)
-    x_prime = x_of_z(z_prime)
-
-    ax.plot(x_prime, z_prime, '.r')
-
-plt.axis('equal')
+plt.figure()
+plt.imshow(np.abs(image)**2/np.max(np.abs(image)**2))
 plt.show()

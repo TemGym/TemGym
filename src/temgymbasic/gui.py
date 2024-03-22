@@ -395,8 +395,14 @@ class TemGymWindow(QMainWindow):
         )
 
         if self.model.detector is not None:
-            image = self.model.detector.get_image(all_rays[-1])
-            self.spot_img.setImage(image.T)
+            # image = self.model.detector.get_image(all_rays[-1])
+            image = self.model.detector.get_image_intensity(all_rays[-1])
+            if np.max(np.abs(image.T)**2) < 1e-12:
+                max_val = 1.
+            else:
+                max_val = np.max(np.abs(image.T)**2)
+
+            self.spot_img.setImage(np.abs(image.T)**2/max_val)
 
     def add_geometry(self):
         self.tem_window.clear()
@@ -636,7 +642,6 @@ class SourceGUI(ComponentGUIWrapper):
     def num_rays(self) -> int:
         return self.rayslider.value()
 
-
 class ParallelBeamGUI(SourceGUI):
     @property
     def beam(self) -> 'comp.ParallelBeam':
@@ -665,7 +670,7 @@ class ParallelBeamGUI(SourceGUI):
             self.yangleslider.setValue(self.beam.tilt_yx[0])
 
     def build(self) -> Self:
-        num_rays = 64
+        num_rays = 2**20
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
         beam_radius = self.beam.radius
 
@@ -673,7 +678,7 @@ class ParallelBeamGUI(SourceGUI):
         # vbox.addStretch()
 
         self.rayslider, _ = labelled_slider(
-            num_rays, 1, 512, name="Number of Rays", insert_into=vbox,
+            num_rays, 1, 2**20, name="Number of Rays", insert_into=vbox,
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
@@ -702,6 +707,68 @@ class ParallelBeamGUI(SourceGUI):
     def _get_geom(self):
         return comp_geom.lens(
             self.beam.radius,
+            Z_ORIENT * self.component.z,
+            64,
+        ).T
+
+    def get_geom(self):
+        self.geom = gl.GLLinePlotItem(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            width=2,
+            antialias=True,
+        )
+        return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setData(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            antialias=True,
+        )
+
+class PointBeamGUI(SourceGUI):
+    @property
+    def beam(self) -> 'comp.PointBeam':
+        return self.component
+
+    @Slot(float)
+    def set_semi_angle(self, val):
+        self.beam.semi_angle = val
+        self.try_update(geom=True)
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.beamsemiangleslider):
+            self.beamsemiangleslider.setValue(self.beam.semi_angle)
+
+    def build(self) -> Self:
+        num_rays = 2**20
+        beam_semi_angle = self.beam.semi_angle
+
+        vbox = QVBoxLayout()
+        # vbox.addStretch()
+
+        self.rayslider, _ = labelled_slider(
+            num_rays, 1, 2**20, name="Number of Rays", insert_into=vbox,
+        )
+        self.rayslider.valueChanged.connect(self.try_update_slot)
+
+        common_args = dict(
+            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
+        )
+
+        self.beamsemiangleslider, _ = labelled_slider(
+            beam_semi_angle, 0.0001, 0.1, name='Point Beam Semi Angle', insert_into=vbox, decimals=3
+        )
+        self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
+
+        self.box.setLayout(vbox)
+        return self
+
+    def _get_geom(self):
+        return comp_geom.lens(
+            0.,
             Z_ORIENT * self.component.z,
             64,
         ).T
@@ -1205,7 +1272,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.ysize.lineEdit.textChanged.connect(self.set_shape)
         self.pixelsizeslider, _ = labelled_slider(
             self.detector.pixel_size, 0.001, 0.03, name="Pixel size",
-            insert_into=hbox, decimals=3,
+            insert_into=hbox, decimals=5,
         )
         self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
         vbox.addLayout(hbox)
