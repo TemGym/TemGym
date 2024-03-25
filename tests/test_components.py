@@ -4,8 +4,17 @@ import numpy as np
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
 from temgymbasic.model import Model
-from numpy.testing import assert_allclose
+from numpy.testing import assert_allclose, assert_equal
 
+
+@pytest.fixture()
+def empty_rays():
+    return Rays(
+        data=np.empty(shape=(5, 0)),
+        indices=np.empty([]),
+        location=0.2,
+        path_length=np.empty([]),
+    )
 
 @pytest.fixture(
     params=[128, 1, 0],
@@ -14,6 +23,47 @@ def random_rays(request):
     n_rays = request.param
     return Rays(
         data=np.random.uniform(size=(5, n_rays)),
+        indices=np.arange(n_rays),
+        location=0.2,
+        path_length=np.zeros((n_rays,)),
+    )
+
+@pytest.fixture(
+    params=[128],
+)
+def parallel_rays(request):
+    n_rays = request.param
+    data = np.zeros(shape=(5, n_rays))
+
+    data[0, :] = np.random.uniform(size=n_rays)
+    data[1, :] = np.zeros(shape=n_rays)
+    data[2, :] = np.random.uniform(size=n_rays)
+    data[3, :] = np.zeros(shape=n_rays)
+    data[4, :] = np.ones(shape=n_rays)
+
+    return Rays(
+        data=data,
+        indices=np.arange(n_rays),
+        location=0.2,
+        path_length=np.zeros((n_rays,)),
+    )
+
+
+@pytest.fixture(
+    params=[128],
+)
+def slope_of_one_rays(request):
+    n_rays = request.param
+    data = np.zeros(shape=(5, n_rays))
+
+    data[0, :] = np.random.uniform(size=n_rays)
+    data[1, :] = np.ones(shape=n_rays)
+    data[2, :] = np.random.uniform(size=n_rays)
+    data[3, :] = np.ones(shape=n_rays)
+    data[4, :] = np.ones(shape=n_rays)
+
+    return Rays(
+        data=data,
         indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
@@ -45,131 +95,77 @@ def test_interface(component, random_rays):
     assert out_rays.num <= random_rays.num
 
 
-def test_lens_focusing():
-    num_rays = 512
-    components = (
-        comp.ParallelBeam(
-            z=0.0,
-            radius=0.5,
-        ),
-        comp.Lens(
-            z=0.5,
-            f=0.5,
-        ),
-        comp.Detector(
-            z=1.0,
-            pixel_size=0.1,
-            shape=(10, 10),
-        ),
-    )
-    model = Model(components)
-    rays = model.run_to_end(num_rays=num_rays)
-    assert_allclose(rays.x, 0.0)
-    assert_allclose(rays.y, 0.0)
+def test_lens_focusing(parallel_rays):
+    f = 0.5
+    out_manual_dx = parallel_rays.x*(-1/f) + parallel_rays.dx
+    out_manual_dy = parallel_rays.y*(-1/f) + parallel_rays.dy
+    lens = comp.Lens(parallel_rays.location, f)
+    out_rays = tuple(lens.step(parallel_rays))[0]
+
+    assert_allclose(out_rays.x, parallel_rays.x)
+    assert_allclose(out_rays.y, parallel_rays.y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
 
 
-def test_deflector_deflection():
-    deflection = 1.0
-    num_rays = 512
-    components = (
-        comp.ParallelBeam(
-            z=0.0,
-            radius=0.5,
-        ),
-        comp.Deflector(
-            z=0.5,
-            defx=deflection,
-            defy=deflection,
-        ),
-        comp.Detector(
-            z=1.0,
-            pixel_size=0.0005,
-            shape=(200, 200),
-        ),
-    )
-    model = Model(components)
-    rays = model.run_to_end(num_rays=num_rays)
-    assert_allclose(rays.dx, deflection)
-    assert_allclose(rays.dy, deflection)
+def test_deflector_deflection(parallel_rays):
+    deflection = 0.5
+    out_manual_dx = parallel_rays.dx + 1.0*deflection
+    out_manual_dy = parallel_rays.dy + 1.0*deflection
+    deflector = comp.Deflector(parallel_rays.location, defx=deflection, defy=deflection)
+    out_rays = tuple(deflector.step(parallel_rays))[0]
+
+    assert_allclose(out_rays.x, parallel_rays.x)
+    assert_allclose(out_rays.y, parallel_rays.y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
 
 
-def test_double_deflector_deflection():
-    num_rays = 512
-    components = (
-        comp.ParallelBeam(
-            z=0.0,
-            radius=0.5,
-        ),
-        comp.DoubleDeflector(
-            first=comp.Deflector(z=0.1, defx=1, defy=1, name='Upper'),
-            second=comp.Deflector(z=0.2, defx=-1, defy=-1, name='Lower'),
-        ),
-        comp.Detector(
-            z=0.3,
-            pixel_size=0.0005,
-            shape=(200, 200),
-        ),
+def test_double_deflector_deflection(parallel_rays):
+    separation = 0.1
+
+    defx1 = 1
+    defy1 = 1
+    defx2 = -1
+    defy2 = -1
+
+    out_manual_x = parallel_rays.x + separation*defx1
+    out_manual_y = parallel_rays.y + separation*defy1
+    out_manual_dx = parallel_rays.dx + 1.0*defx1 + 1.0*defx2
+    out_manual_dy = parallel_rays.dy + 1.0*defy1 + 1.0*defy2
+
+    double_deflector = comp.DoubleDeflector(
+        first=comp.Deflector(z=parallel_rays.location, defx=defx1, defy=defy1, name='Upper'),
+        second=comp.Deflector(z=parallel_rays.location+separation, defx=defx2, defy=defy2, name='Lower'),
     )
 
-    model = Model(components)
-    rays = model.run_to_end(num_rays=num_rays)
-    assert_allclose(rays.dx, 0.0)
-    assert_allclose(rays.dy, 0.0)
+    out_rays = tuple(double_deflector.step(parallel_rays))[1]
+
+    assert_allclose(out_rays.x, out_manual_x)
+    assert_allclose(out_rays.y, out_manual_y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
 
 
-def test_biprism_deflection():
-    num_rays = 512
-    components = (
-        comp.ParallelBeam(
-            z=0.0,
-            radius=0.5,
-        ),
-        comp.Biprism(
-            z=0.1,
-            defx=1.0
-        ),
-        comp.Detector(
-            z=0.3,
-            pixel_size=0.0005,
-            shape=(200, 200),
-        ),
-    )
+def test_biprism_deflection(parallel_rays):
+    deflection=1.0
 
-    model = Model(components)
-    rays = tuple(model.run_iter(num_rays=num_rays))
-    biprism_rays = rays[1]
-    positive_ray_idcs = biprism_rays.x > 0.0
-    negative_ray_idcs = biprism_rays.x < 0.0
+    out_manual_x = parallel_rays.x
+    out_manual_y = parallel_rays.y
+    out_manual_dx = parallel_rays.dx  + np.sign(parallel_rays.x)*deflection
+    out_manual_dy = parallel_rays.dy
+    biprism = comp.Biprism(z=parallel_rays.location, defx=1.0)
 
-    assert_allclose(rays[2].dx[0], 0.0)
-    assert_allclose(rays[2].dx[positive_ray_idcs], 1.0)
-    assert_allclose(rays[2].dx[negative_ray_idcs], -1.0)
-    assert_allclose(rays[2].dy, 0.0)
+    out_rays = tuple(biprism.step(parallel_rays))[0]
+
+    assert_allclose(out_rays.x, out_manual_x)
+    assert_allclose(out_rays.y, out_manual_y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
 
 
-def test_aperture_blocking():
-    num_rays = 512
-    components = (
-        comp.ParallelBeam(
-            z=0.0,
-            radius=0.5,
-        ),
-        comp.Aperture(
-            z=0.1,
-            radius_inner=0.0,
-            radius_outer=1.0,
-        ),
-        comp.Detector(
-            z=0.3,
-            pixel_size=0.0005,
-            shape=(200, 200),
-        ),
-    )
-
-    model = Model(components)
-    rays = tuple(model.run_iter(num_rays=num_rays))
-
-    #Don't understand how aperture works
-    assert_allclose(1, 0)
-
+def test_aperture_blocking(parallel_rays, empty_rays):
+    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=2.0, radius_outer=2.0)
+    out_rays = tuple(aperture.step(parallel_rays))[0]
+    assert_equal(out_rays.data, empty_rays.data)
 
