@@ -25,6 +25,9 @@ class Rays:
     location: Union[float, 'Component', Tuple['Component', ...]]
     path_length: np.ndarray
 
+    def __eq__(self, other: 'Rays') -> bool:
+        return self.num == other.num and (self.data == other.data).all()
+
     @property
     def z(self) -> float:
         try:
