@@ -38,6 +38,7 @@ from .widgets import labelled_slider, LabelledIntField, GLImageItem
 if TYPE_CHECKING:
     from .model import Model, STEMModel
     from . import components as comp
+    from . import Radians
 
 
 LABEL_RADIUS = 0.3
@@ -50,7 +51,7 @@ class GridGeomParams(NamedTuple):
     h: float
     cx: float
     cy: float
-    rotation: float
+    rotation: 'Radians'
     z: float
     shape: Optional[Tuple[int, int]]
 
@@ -768,7 +769,7 @@ class STEMSampleGUI(SampleGUI):
     @Slot(float)
     def set_scan_rotation(self, val):
         self.set_stem_generic(
-            scan_rotation=np.deg2rad(val),
+            scan_rotation=val,
             update_kwargs=dict(geom=True),
         )
 
@@ -849,7 +850,7 @@ class STEMSampleGUI(SampleGUI):
         self.cameralength_slider.valueChanged.connect(self.set_camera_length)
 
         self.scan_rotation_slider, _ = labelled_slider(
-            value=np.rad2deg(self.sample.scan_rotation),
+            value=self.sample.scan_rotation,
             vmin=-180.,
             vmax=180.,
             decimals=1,
@@ -929,7 +930,7 @@ class STEMSampleGUI(SampleGUI):
             cy=-1 * py / 2.,
             w=sx * px,
             h=sy * py,
-            rotation=self.sample.scan_rotation,
+            rotation=self.sample.scan_rotation_rad,
             z=self.component.z,
             shape=self.sample.scan_shape,
         )
@@ -1161,7 +1162,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
 
     @Slot(float)
     def set_rotation(self, val: float):
-        self.detector.rotation = np.deg2rad(val)
+        self.detector.rotation = val
         self.try_update(geom=True)
 
     @Slot(bool)
@@ -1190,7 +1191,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         with blocker(self.flipy_cbox):
             self.flipy_cbox.setChecked(self.detector.flip_y)
         with blocker(self.rotationslider):
-            self.rotationslider.setValue(np.rad2deg(self.detector.rotation))
+            self.rotationslider.setValue(self.detector.rotation)
 
     def build(self) -> Self:
         vbox = QVBoxLayout()
@@ -1215,7 +1216,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.flipy_cbox.stateChanged.connect(self.set_flip_y)
         hbox.addWidget(self.flipy_cbox)
         self.rotationslider, _ = labelled_slider(
-            np.rad2deg(self.detector.rotation), -180., 180., name="Rotation",
+            self.detector.rotation, -180., 180., name="Rotation",
             insert_into=hbox, decimals=1, tick_interval=10.,
         )
         self.rotationslider.valueChanged.connect(self.set_rotation)
@@ -1239,7 +1240,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
             cy=-1 * pixelsize / 2.,
             w=sx * pixelsize,
             h=sy * pixelsize,
-            rotation=self.detector.rotation,
+            rotation=self.detector.rotation_rad,
             z=self.component.z,
             shape=self.detector.shape,
         )
