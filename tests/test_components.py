@@ -170,3 +170,9 @@ def test_aperture_blocking(parallel_rays, empty_rays):
     aperture = comp.Aperture(z=parallel_rays.location, radius_inner=2.0, radius_outer=2.0)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, empty_rays.data)
+
+
+def test_aperture_nonblocking(parallel_rays):
+    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=0., radius_outer=2.0)
+    out_rays = tuple(aperture.step(parallel_rays))[0]
+    assert_equal(out_rays.data, parallel_rays.data)
