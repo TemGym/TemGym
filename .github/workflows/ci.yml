@@ -34,3 +34,7 @@ jobs:
         run: python3 -m pip install tox tox-uv
       - name: run tox
         run: tox -e 'py${{ matrix.python_version }}'
+      - name: submit code coverage
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
