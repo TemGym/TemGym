@@ -3,7 +3,6 @@ import numpy as np
 
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
-from temgymbasic.model import Model
 from numpy.testing import assert_allclose, assert_equal
 
 
@@ -16,6 +15,7 @@ def empty_rays():
         path_length=np.empty([]),
     )
 
+
 @pytest.fixture(
     params=[128, 1, 0],
 )
@@ -27,6 +27,7 @@ def random_rays(request):
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
+
 
 @pytest.fixture(
     params=[128],
@@ -136,7 +137,8 @@ def test_double_deflector_deflection(parallel_rays):
 
     double_deflector = comp.DoubleDeflector(
         first=comp.Deflector(z=parallel_rays.location, defx=defx1, defy=defy1, name='Upper'),
-        second=comp.Deflector(z=parallel_rays.location+separation, defx=defx2, defy=defy2, name='Lower'),
+        second=comp.Deflector(z=parallel_rays.location+separation, defx=defx2,
+                              defy=defy2, name='Lower'),
     )
 
     out_rays = tuple(double_deflector.step(parallel_rays))[1]
@@ -148,11 +150,11 @@ def test_double_deflector_deflection(parallel_rays):
 
 
 def test_biprism_deflection(parallel_rays):
-    deflection=1.0
+    deflection = 1.0
 
     out_manual_x = parallel_rays.x
     out_manual_y = parallel_rays.y
-    out_manual_dx = parallel_rays.dx  + np.sign(parallel_rays.x)*deflection
+    out_manual_dx = parallel_rays.dx + np.sign(parallel_rays.x)*deflection
     out_manual_dy = parallel_rays.dy
     biprism = comp.Biprism(z=parallel_rays.location, defx=1.0)
 
@@ -168,4 +170,3 @@ def test_aperture_blocking(parallel_rays, empty_rays):
     aperture = comp.Aperture(z=parallel_rays.location, radius_inner=2.0, radius_outer=2.0)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, empty_rays.data)
-
