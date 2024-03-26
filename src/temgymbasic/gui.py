@@ -670,7 +670,7 @@ class ParallelBeamGUI(SourceGUI):
             self.yangleslider.setValue(self.beam.tilt_yx[0])
 
     def build(self) -> Self:
-        num_rays = 2**20
+        num_rays = 1
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
         beam_radius = self.beam.radius
 
@@ -678,7 +678,7 @@ class ParallelBeamGUI(SourceGUI):
         # vbox.addStretch()
 
         self.rayslider, _ = labelled_slider(
-            num_rays, 1, 2**20, name="Number of Rays", insert_into=vbox,
+            num_rays, 1, 2**16, name="Number of Rays", insert_into=vbox,
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
@@ -855,16 +855,32 @@ class PointBeamGUI(SourceGUI):
 
 
 class SampleGUI(GridGeomMixin, ComponentGUIWrapper):
-    def _get_extents(self):
-        return GridGeomParams(
-            cx=0.,
-            cy=0.,
-            w=0.25,
-            h=0.25,
-            rotation=0.,
-            z=self.component.z,
-            shape=None,
+    @property
+    def sample(self) -> 'comp.Sample':
+        return self.component
+
+    def _get_image(self):
+        return np.asarray(
+            (((0, 128, 255, 170),),),
+            dtype=np.uint8,
         )
+
+    def _get_extents(self):
+        sy, sx = self.sample.shape
+        py = self.sample.pixel_size
+        px = self.sample.pixel_size
+        return GridGeomParams(
+            cx=-1 * px / 2.,
+            cy=-1 * py / 2.,
+            w=sx * px,
+            h=sy * py,
+            rotation=self.sample.rotation,
+            z=self.component.z,
+            shape=self.sample.shape,
+        )
+
+    def build(self):
+        return self
 
 
 class STEMSampleGUI(SampleGUI):

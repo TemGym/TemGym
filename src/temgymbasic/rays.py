@@ -24,7 +24,8 @@ class Rays:
     indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
     path_length: np.ndarray
-    wavelength: float
+    wavelength: np.ndarray
+    phi_0: np.ndarray
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -108,7 +109,8 @@ class Rays:
                 self.path_length
                 + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
             ),
-            wavelength=self.wavelength
+            wavelength=self.wavelength,
+            phi_0=self.phi_0
         )
 
     def propagate_to(self, z: float) -> Self:
