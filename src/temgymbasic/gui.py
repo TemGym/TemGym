@@ -642,6 +642,7 @@ class SourceGUI(ComponentGUIWrapper):
     def num_rays(self) -> int:
         return self.rayslider.value()
 
+
 class ParallelBeamGUI(SourceGUI):
     @property
     def beam(self) -> 'comp.ParallelBeam':
@@ -727,6 +728,7 @@ class ParallelBeamGUI(SourceGUI):
             antialias=True,
         )
 
+
 class PointBeamGUI(SourceGUI):
     @property
     def beam(self) -> 'comp.PointBeam':
@@ -754,12 +756,13 @@ class PointBeamGUI(SourceGUI):
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
-        common_args = dict(
-            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
-        )
-
         self.beamsemiangleslider, _ = labelled_slider(
-            beam_semi_angle, 0.0001, 0.1, name='Point Beam Semi Angle', insert_into=vbox, decimals=3
+            beam_semi_angle,
+            0.0001,
+            0.1,
+            name='Point Beam Semi Angle',
+            insert_into=vbox,
+            decimals=3,
         )
         self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
 
@@ -1357,7 +1360,7 @@ class BiprismGUI(ComponentGUIWrapper):
     def set_deflection(self, val: float):
         self.biprism.deflection = val
         self.try_update()
-    
+
     @Slot(float)
     def set_offset(self, val: float):
         self.biprism.offset = val
@@ -1432,7 +1435,3 @@ class BiprismGUI(ComponentGUIWrapper):
             color='white',
             antialias=True,
         )
-
-        
-
-

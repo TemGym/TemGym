@@ -177,7 +177,7 @@ def initial_r(num_rays: int):
 
 
 # FIXME resolve code duplication between circular_beam() and point_beam()
-def make_beam(num_rays, outer_radius, beam_type = 'circular_beam'):
+def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
     '''Generates a circular paralell initial beam
 
     Parameters
@@ -268,5 +268,5 @@ def make_beam(num_rays, outer_radius, beam_type = 'circular_beam'):
                 r[1, idx] = np.tan(outer_radius*radius)*np.cos(t)
                 r[3, idx] = np.tan(outer_radius*radius)*np.sin(t)
                 idx += 1
-    
+
     return r, num_points_kth_ring
