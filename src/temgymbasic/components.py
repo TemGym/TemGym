@@ -7,6 +7,7 @@ from typing import (
 import numpy as np
 from numpy.typing import NDArray
 
+
 from . import (
     UsageError,
     InvalidModelError,
@@ -19,7 +20,14 @@ from .rays import Rays
 from .utils import (
     P2R, R2P,
     make_beam,
+    calculate_phi_0,
+    calculate_wavelength
 )
+
+from scipy.constants import c, e, m_e, h
+EPSILON = abs(e)/(2*m_e*c**2)  # Defining epsilon constant from page 18
+                               # of principles of electron optics 2017, Volume 1.
+
 
 if TYPE_CHECKING:
     from .gui import ComponentGUIWrapper
@@ -129,16 +137,104 @@ class Lens(Component):
 
 
 class Sample(Component):
-    def __init__(self, z: float, name: Optional[str] = None):
+    def __init__(
+        self,
+        z: float,
+        potential: NDArray,
+        pixel_size: float,
+        shape: Tuple[int, int],
+        rotation: Radians = 0.,
+        flip_y: bool = False,
+        center: Tuple[float, float] = (0., 0.),
+        name: Optional[str] = None,
+    ):
         super().__init__(name=name, z=z)
+        self.phi = potential
+        self.pixel_size = pixel_size
+        self.shape = shape
+        self.rotation = rotation  # degrees
+        self.flip_y = flip_y
+        self.center = center
+        self.dphi_dy, self.dphi_dx = np.gradient(potential)
+
+    def set_center_px(self, center_px: Tuple[int, int]):
+        """
+        For the desired image center in pixels (after any flip / rotation)
+        set the image center in the physical coordinates of the microscope
+
+        The continuous coordinate can be set directly on detector.center
+        """
+        iy, ix = center_px
+        sy, sx = self.shape
+        cont_y = (iy - sy // 2) * self.pixel_size
+        cont_x = (ix - sx // 2) * self.pixel_size
+        if self.flip_y:
+            cont_y = -1 * cont_y
+        mag, angle = R2P(cont_x + 1j * cont_y)
+        coord: complex = P2R(mag, angle + np.deg2rad(self.rotation))
+        self.center = coord.imag, coord.real
+
+    def on_grid(self, rays: Rays, as_int: bool = True) -> NDArray:
+        return rays.on_grid(
+            shape=self.shape,
+            pixel_size=self.pixel_size,
+            flip_y=self.flip_y,
+            rotation=self.rotation,
+            as_int=as_int,
+        )
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        # Sample has no effect, yet
-        # Could implement ray intensity / attenuation ??
-        rays.location = self
-        yield rays
+        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
+        sy, sx = self.shape
+        mask = np.logical_and(
+            np.logical_and(
+                0 <= pixel_coords_y,
+                pixel_coords_y < sy
+            ),
+            np.logical_and(
+                0 <= pixel_coords_x,
+                pixel_coords_x < sx
+            )
+        )
+
+        flat_icds = np.ravel_multi_index(
+            [
+                pixel_coords_y[mask],
+                pixel_coords_x[mask],
+            ],
+            self.phi.shape
+        )
+
+        # See Chapter 2 & 3 of principles of electron optics 2017 Vol 1 for more info
+        rho = np.sqrt(1+rays.dx[mask]**2+rays.dy[mask]**2)  # Equation 3.16
+        phi_0_plus_phi = (rays.phi_0[mask]+self.phi.ravel()[flat_icds])  # Part of Equation 2.18
+
+        phi_hat = (phi_0_plus_phi)*(1+EPSILON*(phi_0_plus_phi))  # Equation 2.18
+
+        # Between Equation 2.22 & 2.23
+        dphi_hat_dx = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dx.ravel()[flat_icds]
+        dphi_hat_dy = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dy.ravel()[flat_icds]
+
+        rays.data[1][mask] += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
+        rays.data[3][mask] += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
+        # Note here we are ignoring the Ez component (dphi/dz) of 3.22, because this has the effect of only 
+        # slowing the electron down, and since we have modelled the potential of the atom in a plane 
+        # only, we also won't have an Ez component. 
+        
+        # Equation 5.16 & 5.17 & 3.16, where ds of 5.16 is replaced by ds/dz * dz,
+        # where ds/dz = rho (See 3.16 and a little below it)
+        rays.path_length[mask] += rho*np.sqrt(phi_hat/rays.phi_0[mask])
+
+        yield Rays(
+            data=rays.data,
+            indices=rays.indices,
+            path_length=rays.path_length,
+            location=self,
+            wavelength=rays.wavelength,
+            phi_0=rays.phi_0
+        )
 
     @staticmethod
     def gui_wrapper():
@@ -211,15 +307,36 @@ class STEMSample(Sample):
 class Source(Component):
     def __init__(
         self, z: float,
-        wavelength: float,
+        wavelength: Optional[float] = None,
+        phi_0: Optional[float] = None,
         random: bool = False,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
-        self.wavelength = wavelength
         self.random = random
+
+        # Check if both wavelength and acceleration_voltage are provided
+        if wavelength is not None and phi_0 is not None:
+            raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
+        else:
+            # Calculate wavelength if acceleration_voltage is provided
+            if wavelength is None and phi_0 is not None:
+                self.wavelength = calculate_wavelength(phi_0)
+            else:
+                self.wavelength = wavelength
+
+            # Calculate acceleration_voltage if wavelength is provided
+            if phi_0 is None and wavelength is not None:
+                self.phi_0 = calculate_phi_0(wavelength)
+            else:
+                self.phi_0 = phi_0
+
+        @staticmethod
+        def gui_wrapper():
+            from .gui import STEMSampleGUI
+            return STEMSampleGUI
 
     @abc.abstractmethod
     def get_rays(self, num_rays: int) -> Rays:
@@ -235,7 +352,8 @@ class Source(Component):
             indices=indices,
             location=self,
             path_length=np.zeros((r.shape[1],)),
-            wavelength=self.wavelength,
+            wavelength=np.ones((r.shape[1],)) * self.wavelength,
+            phi_0=np.ones((r.shape[1],)) * self.phi_0,
         )
 
     def step(
@@ -250,13 +368,30 @@ class ParallelBeam(Source):
     def __init__(
         self,
         z: float,
-        wavelength: float,
+        wavelength: Optional[float] = None,
+        phi_0: Optional[float] = None,
         radius: float = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(z=z, wavelength=wavelength, tilt_yx=tilt_yx, name=name)
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name)
         self.radius = radius
+
+        # Check if both wavelength and acceleration_voltage are provided
+        if wavelength is not None and phi_0 is not None:
+            raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
+        else:
+            # Calculate wavelength if acceleration_voltage is provided
+            if wavelength is None and phi_0 is not None:
+                self.wavelength = calculate_wavelength(phi_0)
+            else:
+                self.wavelength = wavelength
+
+            # Calculate acceleration_voltage if wavelength is provided
+            if phi_0 is None and wavelength is not None:
+                self.phi_0 = calculate_phi_0(wavelength)
+            else:
+                self.phi_0 = phi_0
 
     def get_rays(self, num_rays: int) -> Rays:
         r, _ = make_beam(num_rays, self.radius, 'circular_beam')
@@ -275,6 +410,7 @@ class XAxialBeam(ParallelBeam):
             -self.radius, self.radius, num=num_rays, endpoint=True
         )
         return self._make_rays(r)
+
 
 class RadialSpikesBeam(ParallelBeam):
     def get_rays(self, num_rays: int) -> Rays:
@@ -300,17 +436,33 @@ class PointBeam(Source):
     def __init__(
         self,
         z: float,
-        wavelength: float,
         random: bool,
+        wavelength: Optional[float] = None,
+        phi_0: Optional[float] = None,
         semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
-
     ):
-        super().__init__(name=name, z=z, wavelength=wavelength)
+        super().__init__(name=name, z=z)
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
         self.random = random
+
+        # Check if both wavelength and acceleration_voltage are provided
+        if wavelength is not None and phi_0 is not None:
+            raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
+        else:
+            # Calculate wavelength if acceleration_voltage is provided
+            if wavelength is None and phi_0 is not None:
+                self.wavelength = calculate_wavelength(phi_0)
+            else:
+                self.wavelength = wavelength
+
+            # Calculate acceleration_voltage if wavelength is provided
+            if phi_0 is None and wavelength is not None:
+                self.phi_0 = calculate_phi_0(wavelength)
+            else:
+                self.phi_0 = phi_0
 
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
@@ -345,24 +497,10 @@ class XPointBeam(PointBeam):
             )
         return self._make_rays(r)
 
-        return self._make_rays(r)
-
     @staticmethod
     def gui_wrapper():
         from .gui import PointBeamGUI
         return PointBeamGUI
-class XPointBeam(PointBeam):
-    def get_rays(self, num_rays: int) -> Rays:
-        r = np.zeros((5, num_rays))
-        if self.random == True:
-            r[1, :] = np.random.uniform(
-                -self.semi_angle, self.semi_angle, size=num_rays
-            )
-        else:
-            r[1, :] = np.linspace(
-                -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
-            )
-        return self._make_rays(r)
 
 class Detector(Component):
     def __init__(
@@ -478,10 +616,9 @@ class Detector(Component):
             1,
         )
         return image
-    
+
     def get_image_intensity(self, rays: Rays) -> NDArray:
 
-        
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
@@ -500,7 +637,7 @@ class Detector(Component):
             dtype=np.complex128,
         )
 
-        # Compute the complex wavefronts for each ray - arbitrary wavefront for now
+        # Compute the complex wavefronts for each ray
         wavefronts = np.exp(-1j * 2 * np.pi / rays.wavelength * rays.path_length)
 
         # Use only the wavefronts for rays that hit the detector
@@ -520,7 +657,6 @@ class Detector(Component):
             valid_wavefronts,
         )
         return image
-
 
     def get_image_intensity(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
@@ -840,11 +976,12 @@ class Biprism(Component):
             indices=rays.indices,
             path_length=(
                 rays.path_length
-                + xdeflection_mag * deflection*rays.data[0]
-                + ydeflection_mag * deflection*rays.data[2]
+                + xdeflection_mag * deflection * rays.data[0]
+                + ydeflection_mag * deflection * rays.data[2]
             ),
             location=self,
-            wavelength=rays.wavelength
+            wavelength=rays.wavelength,
+            phi_0=rays.phi_0
         )
 
     @staticmethod
