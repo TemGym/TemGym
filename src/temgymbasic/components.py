@@ -231,7 +231,11 @@ class Source(Component):
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
         return Rays(
-            data=r, indices=indices, location=self, path_length=np.zeros((r.shape[1],)), wavelength=self.wavelength,
+            data=r,
+            indices=indices,
+            location=self,
+            path_length=np.zeros((r.shape[1],)),
+            wavelength=self.wavelength,
         )
 
     def step(
@@ -272,6 +276,7 @@ class XAxialBeam(ParallelBeam):
         )
         return self._make_rays(r)
 
+
 class RadialSpikesBeam(ParallelBeam):
     def get_rays(self, num_rays: int) -> Rays:
         xvals = np.linspace(
@@ -301,7 +306,7 @@ class PointBeam(Source):
         semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
-        
+
     ):
         super().__init__(name=name, z=z, wavelength=wavelength)
         self.semi_angle = semi_angle
@@ -310,7 +315,7 @@ class PointBeam(Source):
 
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
-        if self.random == True:
+        if self.random:
             r[1, :] = np.random.uniform(
                 -self.semi_angle, self.semi_angle, size=num_rays
             )
@@ -326,10 +331,12 @@ class PointBeam(Source):
     def gui_wrapper():
         from .gui import PointBeamGUI
         return PointBeamGUI
+
+
 class XPointBeam(PointBeam):
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
-        if self.random == True:
+        if self.random:
             r[1, :] = np.random.uniform(
                 -self.semi_angle, self.semi_angle, size=num_rays
             )
@@ -338,6 +345,7 @@ class XPointBeam(PointBeam):
                 -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
             )
         return self._make_rays(r)
+
 
 class Detector(Component):
     def __init__(
@@ -453,10 +461,8 @@ class Detector(Component):
             1,
         )
         return image
-    
-    def get_image_intensity(self, rays: Rays) -> NDArray:
 
-        
+    def get_image_intensity(self, rays: Rays) -> NDArray:
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
@@ -495,7 +501,6 @@ class Detector(Component):
             valid_wavefronts,
         )
         return image
-
 
     @staticmethod
     def gui_wrapper():
@@ -773,7 +778,11 @@ class Biprism(Component):
         yield Rays(
             data=rays.data,
             indices=rays.indices,
-            path_length=rays.path_length + xdeflection_mag*deflection*rays.data[0] + ydeflection_mag*deflection*rays.data[2],
+            path_length=(
+                rays.path_length
+                + xdeflection_mag * deflection*rays.data[0]
+                + ydeflection_mag * deflection*rays.data[2]
+            ),
             location=self,
             wavelength=rays.wavelength
         )
