@@ -3,6 +3,8 @@ from typing_extensions import TypeAlias
 import numpy as np
 from numpy.typing import NDArray
 
+from scipy.constants import e, m_e, h
+
 if TYPE_CHECKING:
     from .model import STEMModel
     from .rays import Rays
@@ -269,3 +271,11 @@ def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
                 r[3, idx] = np.tan(outer_radius*radius)*np.sin(t)
                 idx += 1
     return r, num_points_kth_ring
+
+
+def calculate_wavelength(phi_0):
+    return h / (2 * abs(e) * m_e * phi_0) ** (1 / 2)
+
+
+def calculate_phi_0(wavelength):
+    return h**2 / (2*wavelength * abs(e) * m_e)
