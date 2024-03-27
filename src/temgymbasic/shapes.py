@@ -119,13 +119,20 @@ def biprism(z, r, theta: Radians, offset):
     points : ndarray
         Points array of wire geometry
     '''
-    THETA = np.array([theta, theta+np.pi])
-    R = r*np.ones(np.size(THETA))
-    Z = z*np.ones(np.size(THETA))
+    biprism_loc_v = np.array([offset * np.cos(theta), offset * np.sin(theta)])
+    biprism_v = np.array([-np.sin(theta), np.cos(theta)])
 
-    points = np.array([offset + R*np.cos(THETA), 0. + R*np.sin(THETA), Z])
+    points = np.array([
+            biprism_loc_v - r * biprism_v,
+            biprism_loc_v + r * biprism_v,
+    ])
 
-    return points
+    return np.concatenate((
+            points,
+            np.array((z, z)).reshape(2, 1)
+        ),
+        axis=1,
+    )
 
 
 def quadrupole(r, phi, z, n_arc):
