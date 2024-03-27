@@ -252,24 +252,20 @@ def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
     # Make get the radii for the number of circles of rays we need
     radii = np.linspace(0, outer_radius, num_circles_int+1)
 
-    # fill in the x and y coordinates to our ray array
-    idx = 0
+    # Repeat radii for each ring
+    radii_replicated = np.repeat(radii, num_points_kth_ring)
+
+    # Calculate angles for each ring
+    angles = np.concatenate([np.linspace(0, 2*np.pi, n, endpoint=False)
+                             for n in num_points_kth_ring])
+
     if beam_type == 'circular_beam':
-        for i in range(len(radii)):
-            for j in range(num_points_kth_ring[i]):
-                radius = radii[i]
-                t = j*(2 * np.pi / num_points_kth_ring[i])
-                r[0, idx] = radius*np.cos(t)
-                r[2, idx] = radius*np.sin(t)
-                idx += 1
+        r[0, :] = radii_replicated * np.cos(angles)
+        r[2, :] = radii_replicated * np.sin(angles)
     elif beam_type == 'point_beam':
-        for i in range(len(radii)):
-            for j in range(num_points_kth_ring[i]):
-                radius = radii[i]
-                t = j*(2 * np.pi / num_points_kth_ring[i])
-                r[1, idx] = np.tan(outer_radius*radius)*np.cos(t)
-                r[3, idx] = np.tan(outer_radius*radius)*np.sin(t)
-                idx += 1
+        r[1, :] = np.tan(outer_radius*radii_replicated)*np.cos(angles)
+        r[3, :] = np.tan(outer_radius*radii_replicated)*np.sin(angles)
+
     return r, num_points_kth_ring
 
 
