@@ -1412,7 +1412,7 @@ class BiprismGUI(ComponentGUIWrapper):
             name="X-Offset", insert_into=hbox, decimals=2,
         )
         self.rotation_slider, _ = labelled_slider(
-            rotation, -np.pi, np.pi,
+            rotation, -180, 180,
             name="Rotation", insert_into=hbox, decimals=2,
         )
 
@@ -1429,9 +1429,9 @@ class BiprismGUI(ComponentGUIWrapper):
         return comp_geom.biprism(
             Z_ORIENT*self.biprism.z,
             1,
-            self.biprism.rotation,
+            self.biprism.rotation_rad,
             self.biprism.offset,
-        ).T
+        )
 
     def get_geom(self):
         self.geom = gl.GLLinePlotItem(

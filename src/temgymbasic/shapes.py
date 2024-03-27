@@ -100,7 +100,7 @@ def lens(r, z, n_arc):
     return points_circle
 
 
-def biprism(z, r, theta, offset):
+def biprism(z, r, theta: Radians, offset):
     '''Wire model geometry for biprism
 
     Parameters
@@ -110,7 +110,7 @@ def biprism(z, r, theta, offset):
     r : float
         Radius of wire
     theta : float
-        Angle of wire
+        Angle of wire in radians
     offset : float
         offset of wire along x-axis
 
