@@ -381,17 +381,17 @@ class ParallelBeam(Source):
         self.radius = radius
 
         # Check if both wavelength and acceleration_voltage are provided
-        if wavelength is not None and phi_0 is not None:
+        if wavelength != 0.0 and phi_0 != 0.0:
             raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
         else:
             # Calculate wavelength if acceleration_voltage is provided
-            if wavelength is None and phi_0 is not None:
+            if wavelength == 0.0 and phi_0 != 0.0:
                 self.wavelength = calculate_wavelength(phi_0)
             else:
                 self.wavelength = wavelength
 
             # Calculate acceleration_voltage if wavelength is provided
-            if phi_0 is None and wavelength is not None:
+            if phi_0 == 0.0 and wavelength != 0.0:
                 self.phi_0 = calculate_phi_0(wavelength)
             else:
                 self.phi_0 = phi_0
@@ -452,17 +452,17 @@ class PointBeam(Source):
         self.random = random
 
         # Check if both wavelength and acceleration_voltage are provided
-        if wavelength is not None and phi_0 is not None:
+        if wavelength != 0.0 and phi_0 != 0.0:
             raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
         else:
             # Calculate wavelength if acceleration_voltage is provided
-            if wavelength is None and phi_0 is not None:
+            if wavelength == 0.0 and phi_0 != 0.0:
                 self.wavelength = calculate_wavelength(phi_0)
             else:
                 self.wavelength = wavelength
 
             # Calculate acceleration_voltage if wavelength is provided
-            if phi_0 is None and wavelength is not None:
+            if phi_0 == 0.0 and wavelength != 0.0:
                 self.phi_0 = calculate_phi_0(wavelength)
             else:
                 self.phi_0 = phi_0
