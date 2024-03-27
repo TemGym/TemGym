@@ -672,6 +672,25 @@ class SourceGUI(ComponentGUIWrapper):
         self.xangleslider.valueChanged.connect(self.set_tilt)
         self.yangleslider.valueChanged.connect(self.set_tilt)
 
+    def _get_geom(self):
+        raise NotImplementedError("Needs to be defined")
+
+    def get_geom(self):
+        self.geom = gl.GLLinePlotItem(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            width=2,
+            antialias=True,
+        )
+        return [self.geom]
+
+    def update_geometry(self):
+        self.geom.setData(
+            pos=self._get_geom(),
+            color=RAY_COLOR + (0.9,),
+            antialias=True,
+        )
+
 
 class ParallelBeamGUI(SourceGUI):
     @property
@@ -719,22 +738,6 @@ class ParallelBeamGUI(SourceGUI):
             Z_ORIENT * self.component.z,
             64,
         ).T
-
-    def get_geom(self):
-        self.geom = gl.GLLinePlotItem(
-            pos=self._get_geom(),
-            color=RAY_COLOR + (0.9,),
-            width=2,
-            antialias=True,
-        )
-        return [self.geom]
-
-    def update_geometry(self):
-        self.geom.setData(
-            pos=self._get_geom(),
-            color=RAY_COLOR + (0.9,),
-            antialias=True,
-        )
 
 
 class PointBeamGUI(SourceGUI):
@@ -785,22 +788,6 @@ class PointBeamGUI(SourceGUI):
             Z_ORIENT * self.component.z,
             64,
         ).T
-
-    def get_geom(self):
-        self.geom = gl.GLLinePlotItem(
-            pos=self._get_geom(),
-            color=RAY_COLOR + (0.9,),
-            width=2,
-            antialias=True,
-        )
-        return [self.geom]
-
-    def update_geometry(self):
-        self.geom.setData(
-            pos=self._get_geom(),
-            color=RAY_COLOR + (0.9,),
-            antialias=True,
-        )
 
 
 class SampleGUI(GridGeomMixin, ComponentGUIWrapper):
