@@ -138,6 +138,24 @@ class Lens(Component):
 
 
 class Sample(Component):
+    def __init__(self, z: float, name: Optional[str] = None):
+        super().__init__(name=name, z=z)
+
+    def step(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        # Sample has no effect, yet
+        # Could implement ray intensity / attenuation ??
+        rays.location = self
+        yield rays
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import SampleGUI
+        return SampleGUI
+
+
+class PotentialSample(Sample):
     def __init__(
         self,
         z: float,
