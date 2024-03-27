@@ -371,9 +371,9 @@ class ParallelBeam(Source):
     def __init__(
         self,
         z: float,
+        radius: float,
         wavelength: Optional[float] = 0.0,
         phi_0: Optional[float] = 0.0,
-        radius: float = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
