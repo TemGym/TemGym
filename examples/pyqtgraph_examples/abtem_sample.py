@@ -45,7 +45,7 @@ components = (
         phi_0=100e3,
         radius=1e-9,
     ),
-    comp.Sample(
+    comp.PotentialSample(
         z=0.1,
         potential=pot_array,
         pixel_size=potential.sampling[0]*1e-10,

@@ -9,6 +9,7 @@ from temgymbasic.rays import Rays
 from numpy.testing import assert_allclose, assert_equal
 import scipy
 
+
 @pytest.fixture()
 def empty_rays():
     return Rays(
@@ -214,7 +215,7 @@ def test_biprism_deflection_top_right_quadrant(rot, inp, out):
 def test_biprism_interference():
 
     # Using biprism equation to calculate number of peaks in a biprism interefence pattern,
-    #Firstly, the spacing between peaks is given by DeltaS = ((a+b)/d) x wavelength,
+    # Firstly, the spacing between peaks is given by DeltaS = ((a+b)/d) x wavelength,
     # where a is distance from source to biprism, b is distance from biprism
     # to detector, d is the separation between spots in the source plane
     # and wavelength is the wavelength of the source
