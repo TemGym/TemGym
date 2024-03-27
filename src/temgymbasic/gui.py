@@ -655,7 +655,7 @@ class SourceGUI(ComponentGUIWrapper):
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
 
         self.rayslider, _ = labelled_slider(
-            num_rays, 1, 2**12, name="Number of Rays"
+            num_rays, 1, 2**18, name="Number of Rays"
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
