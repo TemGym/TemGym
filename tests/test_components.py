@@ -16,6 +16,25 @@ def empty_rays():
     )
 
 
+@pytest.fixture
+def single_quadrant_ray(request):
+    x, y = request.param
+    data = np.zeros(shape=(5, 1))
+
+    data[0, :] = np.random.uniform(low=0, high=x)
+    data[1, :] = np.zeros(1)
+    data[2, :] = np.random.uniform(low=0, high=y)
+    data[3, :] = np.zeros(1)
+    data[4, :] = np.ones(1)
+
+    return Rays(
+        data=data,
+        indices=1,
+        location=0.2,
+        path_length=0.0,
+    )
+
+
 @pytest.fixture(
     params=[128, 1, 0],
 )
@@ -36,9 +55,9 @@ def parallel_rays(request):
     n_rays = request.param
     data = np.zeros(shape=(5, n_rays))
 
-    data[0, :] = np.random.uniform(size=n_rays)
+    data[0, :] = np.random.uniform(low=-1, high=1., size=n_rays)
     data[1, :] = np.zeros(shape=n_rays)
-    data[2, :] = np.random.uniform(size=n_rays)
+    data[2, :] = np.random.uniform(low=-1, high=1., size=n_rays)
     data[3, :] = np.zeros(shape=n_rays)
     data[4, :] = np.ones(shape=n_rays)
 
@@ -149,14 +168,17 @@ def test_double_deflector_deflection(parallel_rays):
     assert_allclose(out_rays.dy, out_manual_dy)
 
 
-def test_biprism_deflection(parallel_rays):
-    deflection = 1.0
+# @pytest.mark.parametrize(
+#     'repeat', [1, 2, 3]
+# )
+def test_biprism_deflection_perpendicular(parallel_rays):
+    deflection = -1.0
 
     out_manual_x = parallel_rays.x
     out_manual_y = parallel_rays.y
     out_manual_dx = parallel_rays.dx + np.sign(parallel_rays.x)*deflection
     out_manual_dy = parallel_rays.dy
-    biprism = comp.Biprism(z=parallel_rays.location, defx=1.0)
+    biprism = comp.Biprism(z=parallel_rays.location, deflection=deflection)
 
     out_rays = tuple(biprism.step(parallel_rays))[0]
 
@@ -164,6 +186,62 @@ def test_biprism_deflection(parallel_rays):
     assert_allclose(out_rays.y, out_manual_y)
     assert_allclose(out_rays.dx, out_manual_dx)
     assert_allclose(out_rays.dy, out_manual_dy)
+
+
+@pytest.mark.parametrize("single_quadrant_ray", [(1, 1)], indirect=True)
+def test_biprism_deflection_top_right_quadrant(single_quadrant_ray):
+    rotation = 45
+
+    # Test that the ray ends up in the correct quadrant if the biprism is rotated
+    deflection = -100.0
+    biprism = comp.Biprism(z=single_quadrant_ray.location, deflection=deflection, rotation=rotation)
+    biprism_out_rays = tuple(biprism.step(single_quadrant_ray))[0]
+    propagated_rays = biprism_out_rays.propagate(0.2)
+
+    assert_allclose(np.sign(propagated_rays.dx), -1)
+    assert_allclose(np.sign(propagated_rays.dy), -1)
+
+
+@pytest.mark.parametrize("single_quadrant_ray", [(-1, 1)], indirect=True)
+def test_biprism_deflection_top_left_quadrant(single_quadrant_ray):
+    rotation = -45
+
+    # Test that the ray ends up in the correct quadrant if the biprism is rotated
+    deflection = -100.0
+    biprism = comp.Biprism(z=single_quadrant_ray.location, deflection=deflection, rotation=rotation)
+    biprism_out_rays = tuple(biprism.step(single_quadrant_ray))[0]
+    propagated_rays = biprism_out_rays.propagate(0.2)
+
+    assert_allclose(np.sign(propagated_rays.dx), 1)
+    assert_allclose(np.sign(propagated_rays.dy), -1)
+
+
+@pytest.mark.parametrize("single_quadrant_ray", [(-1, -1)], indirect=True)
+def test_biprism_deflection_bottom_left_quadrant(single_quadrant_ray):
+    rotation = 45
+
+    # Test that the ray ends up in the correct quadrant if the biprism is rotated
+    deflection = -100.0
+    biprism = comp.Biprism(z=single_quadrant_ray.location, deflection=deflection, rotation=rotation)
+    biprism_out_rays = tuple(biprism.step(single_quadrant_ray))[0]
+    propagated_rays = biprism_out_rays.propagate(0.2)
+
+    assert_allclose(np.sign(propagated_rays.dx), 1)
+    assert_allclose(np.sign(propagated_rays.dy), 1)
+
+
+@pytest.mark.parametrize("single_quadrant_ray", [(1, -1)], indirect=True)
+def test_biprism_deflection_bottom_right_quadrant(single_quadrant_ray):
+    rotation = -45
+
+    # Test that the ray ends up in the correct quadrant if the biprism is rotated
+    deflection = -100.0
+    biprism = comp.Biprism(z=single_quadrant_ray.location, deflection=deflection, rotation=rotation)
+    biprism_out_rays = tuple(biprism.step(single_quadrant_ray))[0]
+    propagated_rays = biprism_out_rays.propagate(0.2)
+
+    assert_allclose(np.sign(propagated_rays.dx), -1)
+    assert_allclose(np.sign(propagated_rays.dy), 1)
 
 
 def test_aperture_blocking(parallel_rays, empty_rays):

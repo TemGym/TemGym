@@ -321,17 +321,17 @@ class Source(Component):
         self.random = random
 
         # Check if both wavelength and acceleration_voltage are provided
-        if wavelength is not None and phi_0 is not None:
+        if wavelength != 0.0 and phi_0 != 0.0:
             raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
         else:
             # Calculate wavelength if acceleration_voltage is provided
-            if wavelength is None and phi_0 is not None:
+            if wavelength == 0.0 and phi_0 != 0.0:
                 self.wavelength = calculate_wavelength(phi_0)
             else:
                 self.wavelength = wavelength
 
             # Calculate acceleration_voltage if wavelength is provided
-            if phi_0 is None and wavelength is not None:
+            if phi_0 == 0.0 and wavelength != 0.0:
                 self.phi_0 = calculate_phi_0(wavelength)
             else:
                 self.phi_0 = phi_0
@@ -937,17 +937,17 @@ class Biprism(Component):
 
         rays_v_centred = rays_v - biprism_loc_v
 
-        rejection = np.dot(rays_v_centred, biprism_v)
-        rejection /= np.dot(biprism_v, biprism_v)
-        rejection = rejection[:, np.newaxis]
-        rejection = rejection * biprism_v[np.newaxis, :]
-        rejection /= np.linalg.norm(rejection, axis=1, keepdims=True)
+        # rejection = np.dot(rays_v_centred, biprism_v)
+        # rejection /= np.dot(biprism_v, biprism_v)
+        # rejection = rejection[:, np.newaxis]
+        # rejection = rejection * biprism_v[np.newaxis, :]
+        # rejection /= np.linalg.norm(rejection, axis=1, keepdims=True)
 
-        # dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
-        # projection = np.outer(dot_product, biprism_v)
+        dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
+        projection = np.outer(dot_product, biprism_v)
 
-        # rejection = projection - rays_v_centred
-        # rejection_norm = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
+        rejection = rays_v_centred - projection
+        rejection = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
         # If the ray position is located at [zero, zero], rejection_norm returns a nan,
         # so we convert it to a zero, zero.
         rejection = np.nan_to_num(rejection)

@@ -24,8 +24,8 @@ class Rays:
     indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
     path_length: np.ndarray
-    wavelength: np.ndarray
-    phi_0: np.ndarray
+    wavelength: Optional[NDArray] = 0.0
+    phi_0: Optional[NDArray] = 0.0
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
