@@ -70,8 +70,6 @@ def labelled_slider(
         hbox.addWidget(slider_namelabel)
 
     hbox.addWidget(slider)
-    # hbox.addSpacing(spacing)
-    # hbox.addWidget(slider_valuelabel)
 
     if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
         insert_into.addLayout(hbox)
