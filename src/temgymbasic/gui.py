@@ -642,6 +642,36 @@ class SourceGUI(ComponentGUIWrapper):
     def num_rays(self) -> int:
         return self.rayslider.value()
 
+    @Slot(float)
+    def set_tilt(self, val):
+        self.beam.tilt_yx = (
+            self.yangleslider.value(),
+            self.xangleslider.value(),
+        )
+        self.try_update()
+
+    def _build(self):
+        num_rays = 64
+        beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
+
+        self.rayslider, _ = labelled_slider(
+            num_rays, 1, 2**12, name="Number of Rays"
+        )
+        self.rayslider.valueChanged.connect(self.try_update_slot)
+
+        common_args = dict(
+            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
+        )
+        self.xangleslider, _ = labelled_slider(
+            value=beam_tilt_x, name="Beam Tilt X", **common_args
+        )
+        self.yangleslider, _ = labelled_slider(
+            value=beam_tilt_y, name="Beam Tilt Y", **common_args,
+        )
+
+        self.xangleslider.valueChanged.connect(self.set_tilt)
+        self.yangleslider.valueChanged.connect(self.set_tilt)
+
 
 class ParallelBeamGUI(SourceGUI):
     @property
@@ -653,14 +683,6 @@ class ParallelBeamGUI(SourceGUI):
         self.beam.radius = val
         self.try_update(geom=True)
 
-    @Slot(float)
-    def set_tilt(self, val):
-        self.beam.tilt_yx = (
-            self.yangleslider.value(),
-            self.xangleslider.value(),
-        )
-        self.try_update()
-
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
@@ -671,37 +693,23 @@ class ParallelBeamGUI(SourceGUI):
             self.yangleslider.setValue(self.beam.tilt_yx[0])
 
     def build(self) -> Self:
-        num_rays = 1
-        beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
-        beam_radius = self.beam.radius
 
         vbox = QVBoxLayout()
-        # vbox.addStretch()
 
-        self.rayslider, _ = labelled_slider(
-            num_rays, 1, 2**12, name="Number of Rays", insert_into=vbox,
-        )
-        self.rayslider.valueChanged.connect(self.try_update_slot)
+        self._build()
 
-        common_args = dict(
-            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
-        )
-        self.xangleslider, hbox_angles = labelled_slider(
-            value=beam_tilt_x, name="Beam Tilt X", **common_args
-        )
-        self.yangleslider, _ = labelled_slider(
-            value=beam_tilt_y, name="Beam Tilt Y", **common_args,
-            insert_into=hbox_angles
-        )
-        vbox.addLayout(hbox_angles)
-        self.xangleslider.valueChanged.connect(self.set_tilt)
-        self.yangleslider.valueChanged.connect(self.set_tilt)
+        vbox.addWidget(self.rayslider)
 
+        beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
             beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=3
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.xangleslider)
+        hbox.addWidget(self.yangleslider)
+        vbox.addLayout(hbox)
         self.box.setLayout(vbox)
         return self
 
@@ -745,16 +753,13 @@ class PointBeamGUI(SourceGUI):
             self.beamsemiangleslider.setValue(self.beam.semi_angle)
 
     def build(self) -> Self:
-        num_rays = 2**20
         beam_semi_angle = self.beam.semi_angle
 
         vbox = QVBoxLayout()
-        # vbox.addStretch()
 
-        self.rayslider, _ = labelled_slider(
-            num_rays, 1, 2**20, name="Number of Rays", insert_into=vbox,
-        )
-        self.rayslider.valueChanged.connect(self.try_update_slot)
+        self._build()
+
+        vbox.addWidget(self.rayslider)
 
         self.beamsemiangleslider, _ = labelled_slider(
             beam_semi_angle,
@@ -766,7 +771,12 @@ class PointBeamGUI(SourceGUI):
         )
         self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
 
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.xangleslider)
+        hbox.addWidget(self.yangleslider)
+        vbox.addLayout(hbox)
         self.box.setLayout(vbox)
+
         return self
 
     def _get_geom(self):
