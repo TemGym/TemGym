@@ -24,9 +24,10 @@ from .utils import (
     calculate_wavelength
 )
 
-from scipy.constants import c, e, m_e, h
-EPSILON = abs(e)/(2*m_e*c**2)  # Defining epsilon constant from page 18
-                               # of principles of electron optics 2017, Volume 1.
+from scipy.constants import c, e, m_e
+
+# Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
+EPSILON = abs(e)/(2*m_e*c**2)
 
 
 if TYPE_CHECKING:
@@ -219,10 +220,12 @@ class Sample(Component):
 
         rays.data[1][mask] += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
         rays.data[3][mask] += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
-        # Note here we are ignoring the Ez component (dphi/dz) of 3.22, because this has the effect of only 
-        # slowing the electron down, and since we have modelled the potential of the atom in a plane 
-        # only, we also won't have an Ez component. 
-        
+
+        # Note here we are ignoring the Ez component (dphi/dz) of 3.22,
+        # because this has the effect of only
+        # slowing the electron down, and since we have modelled the potential of the atom in a plane
+        # only, we also won't have an Ez component.
+
         # Equation 5.16 & 5.17 & 3.16, where ds of 5.16 is replaced by ds/dz * dz,
         # where ds/dz = rho (See 3.16 and a little below it)
         rays.path_length[mask] += rho*np.sqrt(phi_hat/rays.phi_0[mask])
@@ -307,11 +310,11 @@ class STEMSample(Sample):
 class Source(Component):
     def __init__(
         self, z: float,
-        wavelength: Optional[float] = None,
-        phi_0: Optional[float] = None,
         random: bool = False,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
+        wavelength: Optional[float] = 0.0,
+        phi_0: Optional[float] = 0.0,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
@@ -368,8 +371,8 @@ class ParallelBeam(Source):
     def __init__(
         self,
         z: float,
-        wavelength: Optional[float] = None,
-        phi_0: Optional[float] = None,
+        wavelength: Optional[float] = 0.0,
+        phi_0: Optional[float] = 0.0,
         radius: float = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
@@ -501,6 +504,7 @@ class XPointBeam(PointBeam):
     def gui_wrapper():
         from .gui import PointBeamGUI
         return PointBeamGUI
+
 
 class Detector(Component):
     def __init__(
@@ -638,46 +642,6 @@ class Detector(Component):
         )
 
         # Compute the complex wavefronts for each ray
-        wavefronts = np.exp(-1j * 2 * np.pi / rays.wavelength * rays.path_length)
-
-        # Use only the wavefronts for rays that hit the detector
-        valid_wavefronts = wavefronts[mask]
-
-        flat_icds = np.ravel_multi_index(
-            [
-                pixel_coords_y[mask],
-                pixel_coords_x[mask],
-            ],
-            image.shape
-        )
-        # Increment at each pixel for each ray that hits
-        np.add.at(
-            image.ravel(),
-            flat_icds,
-            valid_wavefronts,
-        )
-        return image
-
-    def get_image_intensity(self, rays: Rays) -> NDArray:
-        # Convert rays from detector positions to pixel positions
-        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
-        sy, sx = self.shape
-        mask = np.logical_and(
-            np.logical_and(
-                0 <= pixel_coords_y,
-                pixel_coords_y < sy
-            ),
-            np.logical_and(
-                0 <= pixel_coords_x,
-                pixel_coords_x < sx
-            )
-        )
-        image = np.zeros(
-            self.shape,
-            dtype=np.complex128,
-        )
-
-        # Compute the complex wavefronts for each ray - arbitrary wavefront for now
         wavefronts = np.exp(-1j * 2 * np.pi / rays.wavelength * rays.path_length)
 
         # Use only the wavefronts for rays that hit the detector
@@ -916,7 +880,7 @@ class Biprism(Component):
         self,
         z: float,
         offset: float = 0.,
-        rotation: float = 0.,
+        rotation: Degrees = 0.,
         deflection: float = 0.,
         name: Optional[str] = None,
     ):
@@ -940,33 +904,56 @@ class Biprism(Component):
         self.offset = offset
         self.rotation = rotation
 
+    @property
+    def rotation(self) -> Degrees:
+        return np.rad2deg(self.rotation_rad)
+
+    @rotation.setter
+    def rotation(self, val: Degrees):
+        self.rotation_rad: Radians = np.deg2rad(val)
+
+    @property
+    def rotation_rad(self) -> Radians:
+        return self._rotation
+
+    @rotation_rad.setter
+    def rotation_rad(self, val: Radians):
+        self._rotation = val
+
     def step(
         self, rays: Rays,
     ) -> Generator[Rays, None, None]:
         deflection = self.deflection
         offset = self.offset
-        rot = self.rotation
+        rot = self.rotation_rad
         pos_x = rays.x
         pos_y = rays.y
         rays_v = np.array([pos_x, pos_y]).T
-        r = 1  # Just used for creating the biprism vector
 
-        biprism_loc_v = np.array([offset, 0.0])
-        biprism_v = np.array([r*np.cos(rot), r*np.sin(rot)])
+        biprism_loc_v = np.array([offset*np.cos(rot), offset*np.sin(rot)])
+
+        biprism_v = np.array([-np.sin(rot), np.cos(rot)])
+        biprism_v /= np.linalg.norm(biprism_v)
 
         rays_v_centred = rays_v - biprism_loc_v
 
-        dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
-        projection = np.outer(dot_product, biprism_v)
+        rejection = np.dot(rays_v_centred, biprism_v)
+        rejection /= np.dot(biprism_v, biprism_v)
+        rejection = rejection[:, np.newaxis]
+        rejection = rejection * biprism_v[np.newaxis, :]
+        rejection /= np.linalg.norm(rejection, axis=1, keepdims=True)
 
-        rejection = projection - rays_v_centred
-        rejection_norm = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
+        # dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
+        # projection = np.outer(dot_product, biprism_v)
+
+        # rejection = projection - rays_v_centred
+        # rejection_norm = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
         # If the ray position is located at [zero, zero], rejection_norm returns a nan,
         # so we convert it to a zero, zero.
-        rejection_norm = np.nan_to_num(rejection_norm)
+        rejection = np.nan_to_num(rejection)
 
-        xdeflection_mag = rejection_norm[:, 0]
-        ydeflection_mag = rejection_norm[:, 1]
+        xdeflection_mag = rejection[:, 0]
+        ydeflection_mag = rejection[:, 1]
 
         rays.data[1] += xdeflection_mag*deflection
         rays.data[3] += ydeflection_mag*deflection
