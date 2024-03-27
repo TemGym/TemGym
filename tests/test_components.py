@@ -1,10 +1,13 @@
 import pytest
 import numpy as np
 
+from temgymbasic.model import (
+    Model,
+)
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
 from numpy.testing import assert_allclose, assert_equal
-
+import scipy
 
 @pytest.fixture()
 def empty_rays():
@@ -120,10 +123,17 @@ def test_lens_focusing(parallel_rays):
     lens = comp.Lens(parallel_rays.location, f)
     out_rays = tuple(lens.step(parallel_rays))[0]
 
+    # First check that the lens has applied the correct deflection to rays
     assert_allclose(out_rays.x, parallel_rays.x)
     assert_allclose(out_rays.y, parallel_rays.y)
     assert_allclose(out_rays.dx, out_manual_dx)
     assert_allclose(out_rays.dy, out_manual_dy)
+
+    # Then check that when we propagate these parallel rays,
+    # they go to the 0.0 (Parallel rays go to 0.0 in the focal plane)
+    propagated_rays = out_rays.propagate(0.5)
+    assert_allclose(propagated_rays.x, 0.0)
+    assert_allclose(propagated_rays.y, 0.0)
 
 
 def test_deflector_deflection(parallel_rays):
@@ -166,9 +176,6 @@ def test_double_deflector_deflection(parallel_rays):
     assert_allclose(out_rays.dy, out_manual_dy)
 
 
-# @pytest.mark.parametrize(
-#     'repeat', [1, 2, 3]
-# )
 def test_biprism_deflection_perpendicular(parallel_rays):
     deflection = -1.0
 
@@ -202,6 +209,56 @@ def test_biprism_deflection_top_right_quadrant(rot, inp, out):
 
     assert_allclose(np.sign(propagated_rays.dx), out[0])
     assert_allclose(np.sign(propagated_rays.dy), out[1])
+
+
+def test_biprism_interference():
+
+    # Using biprism equation to calculate number of peaks in a biprism interefence pattern,
+    #Firstly, the spacing between peaks is given by DeltaS = ((a+b)/d) x wavelength,
+    # where a is distance from source to biprism, b is distance from biprism
+    # to detector, d is the separation between spots in the source plane
+    # and wavelength is the wavelength of the source
+    wavelength = 0.001
+    deflection = -0.1
+    a = 0.5
+    b = 0.5
+    d = 2*a*deflection
+    spacing = ((a+b)/abs(d))*wavelength
+
+    # For this detector size and peak spacing, we expect to see 11 peaks in the
+    # detector plane
+    det_shape = (1, 101)
+    pixel_size = 0.001
+    num_peaks = int(pixel_size*det_shape[1]/spacing) + 1
+
+    components = (
+        comp.XPointBeam(
+            z=0.0,
+            wavelength=wavelength,
+            semi_angle=0.1,
+            random=False,
+        ),
+        comp.Biprism(
+            z=a,
+            offset=0.0,
+            rotation=0.0,
+            deflection=deflection,
+        ),
+        comp.Detector(
+            z=a+b,
+            pixel_size=pixel_size,
+            shape=det_shape,
+        ),
+    )
+
+    model = Model(components)
+
+    # We need enough rays that there is lots of interference in the image plane
+    rays = tuple(model.run_iter(num_rays=2**20))
+    image = model.detector.get_image_intensity(rays[-1])
+    peaks, _ = scipy.signal.find_peaks(np.abs(image[0, :])**2, height=0)
+
+    assert_equal(len(peaks), num_peaks)
 
 
 def test_aperture_blocking(parallel_rays, empty_rays):
