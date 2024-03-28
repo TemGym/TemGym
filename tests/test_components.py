@@ -212,6 +212,8 @@ def test_double_deflector_deflection(parallel_rays):
 
     out_manual_x = parallel_rays.x + separation*defx1
     out_manual_y = parallel_rays.y + separation*defy1
+
+    # The 1.0 multiplying defx1 and defx2 here represents the 1.0 that exists in the matmul
     out_manual_dx = parallel_rays.dx + 1.0*defx1 + 1.0*defx2
     out_manual_dy = parallel_rays.dy + 1.0*defy1 + 1.0*defy2
 
