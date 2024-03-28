@@ -214,17 +214,24 @@ def test_biprism_deflection_top_right_quadrant(rot, inp, out):
 
 def test_biprism_interference():
 
-    # Using biprism equation to calculate number of peaks in a biprism interefence pattern,
-    # Firstly, the spacing between peaks is given by DeltaS = ((a+b)/d) x wavelength,
+    # This test uses an old biprism equation from light optics
+    # to calculate the number of peaks in a biprism interefence pattern,
+    # The biprism equation tells you the spacing between interference peaks
+    # in image plane given an optical setup with a point source, a biprism
+    # and a detector. The equation is given by DeltaS = ((a+b)/d) \times wavelength,
     # where a is distance from source to biprism, b is distance from biprism
     # to detector, d is the separation between spots in the source plane
     # and wavelength is the wavelength of the source
+
+    # This tests at least that we have an interference pattern,
+    # although this test is not quite so general, and will probably break
+    # if any of these parameters are modified significantly
     wavelength = 0.001
-    deflection = -0.1
-    a = 0.5
-    b = 0.5
-    d = 2*a*deflection
-    spacing = ((a+b)/abs(d))*wavelength
+    deflection = -0.1  # Deflection of biprism
+    a = 0.5  # Source to biprism distance
+    b = 0.5  # Biprism to image plane
+    d = 2*a*deflection  # Source spot spacing (Biprism splits a single source into two)
+    spacing = ((a+b)/abs(d))*wavelength  # Interference pattern peak spacing in image plane
 
     # For this detector size and peak spacing, we expect to see 11 peaks in the
     # detector plane
@@ -255,6 +262,7 @@ def test_biprism_interference():
     model = Model(components)
 
     # We need enough rays that there is lots of interference in the image plane
+    # so that there are definite peaks for peak finder
     rays = tuple(model.run_iter(num_rays=2**20))
     image = model.detector.get_image_intensity(rays[-1])
     peaks, _ = scipy.signal.find_peaks(np.abs(image[0, :])**2, height=0)
