@@ -74,6 +74,27 @@ def parallel_rays(request):
 @pytest.fixture(
     params=[128],
 )
+def point_rays(request):
+    n_rays = request.param
+    data = np.zeros(shape=(5, n_rays))
+
+    data[0, :] = np.zeros(shape=n_rays)
+    data[1, :] = np.random.uniform(low=-1, high=1., size=n_rays)
+    data[2, :] = np.zeros(shape=n_rays)
+    data[3, :] = np.random.uniform(low=-1, high=1., size=n_rays)
+    data[4, :] = np.ones(shape=n_rays)
+
+    return Rays(
+        data=data,
+        indices=np.arange(n_rays),
+        location=0.0,
+        path_length=np.zeros((n_rays,)),
+    )
+
+
+@pytest.fixture(
+    params=[128],
+)
 def slope_of_one_rays(request):
     n_rays = request.param
     data = np.zeros(shape=(5, n_rays))
@@ -117,7 +138,8 @@ def test_interface(component, random_rays):
     assert out_rays.num <= random_rays.num
 
 
-def test_lens_focusing(parallel_rays):
+def test_lens_focusing_to_point(parallel_rays):
+    # If rays are parallel, lens focuses them to a point, so we test this behaviour here.
     f = 0.5
     out_manual_dx = parallel_rays.x*(-1/f) + parallel_rays.dx
     out_manual_dy = parallel_rays.y*(-1/f) + parallel_rays.dy
@@ -135,6 +157,36 @@ def test_lens_focusing(parallel_rays):
     propagated_rays = out_rays.propagate(0.5)
     assert_allclose(propagated_rays.x, 0.0)
     assert_allclose(propagated_rays.y, 0.0)
+
+
+def test_lens_focusing_to_infinity(point_rays):
+    # If rays are a point source and leave from the focal plane,
+    # the lens creates a parallel ("Collimated") beam "focused at infinity",
+    # so we test this behaviour here.
+
+    f = 0.5
+
+    propagated_rays_to_lens = point_rays.propagate(f)
+
+    out_manual_dx = 0.0
+    out_manual_dy = 0.0
+
+    lens = comp.Lens(propagated_rays_to_lens.location, f)
+    out_rays = tuple(lens.step(propagated_rays_to_lens))[0]
+
+    # First check that the lens has applied the correct deflection to rays
+    assert_allclose(out_rays.x, propagated_rays_to_lens.x)
+    assert_allclose(out_rays.y, propagated_rays_to_lens.y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
+
+    # Then check that when we propagate these now collimated rays a large distance,
+    # they move parallel to the optic axis continuously
+    propagated_rays = out_rays.propagate(10000)
+    assert_allclose(propagated_rays.x, out_rays.x)
+    assert_allclose(propagated_rays.y, out_rays.y)
+    assert_allclose(propagated_rays.dx, out_rays.dx)
+    assert_allclose(propagated_rays.dy, out_rays.dy)
 
 
 def test_deflector_deflection(parallel_rays):
