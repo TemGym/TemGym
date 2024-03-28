@@ -59,7 +59,6 @@ components = (
         potential=pot_interp,
         Ex=Ex_interp,
         Ey=Ey_interp,
-        extent=extent,
     ),
     comp.Detector(
         z=0.2,
