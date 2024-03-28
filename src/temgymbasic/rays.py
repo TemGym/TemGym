@@ -68,7 +68,7 @@ class Rays:
 
     @y.setter
     def y(self, ypos):
-        self.data[0, :] = ypos
+        self.data[2, :] = ypos
 
     @property
     def yx(self):
