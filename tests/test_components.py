@@ -138,6 +138,19 @@ def test_interface(component, random_rays):
     assert out_rays.num <= random_rays.num
 
 
+def test_lens_random_rays(random_rays):
+    f = np.random.uniform(0., 1)
+    out_manual_dx = random_rays.x*(-1/f) + random_rays.dx
+    out_manual_dy = random_rays.y*(-1/f) + random_rays.dy
+
+    lens = comp.Lens(random_rays.location, f)
+    out_rays = tuple(lens.step(random_rays))[0]
+
+    # Check that the lens has applied the correct deflection to rays
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
+
+
 def test_lens_focusing_to_point(parallel_rays):
     # If rays are parallel, lens focuses them to a point, so we test this behaviour here.
     f = 0.5
@@ -187,6 +200,25 @@ def test_lens_focusing_to_infinity(point_rays):
     assert_allclose(propagated_rays.y, out_rays.y)
     assert_allclose(propagated_rays.dx, out_rays.dx)
     assert_allclose(propagated_rays.dy, out_rays.dy)
+
+
+def test_deflector_random_rays(random_rays):
+    deflection = np.random.uniform(-5, 5)
+
+    # The last row of rays should always be 1.0, but random rays randomises 
+    # this, and we have no getter for the final row because it was always supposed to be 1.0
+    # so we use data instead to make the test succeed
+    out_manual_dx = random_rays.dx + random_rays.data[-1, :]*deflection
+    out_manual_dy = random_rays.dy + random_rays.data[-1, :]*deflection
+
+    deflector = comp.Deflector(random_rays.location, defx=deflection, defy=deflection)
+    out_rays = tuple(deflector.step(random_rays))[0]
+
+    # Check that the lens has applied the correct deflection to rays
+    assert_allclose(out_rays.x, random_rays.x)
+    assert_allclose(out_rays.y, random_rays.y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
 
 
 def test_deflector_deflection(parallel_rays):
