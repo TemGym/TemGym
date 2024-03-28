@@ -159,94 +159,47 @@ class PotentialSample(Sample):
     def __init__(
         self,
         z: float,
-        potential: NDArray,
-        pixel_size: float,
-        shape: Tuple[int, int],
-        rotation: Radians = 0.,
-        flip_y: bool = False,
-        center: Tuple[float, float] = (0., 0.),
+        potential,
+        Ex,
+        Ey,
         name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
+
+        # We're renaming here some terms to be closer to the math in Hawkes
+        # Not sure if this is recommended or breaks any convetions
         self.phi = potential
-        self.pixel_size = pixel_size
-        self.shape = shape
-        self.rotation = rotation  # degrees
-        self.flip_y = flip_y
-        self.center = center
-        self.dphi_dy, self.dphi_dx = np.gradient(potential)
-
-    def set_center_px(self, center_px: Tuple[int, int]):
-        """
-        For the desired image center in pixels (after any flip / rotation)
-        set the image center in the physical coordinates of the microscope
-
-        The continuous coordinate can be set directly on detector.center
-        """
-        iy, ix = center_px
-        sy, sx = self.shape
-        cont_y = (iy - sy // 2) * self.pixel_size
-        cont_x = (ix - sx // 2) * self.pixel_size
-        if self.flip_y:
-            cont_y = -1 * cont_y
-        mag, angle = R2P(cont_x + 1j * cont_y)
-        coord: complex = P2R(mag, angle + np.deg2rad(self.rotation))
-        self.center = coord.imag, coord.real
-
-    def on_grid(self, rays: Rays, as_int: bool = True) -> NDArray:
-        return rays.on_grid(
-            shape=self.shape,
-            pixel_size=self.pixel_size,
-            flip_y=self.flip_y,
-            rotation=self.rotation,
-            as_int=as_int,
-        )
+        self.dphi_dx = Ex
+        self.dphi_dy = Ey
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
-        sy, sx = self.shape
-        mask = np.logical_and(
-            np.logical_and(
-                0 <= pixel_coords_y,
-                pixel_coords_y < sy
-            ),
-            np.logical_and(
-                0 <= pixel_coords_x,
-                pixel_coords_x < sx
-            )
-        )
-
-        flat_icds = np.ravel_multi_index(
-            [
-                pixel_coords_y[mask],
-                pixel_coords_x[mask],
-            ],
-            self.phi.shape
-        )
 
         # See Chapter 2 & 3 of principles of electron optics 2017 Vol 1 for more info
-        rho = np.sqrt(1+rays.dx[mask]**2+rays.dy[mask]**2)  # Equation 3.16
-        phi_0_plus_phi = (rays.phi_0[mask]+self.phi.ravel()[flat_icds])  # Part of Equation 2.18
+        rho = np.sqrt(1+rays.dx**2+rays.dy**2)  # Equation 3.16
+        phi_0_plus_phi = (rays.phi_0+self.phi((rays.x, rays.y)))  # Part of Equation 2.18
 
         phi_hat = (phi_0_plus_phi)*(1+EPSILON*(phi_0_plus_phi))  # Equation 2.18
 
         # Between Equation 2.22 & 2.23
-        dphi_hat_dx = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dx.ravel()[flat_icds]
-        dphi_hat_dy = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dy.ravel()[flat_icds]
+        dphi_hat_dx = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dx((rays.x, rays.y))
+        dphi_hat_dy = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dy((rays.x, rays.y))
 
-        rays.data[1][mask] += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
-        rays.data[3][mask] += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
+        # Perform deflection to ray in slope coordinates
+        rays.dx += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
+        rays.dy += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
 
         # Note here we are ignoring the Ez component (dphi/dz) of 3.22,
         # because this has the effect of only
         # slowing the electron down, and since we have modelled the potential of the atom in a plane
-        # only, we also won't have an Ez component.
+        # only, we also won't have an Ez component (At least I don't think this is the case?
+        # I could be completely wrong here though - it might actually have an effect!
+        # But I don't think I can get an Ez from an infinitely thin slice.
 
         # Equation 5.16 & 5.17 & 3.16, where ds of 5.16 is replaced by ds/dz * dz,
         # where ds/dz = rho (See 3.16 and a little below it)
-        rays.path_length[mask] += rho*np.sqrt(phi_hat/rays.phi_0[mask])
+        rays.path_length += rho*np.sqrt(phi_hat/rays.phi_0)
 
         yield Rays(
             data=rays.data,
