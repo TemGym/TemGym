@@ -263,6 +263,25 @@ def test_double_deflector_deflection(parallel_rays):
     assert_allclose(out_rays.dy, out_manual_dy)
 
 
+def test_biprism_total_deflection_is_one(point_rays):
+
+    # We need to test our vector calculus that we use to find the deflection vectors in x and y
+    # space. If we have done this correctly, the sqrt(deflection_x**2 + deflection_y**2) we
+    # calculate if the biprism is rotated should be equal to the total deflection of the biprism.
+    rot = np.random.uniform(-180, 180)
+    deflection = np.random.uniform(-5, 5)
+    biprism_location = 0.5
+    biprism = comp.Biprism(z=biprism_location, deflection=deflection, rotation=rot)
+    biprism_rays = point_rays.propagate(biprism_location)
+    out_rays = tuple(biprism.step(biprism_rays))[0]
+
+    deflection_x = out_rays.dx - point_rays.dx
+    deflection_y = out_rays.dy - point_rays.dy
+
+    total_deflection = np.sqrt(deflection_x**2 + deflection_y**2)
+    assert_allclose(total_deflection, np.ones(point_rays.num)*np.abs(deflection))
+
+
 def test_biprism_deflection_perpendicular(parallel_rays):
     deflection = -1.0
 
@@ -286,6 +305,7 @@ def test_biprism_deflection_perpendicular(parallel_rays):
     (45, (-1, -1), (1, 1)),  # Bottom Left to Top Right
     (-45, (1, -1), (-1, 1)),  # Bottom Right to Top Left
 ])
+
 def test_biprism_deflection_by_quadrant(rot, inp, out):
     ray = single_quadrant_ray(inp[0], inp[1])
     # Test that the ray ends up in the correct quadrant if the biprism is rotated
