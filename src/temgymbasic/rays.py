@@ -58,9 +58,17 @@ class Rays:
     def x(self):
         return self.data[0, :]
 
+    @x.setter
+    def x(self, xpos):
+        self.data[0, :] = xpos
+
     @property
     def y(self):
         return self.data[2, :]
+
+    @y.setter
+    def y(self, ypos):
+        self.data[0, :] = ypos
 
     @property
     def yx(self):
@@ -70,9 +78,17 @@ class Rays:
     def dx(self):
         return self.data[1, :]
 
+    @dx.setter
+    def dx(self, xslope):
+        self.data[1, :] = xslope
+
     @property
     def dy(self):
         return self.data[3, :]
+
+    @dy.setter
+    def dy(self, yslope):
+        self.data[3, :] = yslope
 
     @staticmethod
     def propagation_matrix(z):
