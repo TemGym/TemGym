@@ -12,7 +12,7 @@ from ase.build import graphene
 from typing import Tuple, NamedTuple
 import abtem
 from temgymbasic.plotting import plot_model
-
+from scipy.interpolate import RegularGridInterpolator as RGI
 
 class PlotParams(NamedTuple):
     num_rays: int = 1024
@@ -37,7 +37,16 @@ atoms.numbers[17] = 14
 potential = abtem.Potential(atoms, sampling=[0.05, 0.05])
 
 potential_array = potential.build().compute()
+print(potential_array.sampling, potential_array.gpts)
 pot_array = potential_array.array[0]
+extent = potential_array.extent*1e-10
+x = np.linspace(0., potential_array.extent[0], potential_array.gpts[0])*1e-10
+y = np.linspace(0., potential_array.extent[1], potential_array.gpts[1])*1e-10
+xx, yy = np.meshgrid(x, y)
+pot_interp = RGI((x, y), pot_array, method='linear', bounds_error=False, fill_value=0.0)
+Ey, Ex = np.gradient(pot_array)
+Ex_interp = RGI((x, y), Ex, method='linear', bounds_error=False, fill_value=0.0)
+Ey_interp = RGI((x, y), Ey, method='linear', bounds_error=False, fill_value=0.0)
 
 components = (
     comp.ParallelBeam(
@@ -47,9 +56,10 @@ components = (
     ),
     comp.PotentialSample(
         z=0.1,
-        potential=pot_array,
-        pixel_size=potential.sampling[0]*1e-10,
-        shape=pot_array.shape,
+        potential=pot_interp,
+        Ex=Ex_interp,
+        Ey=Ey_interp,
+        extent=extent,
     ),
     comp.Detector(
         z=0.2,
@@ -61,7 +71,7 @@ components = (
 model = Model(components)
 rays = tuple(model.run_iter(num_rays=1024))
 
-plot_model(model, plot_params=PlotParams())
+# plot_model(model, plot_params=PlotParams())
 
 plt.figure()
 plt.imshow(model.detector.get_image(rays[-1]).astype(np.bool_))
