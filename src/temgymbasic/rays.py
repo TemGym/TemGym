@@ -12,6 +12,7 @@ from . import (
 )
 from .utils import (
     get_pixel_coords,
+    calculate_phi_0
 )
 
 if TYPE_CHECKING:
@@ -24,8 +25,7 @@ class Rays:
     indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
     path_length: np.ndarray
-    wavelength: Optional[NDArray] = 0.0
-    phi_0: Optional[NDArray] = 0.0
+    wavelength: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -90,6 +90,10 @@ class Rays:
     def dy(self, yslope):
         self.data[3, :] = yslope
 
+    @property
+    def phi_0(self):
+        return calculate_phi_0(self.wavelength)
+
     @staticmethod
     def propagation_matrix(z):
         '''
@@ -126,7 +130,6 @@ class Rays:
                 + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
             ),
             wavelength=self.wavelength,
-            phi_0=self.phi_0
         )
 
     def propagate_to(self, z: float) -> Self:

@@ -267,7 +267,7 @@ def test_biprism_deflection_top_right_quadrant(rot, inp, out):
 
 
 def test_biprism_interference():
-
+    from temgymbasic.utils import calculate_phi_0
     # This test uses an old biprism equation from light optics
     # to calculate the number of peaks in a biprism interefence pattern,
     # The biprism equation tells you the spacing between interference peaks
@@ -281,6 +281,8 @@ def test_biprism_interference():
     # although this test is not quite so general, and will probably break
     # if any of these parameters are modified significantly
     wavelength = 0.001
+    phi_0 = calculate_phi_0(wavelength)
+
     deflection = -0.1  # Deflection of biprism
     a = 0.5  # Source to biprism distance
     b = 0.5  # Biprism to image plane
@@ -296,9 +298,8 @@ def test_biprism_interference():
     components = (
         comp.XPointBeam(
             z=0.0,
-            wavelength=wavelength,
+            phi_0=phi_0,
             semi_angle=0.1,
-            random=False,
         ),
         comp.Biprism(
             z=a,

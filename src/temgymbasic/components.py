@@ -20,7 +20,9 @@ from .rays import Rays
 from .utils import (
     P2R, R2P,
     make_beam,
-    calculate_phi_0,
+)
+
+from .utils import (
     calculate_wavelength
 )
 
@@ -207,7 +209,6 @@ class PotentialSample(Sample):
             path_length=rays.path_length,
             location=self,
             wavelength=rays.wavelength,
-            phi_0=rays.phi_0
         )
 
     @staticmethod
@@ -281,53 +282,36 @@ class STEMSample(Sample):
 class Source(Component):
     def __init__(
         self, z: float,
-        random: bool = False,
         tilt_yx: Tuple[float, float] = (0., 0.),
+        phi_0: Optional[float] = None,
         name: Optional[str] = None,
-        wavelength: Optional[float] = 0.0,
-        phi_0: Optional[float] = 0.0,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
-        self.random = random
-
-        # Check if both wavelength and acceleration_voltage are provided
-        if wavelength != 0.0 and phi_0 != 0.0:
-            raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
-        else:
-            # Calculate wavelength if acceleration_voltage is provided
-            if wavelength == 0.0 and phi_0 != 0.0:
-                self.wavelength = calculate_wavelength(phi_0)
-            else:
-                self.wavelength = wavelength
-
-            # Calculate acceleration_voltage if wavelength is provided
-            if phi_0 == 0.0 and wavelength != 0.0:
-                self.phi_0 = calculate_phi_0(wavelength)
-            else:
-                self.phi_0 = phi_0
-
-        @staticmethod
-        def gui_wrapper():
-            from .gui import STEMSampleGUI
-            return STEMSampleGUI
+        self.phi_0 = phi_0
 
     @abc.abstractmethod
     def get_rays(self, num_rays: int) -> Rays:
         raise NotImplementedError
 
     def _make_rays(self, r: NDArray, indices: Optional[NDArray] = None) -> Rays:
+        num_rays = r.shape[1]
         if indices is None:
-            indices = np.arange(r.shape[1])
+            indices = np.arange(num_rays)
         r[1, :] += self.tilt_yx[1]
         r[3, :] += self.tilt_yx[0]
+
+        if self.phi_0 is None:
+            wavelengths = None
+        else:
+            wavelengths = np.ones((num_rays,)) * calculate_wavelength(self.phi_0)
+
         return Rays(
             data=r,
             indices=indices,
             location=self,
-            path_length=np.zeros((r.shape[1],)),
-            wavelength=np.ones((r.shape[1],)) * self.wavelength,
-            phi_0=np.ones((r.shape[1],)) * self.phi_0,
+            path_length=np.zeros((num_rays,)),
+            wavelength=wavelengths,
         )
 
     def step(
@@ -343,29 +327,12 @@ class ParallelBeam(Source):
         self,
         z: float,
         radius: float,
-        wavelength: Optional[float] = 0.0,
-        phi_0: Optional[float] = 0.0,
+        phi_0: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(z=z, tilt_yx=tilt_yx, name=name)
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name, phi_0=phi_0)
         self.radius = radius
-
-        # Check if both wavelength and acceleration_voltage are provided
-        if wavelength != 0.0 and phi_0 != 0.0:
-            raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
-        else:
-            # Calculate wavelength if acceleration_voltage is provided
-            if wavelength == 0.0 and phi_0 != 0.0:
-                self.wavelength = calculate_wavelength(phi_0)
-            else:
-                self.wavelength = wavelength
-
-            # Calculate acceleration_voltage if wavelength is provided
-            if phi_0 == 0.0 and wavelength != 0.0:
-                self.phi_0 = calculate_phi_0(wavelength)
-            else:
-                self.phi_0 = phi_0
 
     def get_rays(self, num_rays: int) -> Rays:
         r, _ = make_beam(num_rays, self.radius, 'circular_beam')
@@ -410,45 +377,18 @@ class PointBeam(Source):
     def __init__(
         self,
         z: float,
-        random: bool,
-        wavelength: Optional[float] = 0.0,
-        phi_0: Optional[float] = 0.0,
+        phi_0: Optional[float] = None,
         semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(name=name, z=z)
+        super().__init__(name=name, z=z, phi_0=phi_0)
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
-        self.random = random
-
-        # Check if both wavelength and acceleration_voltage are provided
-        if wavelength != 0.0 and phi_0 != 0.0:
-            raise ValueError("Only one of 'wavelength' or 'phi_0' should be provided.")
-        else:
-            # Calculate wavelength if acceleration_voltage is provided
-            if wavelength == 0.0 and phi_0 != 0.0:
-                self.wavelength = calculate_wavelength(phi_0)
-            else:
-                self.wavelength = wavelength
-
-            # Calculate acceleration_voltage if wavelength is provided
-            if phi_0 == 0.0 and wavelength != 0.0:
-                self.phi_0 = calculate_phi_0(wavelength)
-            else:
-                self.phi_0 = phi_0
 
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
-        if self.random:
-            r[1, :] = np.random.uniform(
-                -self.semi_angle, self.semi_angle, size=num_rays
-            )
-            r[3, :] = np.random.uniform(
-                -self.semi_angle, self.semi_angle, size=num_rays
-            )
-        else:
-            r, _ = make_beam(num_rays, self.semi_angle, 'point_beam')
+        r, _ = make_beam(num_rays, self.semi_angle, 'point_beam')
 
         return self._make_rays(r)
 
@@ -461,13 +401,8 @@ class PointBeam(Source):
 class XPointBeam(PointBeam):
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
-        if self.random:
-            r[1, :] = np.random.uniform(
-                -self.semi_angle, self.semi_angle, size=num_rays
-            )
-        else:
-            r[1, :] = np.linspace(
-                -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
+        r[1, :] = np.linspace(
+            -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
             )
         return self._make_rays(r)
 
@@ -881,17 +816,12 @@ class Biprism(Component):
 
         rays_v_centred = rays_v - biprism_loc_v
 
-        # rejection = np.dot(rays_v_centred, biprism_v)
-        # rejection /= np.dot(biprism_v, biprism_v)
-        # rejection = rejection[:, np.newaxis]
-        # rejection = rejection * biprism_v[np.newaxis, :]
-        # rejection /= np.linalg.norm(rejection, axis=1, keepdims=True)
-
         dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
         projection = np.outer(dot_product, biprism_v)
 
         rejection = rays_v_centred - projection
         rejection = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
+
         # If the ray position is located at [zero, zero], rejection_norm returns a nan,
         # so we convert it to a zero, zero.
         rejection = np.nan_to_num(rejection)
