@@ -829,8 +829,8 @@ class Biprism(Component):
         xdeflection_mag = rejection[:, 0]
         ydeflection_mag = rejection[:, 1]
 
-        rays.data[1] += xdeflection_mag*deflection
-        rays.data[3] += ydeflection_mag*deflection
+        rays.dx += xdeflection_mag*deflection
+        rays.dy += ydeflection_mag*deflection
 
         yield Rays(
             data=rays.data,
