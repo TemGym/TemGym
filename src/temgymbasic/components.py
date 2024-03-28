@@ -559,40 +559,7 @@ class Detector(Component):
             as_int=as_int,
         )
 
-    def get_image(self, rays: Rays) -> NDArray:
-        # Convert rays from detector positions to pixel positions
-        pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
-        sy, sx = self.shape
-        mask = np.logical_and(
-            np.logical_and(
-                0 <= pixel_coords_y,
-                pixel_coords_y < sy
-            ),
-            np.logical_and(
-                0 <= pixel_coords_x,
-                pixel_coords_x < sx
-            )
-        )
-        image = np.zeros(
-            self.shape,
-            dtype=int,
-        )
-        flat_icds = np.ravel_multi_index(
-            [
-                pixel_coords_y[mask],
-                pixel_coords_x[mask],
-            ],
-            image.shape
-        )
-        # Increment at each pixel for each ray that hits
-        np.add.at(
-            image.ravel(),
-            flat_icds,
-            1,
-        )
-        return image
-
-    def get_image_intensity(self, rays: Rays) -> NDArray:
+    def get_image(self, rays: Rays, interference: bool = False) -> NDArray:
 
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
@@ -607,17 +574,23 @@ class Detector(Component):
                 pixel_coords_x < sx
             )
         )
+
+        if interference:
+            # If we are doing interference, we add a complex number representing
+            # the phase of the ray for now to each pixel.
+            # Amplitude is 1.0 for now for each complex ray.
+            image_dtype = np.complex128
+            wavefronts = 1.0 * np.exp(-1j * (2 * np.pi / rays.wavelength) * rays.path_length)
+            valid_wavefronts = wavefronts[mask]
+        else:
+            # If we are not doing interference, we simply add 1 to each pixel that a ray hits
+            image_dtype = int
+            valid_wavefronts = 1
+
         image = np.zeros(
             self.shape,
-            dtype=np.complex128,
+            dtype=image_dtype,
         )
-
-        # Compute the complex wavefronts for each ray
-        wavefronts = np.exp(-1j * 2 * np.pi / rays.wavelength * rays.path_length)
-
-        # Use only the wavefronts for rays that hit the detector
-        valid_wavefronts = wavefronts[mask]
-
         flat_icds = np.ravel_multi_index(
             [
                 pixel_coords_y[mask],
@@ -934,8 +907,8 @@ class Biprism(Component):
             indices=rays.indices,
             path_length=(
                 rays.path_length
-                + xdeflection_mag * deflection * rays.data[0]
-                + ydeflection_mag * deflection * rays.data[2]
+                + xdeflection_mag * deflection * rays.x
+                + ydeflection_mag * deflection * rays.y
             ),
             location=self,
             wavelength=rays.wavelength,
