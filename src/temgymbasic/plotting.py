@@ -5,7 +5,7 @@ import matplotlib as mpl
 import numpy as np
 from temgymbasic.components import (
     DoubleDeflector, Lens, Sample, Detector, Biprism, Aperture,
-    Deflector, RadialSpikesBeam
+    Deflector, RadialSpikesBeam, PotentialSample
 )
 
 
@@ -114,6 +114,19 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
             ax.add_patch(mpl.patches.Arc((0, component.z), radius, height=0.03/aspect,
                                         theta1=180, theta2=0, linewidth=1,
                                         fill=False, zorder=-1, edgecolor='k'))
+        elif isinstance(component, PotentialSample):
+            ax.text(extent, component.z,
+                component.name, fontsize=p.label_fontsize, zorder=1000, va='center')
+            ax.plot(
+                [
+                    -component.pixel_size*component.shape[1]/2,
+                    component.pixel_size*component.shape[1]/2
+                ],
+                [component.z, component.z],
+                color='dimgrey',
+                alpha=0.8,
+                linewidth=3
+            )
         elif isinstance(component, Sample):
             ax.text(extent, component.z,
                 component.name, fontsize=p.label_fontsize, zorder=1000, va='center')
