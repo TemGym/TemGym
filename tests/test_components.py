@@ -319,7 +319,7 @@ def test_biprism_interference():
     # We need enough rays that there is lots of interference in the image plane
     # so that there are definite peaks for peak finder
     rays = tuple(model.run_iter(num_rays=2**20))
-    image = model.detector.get_image_intensity(rays[-1])
+    image = model.detector.get_image(rays[-1], interference=True)
     peaks, _ = scipy.signal.find_peaks(np.abs(image[0, :])**2, height=0)
 
     assert_equal(len(peaks), num_peaks)

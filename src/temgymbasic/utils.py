@@ -274,4 +274,4 @@ def calculate_wavelength(phi_0):
 
 
 def calculate_phi_0(wavelength):
-    return h**2 / (2*wavelength * abs(e) * m_e)
+    return h**2 / (2*wavelength**2 * abs(e) * m_e)
