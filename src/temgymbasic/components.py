@@ -842,7 +842,6 @@ class Biprism(Component):
             ),
             location=self,
             wavelength=rays.wavelength,
-            phi_0=rays.phi_0
         )
 
     @staticmethod
