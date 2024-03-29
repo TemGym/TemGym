@@ -1,5 +1,5 @@
-from typing import TYPE_CHECKING, Tuple, Iterable
-from typing_extensions import TypeAlias
+from typing import TYPE_CHECKING, Tuple, Iterable, Optional
+from typing_extensions import TypeAlias, Literal
 import numpy as np
 from numpy.typing import NDArray
 
@@ -179,7 +179,13 @@ def initial_r(num_rays: int):
 
 
 # FIXME resolve code duplication between circular_beam() and point_beam()
-def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
+def make_beam(
+    num_rays: int,
+    beam_type: Literal['circular_beam', 'point_beam'] = 'circular_beam',
+    *,
+    outer_radius: Optional[float] = None,
+    semiangle: Optional[float] = None,
+):
     '''Generates a circular paralell initial beam
 
     Parameters
@@ -197,6 +203,16 @@ def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
         Array of the number of points on each ring of our circular beam
     '''
     r = initial_r(num_rays)
+
+    if beam_type == 'point_beam':
+        assert semiangle is not None
+        assert outer_radius is None
+        outer_radius = semiangle
+    elif beam_type == 'circular_beam':
+        assert semiangle is None
+        assert outer_radius is not None
+    else:
+        raise ValueError(f'Unrecognized beam type: {beam_type}')
 
     # Use the equation from stack overflow about ukrainian graves from 2014
     # to calculate the number of even rings including decimal remainder
@@ -263,8 +279,8 @@ def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
         r[0, :] = radii_replicated * np.cos(angles)
         r[2, :] = radii_replicated * np.sin(angles)
     elif beam_type == 'point_beam':
-        r[1, :] = np.tan(outer_radius*radii_replicated)*np.cos(angles)
-        r[3, :] = np.tan(outer_radius*radii_replicated)*np.sin(angles)
+        r[1, :] = np.tan(outer_radius * radii_replicated) * np.cos(angles)
+        r[3, :] = np.tan(outer_radius * radii_replicated) * np.sin(angles)
 
     return r, num_points_kth_ring
 
