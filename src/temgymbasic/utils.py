@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Tuple, Iterable, Optional
 from typing_extensions import TypeAlias, Literal
 import numpy as np
 from numpy.typing import NDArray
+from numba import njit
 
 from scipy.constants import e, m_e, h
 
@@ -178,13 +179,30 @@ def initial_r(num_rays: int):
     return r
 
 
-# FIXME resolve code duplication between circular_beam() and point_beam()
+@njit
+def multi_cumsum_inplace(values, partitions, start):
+    part_idx = 0
+    current_part_len = partitions[part_idx]
+    part_count = 0
+    values[0] = start
+    for v_idx in range(1, values.size):
+        if current_part_len == part_count:
+            part_count = 0
+            part_idx += 1
+            current_part_len = partitions[part_idx]
+            values[v_idx] = start
+        else:
+            values[v_idx] += values[v_idx - 1]
+            part_count += 1
+
+
 def make_beam(
-    num_rays: int,
+    num_rays_approx: int,
     beam_type: Literal['circular_beam', 'point_beam'] = 'circular_beam',
     *,
     outer_radius: Optional[float] = None,
     semiangle: Optional[float] = None,
+    randomize: bool = False,
 ):
     '''Generates a circular paralell initial beam
 
@@ -202,7 +220,6 @@ def make_beam(
     num_points_kth_ring: ndarray
         Array of the number of points on each ring of our circular beam
     '''
-    r = initial_r(num_rays)
 
     if beam_type == 'point_beam':
         assert semiangle is not None
@@ -214,75 +231,39 @@ def make_beam(
     else:
         raise ValueError(f'Unrecognized beam type: {beam_type}')
 
-    # Use the equation from stack overflow about ukrainian graves from 2014
-    # to calculate the number of even rings including decimal remainder
+    num_rings = max(
+        1,
+        int(np.floor((-1 + np.sqrt(1 + 4 * num_rays_approx / np.pi)) / 2))
+    )
 
-    if num_rays < 7:
-        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
-    else:
-        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
-
-    # Get the number of integer rings
-    num_circles_int = int(np.floor(num_circles_dec))
-
-    # Calculate the number of points per ring with the integer amoung of rings
+    # Calculate the circumference of each ring
     num_points_kth_ring = np.round(
-        2*np.pi*(np.arange(0, num_circles_int+1))).astype(int)
-
-    # get the remainding amount of rays
-    remainder_rays = num_rays - np.sum(num_points_kth_ring)
-
-    # Get the proportion of points in each rung
-    proportion = num_points_kth_ring/np.sum(num_points_kth_ring)
-
-    # resolve this proportion to an integer value, and reverse it
-    num_rays_to_each_ring = np.ceil(proportion*remainder_rays)[::-1]
-
-    # We need to decide on where to stop adding the remainder of rays to the
-    # rest of the rings. We find this point by summing the rays in each ring
-    # from outside to inside, and then getting the index where it is greater
-    # than or equal to the remainder
-    index_to_stop_adding_rays = np.where(
-        np.cumsum(num_rays_to_each_ring) >= remainder_rays)[0][0]
-
-    # We then get the total number of rays to add
-    rays_to_add = np.cumsum(num_rays_to_each_ring)[
-        index_to_stop_adding_rays].astype(np.int32)
-
-    # The number of rays to add isn't always matching the remainder, so we
-    # collect them here with this line
-    final_sub = rays_to_add - remainder_rays
-
-    # Here we take them away so we get the number of rays we want
-    num_rays_to_each_ring[index_to_stop_adding_rays] -= final_sub
-
-    # Then we add all of these rays to the correct ring
-    num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
-        :index_to_stop_adding_rays+1
-    ].astype(int)
-
-    # Add one point for the centre, and take one away from the end
-    num_points_kth_ring[0] = 1
-    num_points_kth_ring[-1] = num_points_kth_ring[-1] - 1
+        2 * np.pi * np.arange(1, num_rings + 1)
+    ).astype(int)
+    num_rings = num_points_kth_ring.size
+    rays_per_unit = num_rays_approx / num_points_kth_ring.sum()
+    rays_per_ring = np.round(num_points_kth_ring * rays_per_unit).astype(int)
 
     # Make get the radii for the number of circles of rays we need
-    radii = np.linspace(0, outer_radius, num_circles_int+1)
+    radii = np.linspace(
+        0, outer_radius, num_rings + 1, endpoint=True,
+    )[1:]
+    all_radii = np.repeat(radii, rays_per_ring)
 
-    # Repeat radii for each ring
-    radii_replicated = np.repeat(radii, num_points_kth_ring)
+    div_angle = 2 * np.pi / rays_per_ring
+    all_angles = np.repeat(div_angle, rays_per_ring)
+    multi_cumsum_inplace(all_angles, rays_per_ring, 0.)
 
-    # Calculate angles for each ring
-    angles = np.concatenate([np.linspace(0, 2*np.pi, n, endpoint=False)
-                             for n in num_points_kth_ring])
-
+    r = initial_r(all_angles.size + 1)
     if beam_type == 'circular_beam':
-        r[0, :] = radii_replicated * np.cos(angles)
-        r[2, :] = radii_replicated * np.sin(angles)
+        r[0, 1:] = all_radii * np.cos(all_angles)
+        r[2, 1:] = all_radii * np.sin(all_angles)
     elif beam_type == 'point_beam':
-        r[1, :] = np.tan(outer_radius * radii_replicated) * np.cos(angles)
-        r[3, :] = np.tan(outer_radius * radii_replicated) * np.sin(angles)
+        tan_radii = np.tan(all_radii)
+        r[1, 1:] = tan_radii * np.cos(all_angles)
+        r[3, 1:] = tan_radii * np.sin(all_angles)
 
-    return r, num_points_kth_ring
+    return r
 
 
 def calculate_wavelength(phi_0):
