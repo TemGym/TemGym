@@ -2,7 +2,7 @@ from typing import (
     Tuple, Optional, Union, TYPE_CHECKING
 )
 from typing_extensions import Self
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import numpy as np
 from numpy.typing import NDArray
 
@@ -118,18 +118,16 @@ class Rays:
         )
 
     def propagate(self, distance: float) -> Self:
-        return Rays(
+        return self.new_with(
             data=np.matmul(
                 self.propagation_matrix(distance),
                 self.data,
             ),
-            indices=self.indices,
             location=self.z + distance,
             path_length=(
                 self.path_length
-                + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
+                + 1.0 * distance * (1 + self.dx ** 2 + self.dy ** 2) ** 0.5
             ),
-            wavelength=self.wavelength,
         )
 
     def propagate_to(self, z: float) -> Self:
@@ -172,3 +170,23 @@ class Rays:
             flip_y=flip_y,
         )
         return det.get_image(self)
+
+    def new_with(self, **kwargs):
+        kwargs = {
+            **asdict(self),
+            **kwargs,
+        }
+        return type(self)(**kwargs)
+
+    def with_mask(
+        self, mask: NDArray, **kwargs,
+    ):
+        rays = type(self)(
+            data=self.data[:, mask],
+            indices=self.indices[mask],
+            path_length=self.path_length[mask],
+            **kwargs,
+        )
+        if 'wavelength' not in kwargs and self.wavelength is not None:
+            rays.wavelength = self.wavelength[mask]
+        return rays
