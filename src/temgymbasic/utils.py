@@ -172,10 +172,10 @@ def get_pixel_coords(
 def initial_r(num_rays: int):
     r = np.zeros(
         (5, num_rays),
-        dtype=np.float64
+        dtype=np.float64,
     )  # x, theta_x, y, theta_y, 1
 
-    r[4, :] = np.ones(num_rays)
+    r[4, :] = 1.
     return r
 
 
@@ -248,20 +248,27 @@ def make_beam(
     radii = np.linspace(
         0, outer_radius, num_rings + 1, endpoint=True,
     )[1:]
-    all_radii = np.repeat(radii, rays_per_ring)
-
     div_angle = 2 * np.pi / rays_per_ring
-    all_angles = np.repeat(div_angle, rays_per_ring)
-    multi_cumsum_inplace(all_angles, rays_per_ring, 0.)
+
+    params = np.stack((radii, div_angle), axis=0)
+    all_params = np.repeat(params, rays_per_ring, axis=-1)
+    multi_cumsum_inplace(all_params[1, :], rays_per_ring, 0.)
+
+    all_radii = all_params[0, :]
+    all_angles = all_params[1, :]
 
     r = initial_r(all_angles.size + 1)
     if beam_type == 'circular_beam':
-        r[0, 1:] = all_radii * np.cos(all_angles)
-        r[2, 1:] = all_radii * np.sin(all_angles)
+        np.cos(all_angles, out=r[0, 1:])
+        np.sin(all_angles, out=r[2, 1:])
+        r[0, 1:] *= all_radii
+        r[2, 1:] *= all_radii
     elif beam_type == 'point_beam':
-        tan_radii = np.tan(all_radii)
-        r[1, 1:] = tan_radii * np.cos(all_angles)
-        r[3, 1:] = tan_radii * np.sin(all_angles)
+        np.tan(all_radii, out=all_radii)
+        np.cos(all_angles, out=r[1, 1:])
+        np.sin(all_angles, out=r[3, 1:])
+        r[1, 1:] *= all_radii
+        r[3, 1:] *= all_radii
 
     return r
 
