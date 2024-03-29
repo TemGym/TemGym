@@ -125,11 +125,9 @@ class Lens(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Just straightforward matrix multiplication
-        yield Rays(
+        yield rays.new_with(
             data=np.matmul(self.lens_matrix(self.f), rays.data),
-            indices=rays.indices,
             location=self,
-            path_length=rays.path_length
         )
 
     @staticmethod
@@ -145,8 +143,6 @@ class Sample(Component):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        # Sample has no effect, yet
-        # Could implement ray intensity / attenuation ??
         rays.location = self
         yield rays
 
@@ -178,18 +174,18 @@ class PotentialSample(Sample):
     ) -> Generator[Rays, None, None]:
 
         # See Chapter 2 & 3 of principles of electron optics 2017 Vol 1 for more info
-        rho = np.sqrt(1+rays.dx**2+rays.dy**2)  # Equation 3.16
-        phi_0_plus_phi = (rays.phi_0+self.phi((rays.x, rays.y)))  # Part of Equation 2.18
+        rho = np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)  # Equation 3.16
+        phi_0_plus_phi = (rays.phi_0 + self.phi((rays.x, rays.y)))  # Part of Equation 2.18
 
-        phi_hat = (phi_0_plus_phi)*(1+EPSILON*(phi_0_plus_phi))  # Equation 2.18
+        phi_hat = (phi_0_plus_phi) * (1 + EPSILON * phi_0_plus_phi)  # Equation 2.18
 
         # Between Equation 2.22 & 2.23
         dphi_hat_dx = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dx((rays.x, rays.y))
         dphi_hat_dy = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dy((rays.x, rays.y))
 
         # Perform deflection to ray in slope coordinates
-        rays.dx += ((rho**2)/(2*phi_hat))*dphi_hat_dx  # Equation 3.22
-        rays.dy += ((rho**2)/(2*phi_hat))*dphi_hat_dy  # Equation 3.22
+        rays.dx += ((rho ** 2) / (2 * phi_hat)) * dphi_hat_dx  # Equation 3.22
+        rays.dy += ((rho ** 2) / (2 * phi_hat)) * dphi_hat_dy  # Equation 3.22
 
         # Note here we are ignoring the Ez component (dphi/dz) of 3.22,
         # since we have modelled the potential of the atom in a plane
@@ -199,14 +195,12 @@ class PotentialSample(Sample):
 
         # Equation 5.16 & 5.17 & 3.16, where ds of 5.16 is replaced by ds/dz * dz,
         # where ds/dz = rho (See 3.16 and a little below it)
-        rays.path_length += rho*(np.sqrt(phi_hat/rays.phi_0))
+        rays.path_length += rho * np.sqrt(phi_hat / rays.phi_0)
 
-        yield Rays(
-            data=rays.data,
-            indices=rays.indices,
-            path_length=rays.path_length,
+        # Currently the modifications are all inplace so we only need
+        # to change the location, this should be made clearer
+        yield rays.new_with(
             location=self,
-            wavelength=rays.wavelength,
         )
 
     @staticmethod
@@ -333,7 +327,7 @@ class ParallelBeam(Source):
         self.radius = radius
 
     def get_rays(self, num_rays: int) -> Rays:
-        r, _ = make_beam(num_rays, self.radius, 'circular_beam')
+        r, _ = make_beam(num_rays, 'circular_beam', outer_radius=self.radius)
         return self._make_rays(r)
 
     @staticmethod
@@ -386,7 +380,7 @@ class PointBeam(Source):
 
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
-        r, _ = make_beam(num_rays, self.semi_angle, 'point_beam')
+        r, _ = make_beam(num_rays, 'point_beam', semiangle=self.semi_angle)
 
         return self._make_rays(r)
 
@@ -601,14 +595,12 @@ class Deflector(Component):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        yield Rays(
+        yield rays.new_with(
             data=np.matmul(
                 self.deflector_matrix(self.defx, self.defy),
                 rays.data,
             ),
-            indices=rays.indices,
             location=self,
-            path_length=rays.path_length
         )
 
 
@@ -827,19 +819,14 @@ class Biprism(Component):
         xdeflection_mag = rejection[:, 0]
         ydeflection_mag = rejection[:, 1]
 
-        rays.dx += xdeflection_mag*deflection
-        rays.dy += ydeflection_mag*deflection
-
-        yield Rays(
-            data=rays.data,
-            indices=rays.indices,
-            path_length=(
-                rays.path_length
-                + xdeflection_mag * deflection * rays.x
-                + ydeflection_mag * deflection * rays.y
-            ),
+        rays.data[1] += xdeflection_mag*deflection
+        rays.data[3] += ydeflection_mag*deflection
+        rays.path_length += (
+            xdeflection_mag * deflection * rays.x
+            + ydeflection_mag * deflection * rays.y
+        )
+        yield rays.new_with(
             location=self,
-            wavelength=rays.wavelength,
         )
 
     @staticmethod
@@ -894,7 +881,7 @@ class Aperture(Component):
             distance >= self.radius_inner,
             distance < self.radius_outer,
         )
-        yield Rays(
-            data=rays.data[:, mask], indices=rays.indices[mask],
-            location=self, path_length=rays.path_length[mask],
+        yield rays.with_mask(
+            mask,
+            location=self,
         )
