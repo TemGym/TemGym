@@ -395,8 +395,8 @@ class TemGymWindow(QMainWindow):
         )
 
         if self.model.detector is not None:
-            image = self.model.detector.get_image(all_rays[-1], interference=False)
-            # image = self.model.detector.get_image_intensity(all_rays[-1])
+            # image = self.model.detector.get_image(all_rays[-1])
+            image = self.model.detector.get_image(all_rays[-1])
             if np.max(np.abs(image.T)**2) < 1e-12:
                 max_val = 1.
             else:
@@ -655,7 +655,7 @@ class SourceGUI(ComponentGUIWrapper):
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
 
         self.rayslider, _ = labelled_slider(
-            num_rays, 1, 2**18, name="Number of Rays"
+            num_rays, 1, 2048, name="Number of Rays"
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
