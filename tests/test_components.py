@@ -6,8 +6,15 @@ from temgymbasic.model import (
 )
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
+from temgymbasic.utils import calculate_phi_0, calculate_wavelength
 from numpy.testing import assert_allclose, assert_equal
 import scipy
+import matplotlib.pyplot as plt
+
+from scipy.constants import e, m_e, c
+
+ETA = (abs(e)/(2*m_e))**(1/2)
+EPSILON = abs(e)/(2*m_e*c**2)
 
 
 @pytest.fixture()
@@ -20,7 +27,7 @@ def empty_rays():
     )
 
 
-def single_quadrant_ray(x, y):
+def single_random_uniform_ray(x, y):
     data = np.zeros(shape=(5, 1))
 
     data[0, :] = np.random.uniform(low=0, high=x)
@@ -34,6 +41,7 @@ def single_quadrant_ray(x, y):
         indices=1,
         location=0.2,
         path_length=0.0,
+        wavelength=calculate_wavelength(phi_0=1.0)
     )
 
 
@@ -68,6 +76,7 @@ def parallel_rays(request):
         indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
+        wavelength=np.ones(shape=n_rays)*calculate_wavelength(1.0)
     )
 
 
@@ -205,7 +214,7 @@ def test_lens_focusing_to_infinity(point_rays):
 def test_deflector_random_rays(random_rays):
     deflection = np.random.uniform(-5, 5)
 
-    # The last row of rays should always be 1.0, but random rays randomises 
+    # The last row of rays should always be 1.0, but random rays randomises
     # this, and we have no getter for the final row because it was always supposed to be 1.0
     # so we use data instead to make the test succeed
     out_manual_dx = random_rays.dx + random_rays.data[-1, :]*deflection
@@ -305,9 +314,8 @@ def test_biprism_deflection_perpendicular(parallel_rays):
     (45, (-1, -1), (1, 1)),  # Bottom Left to Top Right
     (-45, (1, -1), (-1, 1)),  # Bottom Right to Top Left
 ])
-
 def test_biprism_deflection_by_quadrant(rot, inp, out):
-    ray = single_quadrant_ray(inp[0], inp[1])
+    ray = single_random_uniform_ray(inp[0], inp[1])
     # Test that the ray ends up in the correct quadrant if the biprism is rotated
     deflection = -100.0
     biprism = comp.Biprism(z=ray.location, deflection=deflection, rotation=rot)
@@ -319,7 +327,6 @@ def test_biprism_deflection_by_quadrant(rot, inp, out):
 
 
 def test_biprism_interference():
-    from temgymbasic.utils import calculate_phi_0
     # This test uses an old biprism equation from light optics
     # to calculate the number of peaks in a biprism interefence pattern,
     # The biprism equation tells you the spacing between interference peaks
@@ -387,3 +394,93 @@ def test_aperture_nonblocking(parallel_rays):
     aperture = comp.Aperture(z=parallel_rays.location, radius_inner=0., radius_outer=2.0)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, parallel_rays.data)
+
+
+def test_sample_potential_deflection():
+    from scipy.interpolate import RegularGridInterpolator as RGI
+
+    # Sample deflection test: The implemented method we test called in the
+    # Potential Sample step function uses the relativistic deflection
+    # equations explained in principles of electron optics.
+
+    # The calculated analytical method used to compare our result comes
+    # from newton's third law and the lorentz force equation for an electron:
+    # We say m * \gamma * a = qE, where m is the rest mass of the electron,
+    # \gamma is the relativistic correction factor, a = acceleration, q =
+    # the electron charge (-ve for electron) and E is the E field.
+    # a is implicitly dv/dt in this equation, but using the relation,
+    # d/dt = v/(sqrt(1+x'^2 + y'^2)) * d/dz where x' denotes derivative with
+    # respect to z (dx/dz), one can derive the instantaneous force as a function of z, and thus
+    # velocity change on the electron in this infinitely thin plane (note dirac delta function is
+    # also implied here as dz is an infinitely thin slice)
+    # x' += (q * (1+x'^2 + y'^2)) / (m * v^2 * gamma) * Ex
+
+    ray = single_random_uniform_ray(0., 0.)
+    x0 = -0.5
+    y0 = -0.5
+    extent = (1, 1)
+    gpts = (256, 256)
+    x = np.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
+    y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
+    xx, _ = np.meshgrid(x, y)
+
+    phi_0 = 1.0  # Set initial voltage
+    phi_r = xx
+
+    v = 2 * ETA * np.sqrt((phi_0) * (1 + EPSILON * (phi_0)) / (
+        1 + 4 * EPSILON * (phi_0) * (1 + EPSILON * (phi_0))))
+
+    gamma = np.sqrt(1 + 4 * EPSILON * phi_0)
+
+    pot_interp = RGI([x, y], phi_r, method='linear', bounds_error=False, fill_value=0.0)
+    Ey, Ex = np.gradient(phi_r, x, y)
+    Ex_interp = RGI([x, y], Ex, method='linear', bounds_error=False, fill_value=0.0)
+    Ey_interp = RGI([x, y], Ey, method='linear', bounds_error=False, fill_value=0.0)
+
+    sample = comp.PotentialSample(
+        z=ray.location,
+        potential=pot_interp,
+        Ex=Ex_interp,
+        Ey=Ey_interp,
+    )
+
+    out_rays = tuple(sample.step(ray))[0]
+
+    # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
+    # but their derivation is not well explained, and is verbose.
+    dx_analytical = np.float64(e/(gamma*m_e*v*v)) * np.max(Ex)
+
+    assert_allclose(out_rays.dx, dx_analytical, rtol=1e-11)
+
+
+def test_sample_phase_shift(parallel_rays):
+    from scipy.interpolate import RegularGridInterpolator as RGI
+
+    x0 = -1.
+    y0 = -1.
+    extent = (2, 2)
+    gpts = (256, 256)
+    x = np.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
+    y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
+    xx, _ = np.meshgrid(x, y)
+    pot_array = xx
+
+    pot_interp = RGI([x, y], pot_array, method='linear', bounds_error=False, fill_value=0.0)
+    Ey, Ex = np.gradient(pot_array, x, y)
+    Ex_interp = RGI([x, y], Ex, method='linear', bounds_error=False, fill_value=0.0)
+    Ey_interp = RGI([x, y], Ey, method='linear', bounds_error=False, fill_value=0.0)
+
+    sample = comp.PotentialSample(
+        z=parallel_rays.location,
+        potential=pot_interp,
+        Ex=Ex_interp,
+        Ey=Ey_interp,
+    )
+
+    out_rays = tuple(sample.step(parallel_rays))[0]
+    end_rays = out_rays.propagate(1.0)
+
+    plt.figure()
+    plt.plot([end_rays.x, out_rays.x],
+             [np.ones(out_rays.x.shape)*end_rays.z, np.ones(out_rays.x.shape)*out_rays.z])
+    plt.show()
