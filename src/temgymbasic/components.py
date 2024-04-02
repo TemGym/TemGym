@@ -291,13 +291,7 @@ class Source(Component):
     def get_rays(self, num_rays: int) -> Rays:
         raise NotImplementedError
 
-    def _make_rays(self, r: NDArray, indices: Optional[NDArray] = None) -> Rays:
-        num_rays = r.shape[1]
-
-        # Each ray needs an index to allow display as continuous segments
-        if indices is None:
-            indices = np.arange(num_rays)
-
+    def _make_rays(self, r: NDArray) -> Rays:
         # Add beam tilt (if any)
         if self.tilt_yx[1] != 0:
             r[1, :] += self.tilt_yx[1]
@@ -308,11 +302,9 @@ class Source(Component):
         if self.phi_0 is not None:
             wavelength = calculate_wavelength(self.phi_0)
 
-        return Rays(
+        return Rays.new(
             data=r,
-            indices=indices,
             location=self,
-            path_length=np.zeros((num_rays,)),
             wavelength=wavelength,
         )
 
