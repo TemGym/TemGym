@@ -188,8 +188,8 @@ class PotentialSample(Sample):
         dphi_hat_dy = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dy((rays.x, rays.y))
 
         # Perform deflection to ray in slope coordinates
-        rays.dx += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
-        rays.dy += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
+        rays.dx += ((rho**2)/(2*phi_hat))*dphi_hat_dx  # Equation 3.22
+        rays.dy += ((rho**2)/(2*phi_hat))*dphi_hat_dy  # Equation 3.22
 
         # Note here we are ignoring the Ez component (dphi/dz) of 3.22,
         # since we have modelled the potential of the atom in a plane
