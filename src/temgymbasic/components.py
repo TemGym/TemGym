@@ -276,12 +276,16 @@ class Source(Component):
     def __init__(
         self, z: float,
         tilt_yx: Tuple[float, float] = (0., 0.),
-        phi_0: Optional[float] = None,
+        voltage: Optional[float] = None,
         name: Optional[str] = None,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
-        self.phi_0 = phi_0
+        self.phi_0 = voltage
+
+    @property
+    def voltage(self):
+        return self.phi_0
 
     @abc.abstractmethod
     def get_rays(self, num_rays: int) -> Rays:
@@ -289,22 +293,27 @@ class Source(Component):
 
     def _make_rays(self, r: NDArray, indices: Optional[NDArray] = None) -> Rays:
         num_rays = r.shape[1]
+
+        # Each ray needs an index to allow display as continuous segments
         if indices is None:
             indices = np.arange(num_rays)
-        r[1, :] += self.tilt_yx[1]
-        r[3, :] += self.tilt_yx[0]
 
-        if self.phi_0 is None:
-            wavelengths = None
-        else:
-            wavelengths = np.ones((num_rays,)) * calculate_wavelength(self.phi_0)
+        # Add beam tilt (if any)
+        if self.tilt_yx[1] != 0:
+            r[1, :] += self.tilt_yx[1]
+        if self.tilt_yx[0] != 0:
+            r[3, :] += self.tilt_yx[0]
+
+        wavelength = None
+        if self.phi_0 is not None:
+            wavelength = calculate_wavelength(self.phi_0)
 
         return Rays(
             data=r,
             indices=indices,
             location=self,
             path_length=np.zeros((num_rays,)),
-            wavelength=wavelengths,
+            wavelength=wavelength,
         )
 
     def step(
@@ -320,11 +329,11 @@ class ParallelBeam(Source):
         self,
         z: float,
         radius: float,
-        phi_0: Optional[float] = None,
+        voltage: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(z=z, tilt_yx=tilt_yx, name=name, phi_0=phi_0)
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage)
         self.radius = radius
 
     def get_rays(self, num_rays: int) -> Rays:
@@ -370,12 +379,12 @@ class PointBeam(Source):
     def __init__(
         self,
         z: float,
-        phi_0: Optional[float] = None,
+        voltage: Optional[float] = None,
         semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(name=name, z=z, phi_0=phi_0)
+        super().__init__(name=name, z=z, voltage=voltage)
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
 
