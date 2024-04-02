@@ -288,9 +288,9 @@ def point_beam(
     return r
 
 
-def calculate_wavelength(phi_0):
+def calculate_wavelength(phi_0: float):
     return h / (2 * abs(e) * m_e * phi_0) ** (1 / 2)
 
 
-def calculate_phi_0(wavelength):
-    return h**2 / (2*wavelength**2 * abs(e) * m_e)
+def calculate_phi_0(wavelength: float):
+    return h ** 2 / (2 * wavelength ** 2 * abs(e) * m_e)

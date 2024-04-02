@@ -25,7 +25,7 @@ class Rays:
     indices: np.ndarray
     location: Union[float, 'Component', Tuple['Component', ...]]
     path_length: np.ndarray
-    wavelength: Optional[NDArray] = None
+    wavelength: Optional[float] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -92,7 +92,9 @@ class Rays:
 
     @property
     def phi_0(self):
-        return calculate_phi_0(self.wavelength)
+        if self.wavelength is not None:
+            return calculate_phi_0(self.wavelength)
+        return self.wavelength
 
     @staticmethod
     def propagation_matrix(z):
