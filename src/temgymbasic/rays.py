@@ -19,16 +19,37 @@ if TYPE_CHECKING:
     from .components import Component
 
 
+LocationT = Union[float, 'Component', Tuple['Component', ...]]
+
+
 @dataclass
 class Rays:
-    data: np.ndarray
-    indices: np.ndarray
-    location: Union[float, 'Component', Tuple['Component', ...]]
-    path_length: np.ndarray
+    data: NDArray
+    location: LocationT
+    path_length: NDArray
     wavelength: Optional[float] = None
+    mask: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
+
+    @classmethod
+    def new(
+        cls,
+        data: NDArray,
+        location: LocationT,
+        wavelength: Optional[float] = None,
+        path_length: Union[float, NDArray] = 0.,
+    ):
+        num_rays = data.shape[1]
+        if np.isscalar(path_length):
+            path_length = np.full((num_rays,), path_length)
+        return cls(
+            data=data,
+            location=location,
+            path_length=path_length,
+            wavelength=wavelength,
+        )
 
     @property
     def z(self) -> float:
@@ -185,8 +206,8 @@ class Rays:
     ):
         rays = type(self)(
             data=self.data[:, mask],
-            indices=self.indices[mask],
             path_length=self.path_length[mask],
+            mask=mask,
             **kwargs,
         )
         if 'wavelength' not in kwargs and self.wavelength is not None:
