@@ -314,7 +314,6 @@ def test_biprism_deflection_perpendicular(parallel_rays):
     (45, (-1, -1), (1, 1)),  # Bottom Left to Top Right
     (-45, (1, -1), (-1, 1)),  # Bottom Right to Top Left
 ])
-
 def test_biprism_deflection_by_quadrant(rot, inp, out):
     ray = single_random_uniform_ray(inp[0], inp[1])
     # Test that the ray ends up in the correct quadrant if the biprism is rotated
