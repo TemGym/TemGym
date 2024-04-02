@@ -31,7 +31,6 @@ from scipy.constants import c, e, m_e
 # Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
 EPSILON = abs(e)/(2*m_e*c**2)
 
-
 if TYPE_CHECKING:
     from .gui import ComponentGUIWrapper
 
@@ -185,23 +184,22 @@ class PotentialSample(Sample):
         phi_hat = (phi_0_plus_phi)*(1+EPSILON*(phi_0_plus_phi))  # Equation 2.18
 
         # Between Equation 2.22 & 2.23
-        dphi_hat_dx = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dx((rays.x, rays.y))
-        dphi_hat_dy = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dy((rays.x, rays.y))
+        dphi_hat_dx = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dx((rays.x, rays.y))
+        dphi_hat_dy = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dy((rays.x, rays.y))
 
         # Perform deflection to ray in slope coordinates
         rays.dx += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
         rays.dy += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
 
         # Note here we are ignoring the Ez component (dphi/dz) of 3.22,
-        # because this has the effect of only
-        # slowing the electron down, and since we have modelled the potential of the atom in a plane
-        # only, we also won't have an Ez component (At least I don't think this is the case?
-        # I could be completely wrong here though - it might actually have an effect!
-        # But I don't think I can get an Ez from an infinitely thin slice.
+        # since we have modelled the potential of the atom in a plane
+        # only, we won't have an Ez component (At least I don't think this is the case?
+        # I could be completely wrong here though - it might actually have an effect.
+        # But I'm not sure I can get an Ez from an infinitely thin slice.
 
         # Equation 5.16 & 5.17 & 3.16, where ds of 5.16 is replaced by ds/dz * dz,
         # where ds/dz = rho (See 3.16 and a little below it)
-        rays.path_length += rho*np.sqrt(phi_hat/rays.phi_0)
+        rays.path_length += rho*(np.sqrt(phi_hat/rays.phi_0))
 
         yield Rays(
             data=rays.data,
