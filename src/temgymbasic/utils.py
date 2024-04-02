@@ -1,5 +1,5 @@
-from typing import TYPE_CHECKING, Tuple, Iterable, Optional
-from typing_extensions import TypeAlias, Literal
+from typing import TYPE_CHECKING, Tuple, Iterable
+from typing_extensions import TypeAlias
 import numpy as np
 from numpy.typing import NDArray
 from numba import njit
@@ -196,44 +196,13 @@ def multi_cumsum_inplace(values, partitions, start):
             part_count += 1
 
 
-def make_beam(
-    num_rays_approx: int,
-    beam_type: Literal['circular_beam', 'point_beam'] = 'circular_beam',
-    *,
-    outer_radius: Optional[float] = None,
-    semiangle: Optional[float] = None,
-    randomize: bool = False,
+def concentric_rings(
+    num_points_approx: int,
+    radius: float,
 ):
-    '''Generates a circular paralell initial beam
-
-    Parameters
-    ----------
-    r : ndarray
-        Ray position and slope matrix
-    outer_radius : float
-        Outer radius of the circular beam
-
-    Returns
-    -------
-    r : ndarray
-        Updated ray position & slope matrix which create a circular beam
-    num_points_kth_ring: ndarray
-        Array of the number of points on each ring of our circular beam
-    '''
-
-    if beam_type == 'point_beam':
-        assert semiangle is not None
-        assert outer_radius is None
-        outer_radius = semiangle
-    elif beam_type == 'circular_beam':
-        assert semiangle is None
-        assert outer_radius is not None
-    else:
-        raise ValueError(f'Unrecognized beam type: {beam_type}')
-
     num_rings = max(
         1,
-        int(np.floor((-1 + np.sqrt(1 + 4 * num_rays_approx / np.pi)) / 2))
+        int(np.floor((-1 + np.sqrt(1 + 4 * num_points_approx / np.pi)) / 2))
     )
 
     # Calculate the circumference of each ring
@@ -241,35 +210,81 @@ def make_beam(
         2 * np.pi * np.arange(1, num_rings + 1)
     ).astype(int)
     num_rings = num_points_kth_ring.size
-    rays_per_unit = num_rays_approx / num_points_kth_ring.sum()
-    rays_per_ring = np.round(num_points_kth_ring * rays_per_unit).astype(int)
+    points_per_unit = num_points_approx / num_points_kth_ring.sum()
+    points_per_ring = np.round(num_points_kth_ring * points_per_unit).astype(int)
 
     # Make get the radii for the number of circles of rays we need
     radii = np.linspace(
-        0, outer_radius, num_rings + 1, endpoint=True,
+        0, radius, num_rings + 1, endpoint=True,
     )[1:]
-    div_angle = 2 * np.pi / rays_per_ring
+    div_angle = 2 * np.pi / points_per_ring
 
     params = np.stack((radii, div_angle), axis=0)
-    all_params = np.repeat(params, rays_per_ring, axis=-1)
-    multi_cumsum_inplace(all_params[1, :], rays_per_ring, 0.)
+    all_params = np.repeat(params, points_per_ring, axis=-1)
+    multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
 
     all_radii = all_params[0, :]
     all_angles = all_params[1, :]
 
-    r = initial_r(all_angles.size + 1)
-    if beam_type == 'circular_beam':
-        np.cos(all_angles, out=r[0, 1:])
-        np.sin(all_angles, out=r[2, 1:])
-        r[0, 1:] *= all_radii
-        r[2, 1:] *= all_radii
-    elif beam_type == 'point_beam':
-        np.tan(all_radii, out=all_radii)
-        np.cos(all_angles, out=r[1, 1:])
-        np.sin(all_angles, out=r[3, 1:])
-        r[1, 1:] *= all_radii
-        r[3, 1:] *= all_radii
+    return all_radii, all_angles
 
+
+def circular_beam(
+    num_rays_approx: int,
+    outer_radius: float,
+) -> NDArray:
+    '''
+    Generates a circular parallel initial beam
+    in approximately equally-filled concentric rings
+
+    Parameters
+    ----------
+    num_rays_approx : int
+        The approximate number of rays
+    outer_radius : float
+        Outer radius of the circular beam
+
+    Returns
+    -------
+    r : ndarray
+        Ray position & slope matrix
+    '''
+    radii, angles = concentric_rings(num_rays_approx, outer_radius)
+    r = initial_r(angles.size + 1)
+    np.cos(angles, out=r[0, 1:])
+    np.sin(angles, out=r[2, 1:])
+    r[0, 1:] *= radii
+    r[2, 1:] *= radii
+    return r
+
+
+def point_beam(
+    num_rays_approx: int,
+    semiangle: float,
+) -> NDArray:
+    '''
+    Generates a diverging point source initial beam
+    in approximately equally-filled conic shells
+
+    Parameters
+    ----------
+    num_rays_approx : int
+        The approximate number of rays
+    semiangle : float
+        The maximum semiangle of the beam
+
+    Returns
+    -------
+    r : ndarray
+        Ray position & slope matrix
+    '''
+    radii, angles = concentric_rings(num_rays_approx, semiangle)
+    r = initial_r(angles.size + 1)
+    np.tan(radii, out=radii)
+    np.cos(angles, out=r[1, 1:])
+    np.sin(angles, out=r[3, 1:])
+    r[1, 1:] *= radii
+    r[3, 1:] *= radii
     return r
 
 
