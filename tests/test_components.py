@@ -23,7 +23,6 @@ EPSILON = abs(e)/(2*m_e*c**2)
 def empty_rays():
     return Rays(
         data=np.empty(shape=(5, 0)),
-        indices=np.empty([]),
         location=0.2,
         path_length=np.empty([]),
     )
@@ -40,7 +39,6 @@ def single_random_uniform_ray(x, y, phi_0=1.0):
 
     return Rays(
         data=data,
-        indices=1,
         location=0.2,
         path_length=0.0,
         wavelength=calculate_wavelength(phi_0=phi_0)
@@ -54,7 +52,6 @@ def random_rays(request):
     n_rays = request.param
     return Rays(
         data=np.random.uniform(size=(5, n_rays)),
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
@@ -75,7 +72,6 @@ def parallel_rays(request):
 
     return Rays(
         data=data,
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
         wavelength=np.ones(shape=n_rays)*calculate_wavelength(1.0)
@@ -97,7 +93,6 @@ def point_rays(request):
 
     return Rays(
         data=data,
-        indices=np.arange(n_rays),
         location=0.0,
         path_length=np.zeros((n_rays,)),
     )
@@ -116,9 +111,8 @@ def slope_of_one_rays(request):
     data[3, :] = np.ones(shape=n_rays)
     data[4, :] = np.ones(shape=n_rays)
 
-    return Rays(
+    return Rays.new(
         data=data,
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
