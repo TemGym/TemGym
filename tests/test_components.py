@@ -359,7 +359,7 @@ def test_biprism_interference():
     components = (
         comp.XPointBeam(
             z=0.0,
-            phi_0=phi_0,
+            voltage=phi_0,
             semi_angle=0.1,
         ),
         comp.Biprism(
