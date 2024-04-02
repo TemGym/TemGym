@@ -19,7 +19,8 @@ from . import (
 from .rays import Rays
 from .utils import (
     P2R, R2P,
-    make_beam,
+    circular_beam,
+    point_beam,
 )
 
 from .utils import (
@@ -327,7 +328,7 @@ class ParallelBeam(Source):
         self.radius = radius
 
     def get_rays(self, num_rays: int) -> Rays:
-        r = make_beam(num_rays, 'circular_beam', outer_radius=self.radius)
+        r = circular_beam(num_rays, self.radius)
         return self._make_rays(r)
 
     @staticmethod
@@ -380,8 +381,7 @@ class PointBeam(Source):
 
     def get_rays(self, num_rays: int) -> Rays:
         r = np.zeros((5, num_rays))
-        r = make_beam(num_rays, 'point_beam', semiangle=self.semi_angle)
-
+        r = point_beam(num_rays, self.semi_angle)
         return self._make_rays(r)
 
     @staticmethod
