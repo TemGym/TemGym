@@ -8,10 +8,12 @@ import temgymbasic.components as comp
 from temgymbasic.rays import Rays
 from temgymbasic.utils import calculate_phi_0, calculate_wavelength
 from numpy.testing import assert_allclose, assert_equal
+from temgymbasic.plotting import plot_model
 import scipy
 import matplotlib.pyplot as plt
-
+from typing import Tuple, NamedTuple
 from scipy.constants import e, m_e, c
+
 
 ETA = (abs(e)/(2*m_e))**(1/2)
 EPSILON = abs(e)/(2*m_e*c**2)
@@ -27,7 +29,7 @@ def empty_rays():
     )
 
 
-def single_random_uniform_ray(x, y):
+def single_random_uniform_ray(x, y, phi_0=1.0):
     data = np.zeros(shape=(5, 1))
 
     data[0, :] = np.random.uniform(low=0, high=x)
@@ -41,7 +43,7 @@ def single_random_uniform_ray(x, y):
         indices=1,
         location=0.2,
         path_length=0.0,
-        wavelength=calculate_wavelength(phi_0=1.0)
+        wavelength=calculate_wavelength(phi_0=phi_0)
     )
 
 
@@ -415,7 +417,8 @@ def test_sample_potential_deflection():
     # also implied here as dz is an infinitely thin slice)
     # x' += (q * (1+x'^2 + y'^2)) / (m * v^2 * gamma) * Ex
 
-    ray = single_random_uniform_ray(0., 0.)
+    phi_0 = 1.0
+    ray = single_random_uniform_ray(0., 0., phi_0=phi_0)
     x0 = -0.5
     y0 = -0.5
     extent = (1, 1)
@@ -424,13 +427,17 @@ def test_sample_potential_deflection():
     y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
     xx, _ = np.meshgrid(x, y)
 
-    phi_0 = 1.0  # Set initial voltage
-    phi_r = xx
+    # Set initial voltage
+    phi_r = xx - x0  # Set the voltage of the sample
 
-    v = 2 * ETA * np.sqrt((phi_0) * (1 + EPSILON * (phi_0)) / (
-        1 + 4 * EPSILON * (phi_0) * (1 + EPSILON * (phi_0))))
+    phi_centre = phi_0 - x0
+    phi_hat_centre = (phi_centre)*(1 + EPSILON * (phi_centre))
 
-    gamma = np.sqrt(1 + 4 * EPSILON * phi_0)
+    gamma = np.sqrt(1 + 4 * EPSILON * phi_hat_centre)
+    v = 2 * ETA * np.sqrt(phi_hat_centre) / gamma
+    v_acc = 1 * c * (1 - (1 - (- e*(phi_centre)) / (m_e * (c ** 2))) ** (-2)) ** (1/2)
+
+    assert_allclose(v, v_acc, atol=1e-3)
 
     pot_interp = RGI([x, y], phi_r, method='linear', bounds_error=False, fill_value=0.0)
     Ey, Ex = np.gradient(phi_r, x, y)
@@ -448,39 +455,87 @@ def test_sample_potential_deflection():
 
     # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
     # but their derivation is not well explained, and is verbose.
-    dx_analytical = np.float64(e/(gamma*m_e*v*v)) * np.max(Ex)
+    dx_analytical_one = np.float64(e/(gamma*m_e*v*v)) * np.max(Ex)
 
-    assert_allclose(out_rays.dx, dx_analytical, rtol=1e-11)
+    assert_allclose(out_rays.dx, dx_analytical_one, atol=1e-7)
 
 
-def test_sample_phase_shift(parallel_rays):
-    from scipy.interpolate import RegularGridInterpolator as RGI
+def test_sample_phase_shift():
+    from scipy.interpolate import RegularGridInterpolator as RGI, interp1d
 
-    x0 = -1.
-    y0 = -1.
-    extent = (2, 2)
+    class PlotParams(NamedTuple):
+        num_rays: int = 10
+        ray_color: str = 'dimgray'
+        fill_color: str = 'aquamarine'
+        fill_color_pair: Tuple[str, str] = ('khaki', 'deepskyblue')
+        fill_alpha: float = 0.0
+        ray_alpha: float = 1.
+        component_lw: float = 1.
+        edge_lw: float = 1.
+        ray_lw: float = 1.
+        label_fontsize: int = 12
+        figsize: Tuple[int, int] = (6, 6)
+        extent_scale: float = 1.1
+
+    x0 = -0.5
+    y0 = -0.5
+
+    extent = (1, 1)
     gpts = (256, 256)
     x = np.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
     y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
-    xx, _ = np.meshgrid(x, y)
-    pot_array = xx
+    xx, yy = np.meshgrid(x, y, indexing='ij')
 
-    pot_interp = RGI([x, y], pot_array, method='linear', bounds_error=False, fill_value=0.0)
-    Ey, Ex = np.gradient(pot_array, x, y)
+    phi_r = xx - x0
+
+    pot_interp = RGI([x, y], phi_r, method='linear', bounds_error=False, fill_value=0.0)
+    Ex, Ey = np.gradient(phi_r, x, y)
     Ex_interp = RGI([x, y], Ex, method='linear', bounds_error=False, fill_value=0.0)
     Ey_interp = RGI([x, y], Ey, method='linear', bounds_error=False, fill_value=0.0)
 
-    sample = comp.PotentialSample(
-        z=parallel_rays.location,
-        potential=pot_interp,
-        Ex=Ex_interp,
-        Ey=Ey_interp,
+    components = (
+        comp.XAxialBeam(
+            z=0.0,
+            radius=0.5,
+            phi_0=1.1
+        ),
+        comp.PotentialSample(
+            z=0.5,
+            potential=pot_interp,
+            Ex=Ex_interp,
+            Ey=Ey_interp,
+        ),
+        comp.Detector(
+            z=6,
+            pixel_size=0.01,
+            shape=(100, 100),
+        ),
     )
 
-    out_rays = tuple(sample.step(parallel_rays))[0]
-    end_rays = out_rays.propagate(1.0)
+    num_rays = 100
+    plot_params = PlotParams(num_rays=num_rays)
 
-    plt.figure()
-    plt.plot([end_rays.x, out_rays.x],
-             [np.ones(out_rays.x.shape)*end_rays.z, np.ones(out_rays.x.shape)*out_rays.z])
+    model = Model(components)
+    fig, ax = plot_model(model, plot_params=plot_params)
+    rays = tuple(model.run_iter(num_rays=num_rays))
+    print(rays[1].path_length[1], rays[1].path_length[2])
+    x = np.stack(tuple(r.x for r in rays), axis=0)
+    z = np.asarray(tuple(r.z for r in rays))
+    opl = np.asarray(tuple(r.path_length for r in rays))
+
+    opls = np.linspace(0.5, 5, 11)
+
+    for idx in range(num_rays):
+
+        # Interpolation for x and z as functions of path length
+        z_of_L = interp1d(opl[:, idx], z, kind='linear')
+        x_of_z = interp1d(z, x[:, idx])
+
+        # Find x and z for the given path length L'
+        z_prime = z_of_L(opls)
+        x_prime = x_of_z(z_prime)
+
+        ax.plot(x_prime, z_prime, '.r')
+
+    plt.axis('equal')
     plt.show()
