@@ -392,7 +392,7 @@ class PointBeam(Source):
 
 
 class XPointBeam(PointBeam):
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         r = np.zeros((5, num_rays))
         r[1, :] = np.linspace(
             -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
