@@ -1339,13 +1339,9 @@ class ApertureGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
 
         hbox = QHBoxLayout()
-        self.inner_radiusslider, _ = labelled_slider(
-            self.aperture.radius_inner, 0.0, 0.25,
-            name="Inner radius", insert_into=hbox, decimals=2,
-        )
-        self.outer_radiusslider, _ = labelled_slider(
-            self.aperture.radius_outer, 0.0, 0.25,
-            name="Outer radius", insert_into=hbox, decimals=2,
+        self.radiusslider, _ = labelled_slider(
+            self.aperture.radius, 0.0, 0.25,
+            name="Radius", insert_into=hbox, decimals=2,
         )
         vbox.addLayout(hbox)
 
