@@ -125,7 +125,7 @@ def slope_of_one_rays(request):
         (comp.Deflector, tuple()),
         (comp.DoubleDeflector.from_params, tuple()),
         (comp.Detector, (0.001, (64, 64))),
-        (comp.Aperture, tuple()),
+        (comp.Aperture, (0.1,)),
         (comp.Biprism, tuple()),
     ]
 )
@@ -381,13 +381,13 @@ def test_biprism_interference():
 
 
 def test_aperture_blocking(parallel_rays, empty_rays):
-    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=2.0, radius_outer=2.0)
+    aperture = comp.Aperture(z=parallel_rays.location, radius=0.)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, empty_rays.data)
 
 
 def test_aperture_nonblocking(parallel_rays):
-    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=0., radius_outer=2.0)
+    aperture = comp.Aperture(z=parallel_rays.location, radius=2.)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, parallel_rays.data)
 
