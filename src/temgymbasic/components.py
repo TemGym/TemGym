@@ -840,13 +840,13 @@ class Aperture(Component):
     def __init__(
         self,
         z: float,
-        radius_inner: float = 0.005,
-        radius_outer: float = 0.25,
+        radius: float,
         x: float = 0.,
         y: float = 0.,
         name: Optional[str] = None,
     ):
         '''
+        An Aperture that lets through rays within a radius centered on (x, y)
 
         Parameters
         ----------
@@ -854,10 +854,8 @@ class Aperture(Component):
             Position of component in optic axis
         name : str, optional
             Name of this component which will be displayed by GUI, by default 'Aperture'
-        radius_inner : float, optional
-           Inner radius of the aperture, by default 0.005
-        radius_outer : float, optional
-            Outer radius of the aperture, by default 0.25
+        radius : float, optional
+           The radius of the aperture
         x : int, optional
             X position of the centre of the aperture, by default 0
         y : int, optional
@@ -868,8 +866,7 @@ class Aperture(Component):
 
         self.x = x
         self.y = y
-        self.radius_inner = radius_inner
-        self.radius_outer = radius_outer
+        self.radius = radius
 
     def step(
         self, rays: Rays,
@@ -878,11 +875,12 @@ class Aperture(Component):
         distance = np.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
-        mask = np.logical_and(
-            distance >= self.radius_inner,
-            distance < self.radius_outer,
-        )
         yield rays.with_mask(
-            mask,
+            distance < self.radius,
             location=self,
         )
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import ApertureGUI
+        return ApertureGUI
