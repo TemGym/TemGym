@@ -288,7 +288,7 @@ class Source(Component):
         return self.phi_0
 
     @abc.abstractmethod
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         raise NotImplementedError
 
     def _make_rays(self, r: NDArray) -> Rays:
@@ -329,8 +329,8 @@ class ParallelBeam(Source):
         super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage)
         self.radius = radius
 
-    def get_rays(self, num_rays: int) -> Rays:
-        r = circular_beam(num_rays, self.radius)
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+        r = circular_beam(num_rays, self.radius, random=random)
         return self._make_rays(r)
 
     @staticmethod
@@ -340,7 +340,7 @@ class ParallelBeam(Source):
 
 
 class XAxialBeam(ParallelBeam):
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         r = np.zeros((5, num_rays))
         r[0, :] = np.linspace(
             -self.radius, self.radius, num=num_rays, endpoint=True
@@ -349,7 +349,7 @@ class XAxialBeam(ParallelBeam):
 
 
 class RadialSpikesBeam(ParallelBeam):
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         xvals = np.linspace(
             0., self.radius, num=num_rays // 4, endpoint=True
         )
@@ -381,9 +381,8 @@ class PointBeam(Source):
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int) -> Rays:
-        r = np.zeros((5, num_rays))
-        r = point_beam(num_rays, self.semi_angle)
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+        r = point_beam(num_rays, self.semi_angle, random=random)
         return self._make_rays(r)
 
     @staticmethod
