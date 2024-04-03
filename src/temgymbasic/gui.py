@@ -7,6 +7,7 @@ from PySide6.QtGui import QVector3D
 from PySide6.QtCore import (
     Slot,
     Qt,
+    QTimer,
 )
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -281,6 +282,11 @@ class TemGymWindow(QMainWindow):
         # Any model-specific GUI setup called in finalize
         self.model_gui.finalize(self)
 
+        # Update rays timer
+        self.rays_timer = QTimer(parent=self)
+        self.rays_timer.timeout.connect(self.update_rays)
+        self.rays_timer.start(30)
+
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Escape, Qt.Key_Q):
             self.close()
@@ -385,7 +391,8 @@ class TemGymWindow(QMainWindow):
     @Slot()
     def update_rays(self):
         all_rays = tuple(self.model.run_iter(
-            self.gui_components[0].num_rays
+            self.gui_components[0].num_rays,
+            random=True,
         ))
         vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
         self.ray_geometry.setData(
@@ -394,14 +401,10 @@ class TemGymWindow(QMainWindow):
         )
 
         if self.model.detector is not None:
-            # image = self.model.detector.get_image(all_rays[-1])
-            image = self.model.detector.get_image(all_rays[-1])
-            if np.max(np.abs(image.T)**2) < 1e-12:
-                max_val = 1.
-            else:
-                max_val = np.max(np.abs(image.T)**2)
-
-            self.spot_img.setImage(np.abs(image.T)**2/max_val)
+            image = self.model.detector.get_image(
+                all_rays[-1]
+            )
+            self.spot_img.setImage(image.T)
 
     def add_geometry(self):
         self.tem_window.clear()
@@ -1332,7 +1335,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         )
 
 
-class ApertureGUI(ComponentGUIWrapper):
+class ApertureGUI(LensGUI):
     @property
     def aperture(self) -> 'comp.Aperture':
         return self.component
