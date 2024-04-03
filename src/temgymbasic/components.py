@@ -312,8 +312,9 @@ class Source(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Source has no effect after get_rays was called
-        rays.location = self
-        yield rays
+        yield rays.new_with(
+            location=self
+        )
 
 
 class ParallelBeam(Source):
@@ -475,8 +476,9 @@ class Detector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Detector has no effect on rays
-        rays.location = self
-        yield rays
+        yield rays.new_with(
+            location=self
+        )
 
     def on_grid(self, rays: Rays, as_int: bool = True) -> NDArray:
         return rays.on_grid(
@@ -675,12 +677,15 @@ class DoubleDeflector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         for rays in self.first.step(rays):
-            rays.location = (self, self.first)
-            yield rays
+            yield rays.new_with(
+                location=(self, self.first)
+            )
         rays = rays.propagate_to(self.second.entrance_z)
         for rays in self.second.step(rays):
             rays.location = (self, self.second)
-            yield rays
+            yield rays.new_with(
+                location=(self, self.second)
+            )
 
     @staticmethod
     def _send_ray_through_pts_1d(
