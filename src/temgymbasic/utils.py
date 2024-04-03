@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Tuple, Iterable
+from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
 import numpy as np
 from numpy.typing import NDArray
@@ -34,37 +34,42 @@ def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[RadiansNP]
     return np.abs(x), np.angle(x)
 
 
-def as_gl_lines(all_rays: Iterable['Rays']):
-    if len({r.num for r in all_rays}) != 1:
-        # need to sort
-        raise NotImplementedError
-    num_rays = all_rays[0].num
-    zpos = tuple((r0.z, r1.z) for r0, r1 in pairwise(all_rays))
-    zpos = np.asarray(zpos).ravel()
-    zpos = np.tile(zpos, num_rays)
-    vertices = np.zeros(
-        (zpos.size, 3),
+def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
+    num_vertices = 0
+    for r in all_rays[:-1]:
+        num_vertices += r.num
+    num_vertices *= 2
+
+    vertices = np.empty(
+        (num_vertices, 3),
         dtype=np.float32,
     )
-    xvals = np.stack(tuple(
-        r.x for r in all_rays
-    ), axis=-1)
-    xvals = np.lib.stride_tricks.sliding_window_view(
-        xvals,
-        2,
-        axis=1,
-    )
-    yvals = np.stack(tuple(
-        r.y for r in all_rays
-    ), axis=-1)
-    yvals = np.lib.stride_tricks.sliding_window_view(
-        yvals,
-        2,
-        axis=1,
-    )
-    vertices[:, 0] = xvals.ravel()
-    vertices[:, 1] = yvals.ravel()
-    vertices[:, 2] = zpos
+    idx = 0
+
+    def _add_vertices(r1: 'Rays', r0: 'Rays'):
+        nonlocal idx, vertices
+
+        num_endpoints = r1.num
+        sl = slice(idx, idx + num_endpoints * 2, 2)
+        vertices[sl, 0] = r1.x
+        vertices[sl, 1] = r1.y
+        vertices[sl, 2] = r1.z * z_mult
+        sl = slice(1 + idx, 1 + idx + num_endpoints * 2, 2)
+        # Relies on the fact that indexing
+        # with None creates a new axis, only
+        vertices[sl, 0] = r0.x[r1.mask].flat
+        vertices[sl, 1] = r0.y[r1.mask].flat
+        vertices[sl, 2] = r0.z * z_mult
+        idx += num_endpoints * 2
+        return idx
+
+    r1 = all_rays[-1]
+    for r0 in reversed(all_rays[:-1]):
+        _add_vertices(r1, r0)
+        if (r1b := r1.blocked_rays()) is not None:
+            _add_vertices(r1b, r0)
+        r1 = r0
+
     return vertices
 
 
