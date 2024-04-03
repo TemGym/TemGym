@@ -387,8 +387,7 @@ class TemGymWindow(QMainWindow):
         all_rays = tuple(self.model.run_iter(
             self.gui_components[0].num_rays
         ))
-        vertices = as_gl_lines(all_rays)
-        vertices[:, 2] *= Z_ORIENT
+        vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
         self.ray_geometry.setData(
             pos=vertices,
             color=RAY_COLOR + (0.05,),
@@ -638,6 +637,10 @@ class LensGUI(ComponentGUIWrapper):
 
 
 class SourceGUI(ComponentGUIWrapper):
+    @property
+    def beam(self) -> 'comp.Source':
+        return self.component
+
     @property
     def num_rays(self) -> int:
         return self.rayslider.value()
