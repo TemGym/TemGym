@@ -29,6 +29,7 @@ class Rays:
     path_length: NDArray
     wavelength: Optional[float] = None
     mask: Optional[NDArray] = None
+    blocked: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -199,17 +200,28 @@ class Rays:
             **asdict(self),
             **kwargs,
         }
+        kwargs.pop('mask', None)
+        kwargs.pop('blocked', None)
         return type(self)(**kwargs)
 
     def with_mask(
         self, mask: NDArray, **kwargs,
     ):
-        rays = type(self)(
+        return type(self)(
             data=self.data[:, mask],
             path_length=self.path_length[mask],
             mask=mask,
+            blocked=self.data[:, ~mask],
             **kwargs,
         )
-        if 'wavelength' not in kwargs and self.wavelength is not None:
-            rays.wavelength = self.wavelength[mask]
-        return rays
+
+    def blocked_rays(self) -> Optional['Rays']:
+        if self.blocked is None or self.mask is None:
+            return None
+        return Rays(
+            data=self.blocked,
+            location=self.z,
+            path_length=None,  # this is invalidates the interface
+            wavelength=self.wavelength,
+            mask=~self.mask,
+        )
