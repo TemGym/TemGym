@@ -547,6 +547,64 @@ class Detector(Component):
         return DetectorGUI
 
 
+class AccumulatingDetector(Detector):
+    def __init__(
+        self,
+        z: float,
+        pixel_size: float,
+        shape: Tuple[int, int],
+        buffer_length: int,
+        rotation: Degrees = 0.,
+        flip_y: bool = False,
+        center: Tuple[float, float] = (0., 0.),
+        name: Optional[str] = None,
+    ):
+        super().__init__(
+            z=z,
+            pixel_size=pixel_size,
+            shape=shape,
+            rotation=rotation,
+            flip_y=flip_y,
+            center=center,
+            name=name,
+        )
+        self.reset_buffer(
+            buffer_length=buffer_length,
+        )
+
+    @property
+    def buffer_length(self):
+        try:
+            return self.buffer.shape[0]
+        except AttributeError:
+            return None
+
+    @property
+    def buffer_frame_shape(self):
+        return self.buffer.shape[1:]
+
+    def reset_buffer(self, buffer_length: Optional[int] = None):
+        if buffer_length is None:
+            buffer_length = self.buffer_length
+        self.buffer = np.zeros(
+            (buffer_length, *self.shape),
+            dtype=np.complex128,
+        )
+        # the next index to write into
+        self.buffer_idx = 0
+
+    def get_image(self, rays: Rays) -> NDArray:
+        if self.buffer_frame_shape != self.shape:
+            self.reset_buffer()
+        else:
+            self.buffer[self.buffer_idx] = 0.
+        super().get_image(
+            rays, interference=True, out=self.buffer[self.buffer_idx],
+        )
+        self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
+        return np.abs(self.buffer.sum(axis=0))
+
+
 class Deflector(Component):
     '''Creates a single deflector component and handles calls to GUI creation, updates to GUI
         and stores the component matrix. See Double Deflector component for a more useful version
