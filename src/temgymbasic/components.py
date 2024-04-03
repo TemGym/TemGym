@@ -488,7 +488,9 @@ class Detector(Component):
             as_int=as_int,
         )
 
-    def get_image(self, rays: Rays, interference: bool = False) -> NDArray:
+    def get_image(
+        self, rays: Rays, interference: bool = False, out: Optional[NDArray] = None
+    ) -> NDArray:
 
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
@@ -508,32 +510,36 @@ class Detector(Component):
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
-            image_dtype = np.complex128
             wavefronts = 1.0 * np.exp(-1j * (2 * np.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
+            image_dtype = valid_wavefronts.dtype
         else:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
-            image_dtype = int
             valid_wavefronts = 1
+            image_dtype = type(valid_wavefronts)
 
-        image = np.zeros(
-            self.shape,
-            dtype=image_dtype,
-        )
+        if out is None:
+            out = np.zeros(
+                self.shape,
+                dtype=image_dtype,
+            )
+        else:
+            assert out.dtype == image_dtype
+            assert out.shape == self.shape
         flat_icds = np.ravel_multi_index(
             [
                 pixel_coords_y[mask],
                 pixel_coords_x[mask],
             ],
-            image.shape
+            out.shape
         )
         # Increment at each pixel for each ray that hits
         np.add.at(
-            image.ravel(),
+            out.ravel(),
             flat_icds,
             valid_wavefronts,
         )
-        return image
+        return out
 
     @staticmethod
     def gui_wrapper():
