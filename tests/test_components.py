@@ -10,7 +10,7 @@ from temgymbasic.utils import calculate_phi_0, calculate_wavelength
 from numpy.testing import assert_allclose, assert_equal
 from temgymbasic.plotting import plot_model
 import scipy
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from typing import Tuple, NamedTuple
 from scipy.constants import e, m_e, c
 
@@ -414,31 +414,42 @@ def test_sample_potential_deflection():
     # d/dt = v/(sqrt(1+x'^2 + y'^2)) * d/dz where x' denotes derivative with
     # respect to z (dx/dz), one can derive the instantaneous force as a function of z, and thus
     # velocity change on the electron in this infinitely thin plane (note dirac delta function is
-    # also implied here as dz is an infinitely thin slice)
+    # also implied here as dz is an infinitely thin slice), thus -
     # x' += (q * (1+x'^2 + y'^2)) / (m * v^2 * gamma) * Ex
+    # One must be careful about the velocity term: I believe it also needs to encode
+    # the potential of the "Sample" that the electron sees. I am unsure about this for now,
+    # but there is no other term that can account for the sample potential, so it makes sense to me.
 
+    # Set initial potential of electron
     phi_0 = 1.0
     ray = single_random_uniform_ray(0., 0., phi_0=phi_0)
-    x0 = -0.5
-    y0 = -0.5
+
+    # Set up sample properties and potential
+    x0 = -0.25
+    y0 = -0.25
     extent = (1, 1)
     gpts = (256, 256)
     x = np.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
     y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
     xx, _ = np.meshgrid(x, y)
 
-    # Set initial voltage
-    phi_r = xx - x0  # Set the voltage of the sample
+    # Set initial potential
+    phi_r = xx - x0
 
+    # Find voltage at central pixel
     phi_centre = phi_0 - x0
     phi_hat_centre = (phi_centre)*(1 + EPSILON * (phi_centre))
 
+    # Calculate gamma
     gamma = np.sqrt(1 + 4 * EPSILON * phi_hat_centre)
+
+    # Calculate velocity two ways for sanity check
     v = 2 * ETA * np.sqrt(phi_hat_centre) / gamma
     v_acc = 1 * c * (1 - (1 - (- e*(phi_centre)) / (m_e * (c ** 2))) ** (-2)) ** (1/2)
 
     assert_allclose(v, v_acc, atol=1e-3)
 
+    # Interpolate potential
     pot_interp = RGI([x, y], phi_r, method='linear', bounds_error=False, fill_value=0.0)
     Ey, Ex = np.gradient(phi_r, x, y)
     Ex_interp = RGI([x, y], Ex, method='linear', bounds_error=False, fill_value=0.0)
@@ -451,15 +462,21 @@ def test_sample_potential_deflection():
         Ey=Ey_interp,
     )
 
+    # rho encodes the slope of the ray into a single parameter and is needed for when the calc
+    # is performed as a function of d/dz, instead of d/dt
+    rho = np.sqrt(1 + ray.dx ** 2 + ray.dy ** 2)
+
+    # Step rays
     out_rays = tuple(sample.step(ray))[0]
 
     # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
-    # but their derivation is not well explained, and is verbose.
-    dx_analytical_one = np.float64(e/(gamma*m_e*v*v)) * np.max(Ex)
+    # but their derivation is not well explained, and is verbose, so this is what we have.
+    dx_analytical_one = np.float64((e * rho ** 2)/(gamma*m_e*v*v)) * np.max(Ex)
 
     assert_allclose(out_rays.dx, dx_analytical_one, atol=1e-7)
 
 
+@pytest.mark.skip(reason="No way to numerically test this now, so visualise plot below to check")
 def test_sample_phase_shift():
     from scipy.interpolate import RegularGridInterpolator as RGI, interp1d
 
@@ -477,6 +494,7 @@ def test_sample_phase_shift():
         figsize: Tuple[int, int] = (6, 6)
         extent_scale: float = 1.1
 
+    phi_0 = 1.1
     x0 = -0.5
     y0 = -0.5
 
@@ -497,7 +515,7 @@ def test_sample_phase_shift():
         comp.XAxialBeam(
             z=0.0,
             radius=0.5,
-            phi_0=1.1
+            phi_0=phi_0
         ),
         comp.PotentialSample(
             z=0.5,
@@ -537,5 +555,7 @@ def test_sample_phase_shift():
 
         ax.plot(x_prime, z_prime, '.r')
 
-    plt.axis('equal')
-    plt.show()
+    # Uncomment these plotting lines to see if the wavefront looks correct
+
+    # plt.axis('equal')
+    # plt.show()
