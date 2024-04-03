@@ -234,9 +234,27 @@ def concentric_rings(
     return all_radii, all_angles
 
 
+def random_coords(num: int, max_r: float, with_radii: bool = False):
+    # generate random points uniformly sampled in x/y
+    # within a centred circle of radius max_r
+    # return as [[y, x], ...] and the radii of each point
+    yx = np.random.uniform(
+        -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / np.pi
+    )
+    radii = np.sqrt((yx ** 2).sum(axis=1))
+    mask = radii < max_r
+    if with_radii:
+        return (
+            yx[mask, :],
+            radii[mask],
+        )
+    return yx[mask, :]
+
+
 def circular_beam(
     num_rays_approx: int,
     outer_radius: float,
+    random: bool = False,
 ) -> NDArray:
     '''
     Generates a circular parallel initial beam
@@ -254,18 +272,25 @@ def circular_beam(
     r : ndarray
         Ray position & slope matrix
     '''
-    radii, angles = concentric_rings(num_rays_approx, outer_radius)
-    r = initial_r(angles.size + 1)
-    np.cos(angles, out=r[0, 1:])
-    np.sin(angles, out=r[2, 1:])
-    r[0, 1:] *= radii
-    r[2, 1:] *= radii
+    if random:
+        yx = random_coords(num_rays_approx, outer_radius)
+        r = initial_r(yx.shape[0] + 1)
+        r[0, 1:] = yx[:, 1]
+        r[2, 1:] = yx[:, 0]
+    else:
+        radii, angles = concentric_rings(num_rays_approx, outer_radius)
+        r = initial_r(angles.size + 1)
+        np.cos(angles, out=r[0, 1:])
+        np.sin(angles, out=r[2, 1:])
+        r[0, 1:] *= radii
+        r[2, 1:] *= radii
     return r
 
 
 def point_beam(
     num_rays_approx: int,
     semiangle: float,
+    random: bool = False,
 ) -> NDArray:
     '''
     Generates a diverging point source initial beam
@@ -283,13 +308,20 @@ def point_beam(
     r : ndarray
         Ray position & slope matrix
     '''
-    radii, angles = concentric_rings(num_rays_approx, semiangle)
-    r = initial_r(angles.size + 1)
-    np.tan(radii, out=radii)
-    np.cos(angles, out=r[1, 1:])
-    np.sin(angles, out=r[3, 1:])
-    r[1, 1:] *= radii
-    r[3, 1:] *= radii
+    if random:
+        yx, radii = random_coords(num_rays_approx, semiangle, with_radii=True)
+    else:
+        radii, angles = concentric_rings(num_rays_approx, semiangle)
+    r = initial_r(radii.size + 1)
+    if random:
+        r[1, 1:] = yx[:, 1]
+        r[3, 1:] = yx[:, 0]
+    else:
+        np.cos(angles, out=r[1, 1:])
+        np.sin(angles, out=r[3, 1:])
+        np.tan(radii, out=radii)
+        r[1, 1:] *= radii
+        r[3, 1:] *= radii
     return r
 
 
