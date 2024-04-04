@@ -509,7 +509,7 @@ def test_sample_phase_shift():
         comp.XAxialBeam(
             z=0.0,
             radius=0.5,
-            phi_0=phi_0
+            voltage=phi_0
         ),
         comp.PotentialSample(
             z=0.5,
