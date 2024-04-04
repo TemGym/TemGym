@@ -568,38 +568,32 @@ class AccumulatingDetector(Detector):
             center=center,
             name=name,
         )
-        self.reset_buffer(
-            buffer_length=buffer_length,
-        )
+        self.buffer = None
+        self.buffer_length = buffer_length
 
     @property
-    def buffer_length(self):
-        try:
-            return self.buffer.shape[0]
-        except AttributeError:
-            return None
-
-    @property
-    def buffer_frame_shape(self):
+    def buffer_frame_shape(self) -> Optional[Tuple[int, int]]:
+        if self.buffer is None:
+            return
         return self.buffer.shape[1:]
 
-    def reset_buffer(self, buffer_length: Optional[int] = None):
-        if buffer_length is None:
-            buffer_length = self.buffer_length
+    def reset_buffer(self, rays: Rays):
         self.buffer = np.zeros(
-            (buffer_length, *self.shape),
-            dtype=np.complex128,
+            (self.buffer_length, *self.shape),
+            dtype=int if rays.wavelength is None else np.complex128,
         )
         # the next index to write into
         self.buffer_idx = 0
 
     def get_image(self, rays: Rays) -> NDArray:
         if self.buffer_frame_shape != self.shape:
-            self.reset_buffer()
+            self.reset_buffer(rays)
         else:
             self.buffer[self.buffer_idx] = 0.
         super().get_image(
-            rays, interference=True, out=self.buffer[self.buffer_idx],
+            rays,
+            interference=rays.wavelength is not None,
+            out=self.buffer[self.buffer_idx],
         )
         self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
         return np.abs(self.buffer.sum(axis=0))
