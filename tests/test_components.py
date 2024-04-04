@@ -10,7 +10,7 @@ from temgymbasic.utils import calculate_phi_0, calculate_wavelength
 from numpy.testing import assert_allclose, assert_equal
 from temgymbasic.plotting import plot_model
 import scipy
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from typing import Tuple, NamedTuple
 from scipy.constants import e, m_e, c
 
@@ -23,7 +23,6 @@ EPSILON = abs(e)/(2*m_e*c**2)
 def empty_rays():
     return Rays(
         data=np.empty(shape=(5, 0)),
-        indices=np.empty([]),
         location=0.2,
         path_length=np.empty([]),
     )
@@ -40,7 +39,6 @@ def single_random_uniform_ray(x, y, phi_0=1.0):
 
     return Rays(
         data=data,
-        indices=1,
         location=0.2,
         path_length=0.0,
         wavelength=calculate_wavelength(phi_0=phi_0)
@@ -54,7 +52,6 @@ def random_rays(request):
     n_rays = request.param
     return Rays(
         data=np.random.uniform(size=(5, n_rays)),
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
@@ -75,7 +72,6 @@ def parallel_rays(request):
 
     return Rays(
         data=data,
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
         wavelength=np.ones(shape=n_rays)*calculate_wavelength(1.0)
@@ -97,7 +93,6 @@ def point_rays(request):
 
     return Rays(
         data=data,
-        indices=np.arange(n_rays),
         location=0.0,
         path_length=np.zeros((n_rays,)),
     )
@@ -116,9 +111,8 @@ def slope_of_one_rays(request):
     data[3, :] = np.ones(shape=n_rays)
     data[4, :] = np.ones(shape=n_rays)
 
-    return Rays(
+    return Rays.new(
         data=data,
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
@@ -131,7 +125,7 @@ def slope_of_one_rays(request):
         (comp.Deflector, tuple()),
         (comp.DoubleDeflector.from_params, tuple()),
         (comp.Detector, (0.001, (64, 64))),
-        (comp.Aperture, tuple()),
+        (comp.Aperture, (0.1,)),
         (comp.Biprism, tuple()),
     ]
 )
@@ -359,7 +353,7 @@ def test_biprism_interference():
     components = (
         comp.XPointBeam(
             z=0.0,
-            phi_0=phi_0,
+            voltage=phi_0,
             semi_angle=0.1,
         ),
         comp.Biprism(
@@ -387,13 +381,13 @@ def test_biprism_interference():
 
 
 def test_aperture_blocking(parallel_rays, empty_rays):
-    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=2.0, radius_outer=2.0)
+    aperture = comp.Aperture(z=parallel_rays.location, radius=0.)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, empty_rays.data)
 
 
 def test_aperture_nonblocking(parallel_rays):
-    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=0., radius_outer=2.0)
+    aperture = comp.Aperture(z=parallel_rays.location, radius=2.)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, parallel_rays.data)
 
@@ -521,7 +515,7 @@ def test_sample_phase_shift():
         comp.XAxialBeam(
             z=0.0,
             radius=0.5,
-            phi_0=phi_0
+            voltage=phi_0
         ),
         comp.PotentialSample(
             z=0.5,
@@ -563,5 +557,5 @@ def test_sample_phase_shift():
 
     # Uncomment these plotting lines to see if the wavefront looks correct
 
-    plt.axis('equal')
-    plt.show()
+    # plt.axis('equal')
+    # plt.show()
