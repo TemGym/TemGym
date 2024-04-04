@@ -1,7 +1,8 @@
-from typing import TYPE_CHECKING, Tuple, Iterable
+from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
 import numpy as np
 from numpy.typing import NDArray
+from numba import njit
 
 from scipy.constants import e, m_e, h
 
@@ -33,37 +34,42 @@ def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[RadiansNP]
     return np.abs(x), np.angle(x)
 
 
-def as_gl_lines(all_rays: Iterable['Rays']):
-    if len({r.num for r in all_rays}) != 1:
-        # need to sort
-        raise NotImplementedError
-    num_rays = all_rays[0].num
-    zpos = tuple((r0.z, r1.z) for r0, r1 in pairwise(all_rays))
-    zpos = np.asarray(zpos).ravel()
-    zpos = np.tile(zpos, num_rays)
-    vertices = np.zeros(
-        (zpos.size, 3),
+def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
+    num_vertices = 0
+    for r in all_rays[:-1]:
+        num_vertices += r.num
+    num_vertices *= 2
+
+    vertices = np.empty(
+        (num_vertices, 3),
         dtype=np.float32,
     )
-    xvals = np.stack(tuple(
-        r.x for r in all_rays
-    ), axis=-1)
-    xvals = np.lib.stride_tricks.sliding_window_view(
-        xvals,
-        2,
-        axis=1,
-    )
-    yvals = np.stack(tuple(
-        r.y for r in all_rays
-    ), axis=-1)
-    yvals = np.lib.stride_tricks.sliding_window_view(
-        yvals,
-        2,
-        axis=1,
-    )
-    vertices[:, 0] = xvals.ravel()
-    vertices[:, 1] = yvals.ravel()
-    vertices[:, 2] = zpos
+    idx = 0
+
+    def _add_vertices(r1: 'Rays', r0: 'Rays'):
+        nonlocal idx, vertices
+
+        num_endpoints = r1.num
+        sl = slice(idx, idx + num_endpoints * 2, 2)
+        vertices[sl, 0] = r1.x
+        vertices[sl, 1] = r1.y
+        vertices[sl, 2] = r1.z * z_mult
+        sl = slice(1 + idx, 1 + idx + num_endpoints * 2, 2)
+        # Relies on the fact that indexing
+        # with None creates a new axis, only
+        vertices[sl, 0] = r0.x[r1.mask].flat
+        vertices[sl, 1] = r0.y[r1.mask].flat
+        vertices[sl, 2] = r0.z * z_mult
+        idx += num_endpoints * 2
+        return idx
+
+    r1 = all_rays[-1]
+    for r0 in reversed(all_rays[:-1]):
+        _add_vertices(r1, r0)
+        if (r1b := r1.blocked_rays()) is not None:
+            _add_vertices(r1b, r0)
+        r1 = r0
+
     return vertices
 
 
@@ -171,107 +177,147 @@ def get_pixel_coords(
 def initial_r(num_rays: int):
     r = np.zeros(
         (5, num_rays),
-        dtype=np.float64
+        dtype=np.float64,
     )  # x, theta_x, y, theta_y, 1
 
-    r[4, :] = np.ones(num_rays)
+    r[4, :] = 1.
     return r
 
 
-# FIXME resolve code duplication between circular_beam() and point_beam()
-def make_beam(num_rays, outer_radius, beam_type='circular_beam'):
-    '''Generates a circular paralell initial beam
+@njit
+def multi_cumsum_inplace(values, partitions, start):
+    part_idx = 0
+    current_part_len = partitions[part_idx]
+    part_count = 0
+    values[0] = start
+    for v_idx in range(1, values.size):
+        if current_part_len == part_count:
+            part_count = 0
+            part_idx += 1
+            current_part_len = partitions[part_idx]
+            values[v_idx] = start
+        else:
+            values[v_idx] += values[v_idx - 1]
+            part_count += 1
+
+
+def concentric_rings(
+    num_points_approx: int,
+    radius: float,
+):
+    num_rings = max(
+        1,
+        int(np.floor((-1 + np.sqrt(1 + 4 * num_points_approx / np.pi)) / 2))
+    )
+
+    # Calculate the circumference of each ring
+    num_points_kth_ring = np.round(
+        2 * np.pi * np.arange(1, num_rings + 1)
+    ).astype(int)
+    num_rings = num_points_kth_ring.size
+    points_per_unit = num_points_approx / num_points_kth_ring.sum()
+    points_per_ring = np.round(num_points_kth_ring * points_per_unit).astype(int)
+
+    # Make get the radii for the number of circles of rays we need
+    radii = np.linspace(
+        0, radius, num_rings + 1, endpoint=True,
+    )[1:]
+    div_angle = 2 * np.pi / points_per_ring
+
+    params = np.stack((radii, div_angle), axis=0)
+    all_params = np.repeat(params, points_per_ring, axis=-1)
+    multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
+
+    all_radii = all_params[0, :]
+    all_angles = all_params[1, :]
+
+    return (
+        all_radii * np.sin(all_angles),
+        all_radii * np.cos(all_angles),
+    )
+
+
+def random_coords(num: int, max_r: float, with_radii: bool = False):
+    # generate random points uniformly sampled in x/y
+    # within a centred circle of radius max_r
+    # return (y, x)
+    yx = np.random.uniform(
+        -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / np.pi
+    )
+    radii = np.sqrt((yx ** 2).sum(axis=1))
+    mask = radii < max_r
+    yx = yx[mask, :]
+    return (
+        yx[:, 0],
+        yx[:, 1],
+    )
+
+
+def circular_beam(
+    num_rays_approx: int,
+    outer_radius: float,
+    random: bool = False,
+) -> NDArray:
+    '''
+    Generates a circular parallel initial beam
+    in approximately equally-filled concentric rings
 
     Parameters
     ----------
-    r : ndarray
-        Ray position and slope matrix
+    num_rays_approx : int
+        The approximate number of rays
     outer_radius : float
         Outer radius of the circular beam
 
     Returns
     -------
     r : ndarray
-        Updated ray position & slope matrix which create a circular beam
-    num_points_kth_ring: ndarray
-        Array of the number of points on each ring of our circular beam
+        Ray position & slope matrix
     '''
-    r = initial_r(num_rays)
-
-    # Use the equation from stack overflow about ukrainian graves from 2014
-    # to calculate the number of even rings including decimal remainder
-
-    if num_rays < 7:
-        num_circles_dec = 1.0  # Round up if the number is between 0 and 1
+    if random:
+        y, x = random_coords(num_rays_approx, outer_radius)
     else:
-        num_circles_dec = (-1+np.sqrt(1+4*(num_rays)/(np.pi)))/2
-
-    # Get the number of integer rings
-    num_circles_int = int(np.floor(num_circles_dec))
-
-    # Calculate the number of points per ring with the integer amoung of rings
-    num_points_kth_ring = np.round(
-        2*np.pi*(np.arange(0, num_circles_int+1))).astype(int)
-
-    # get the remainding amount of rays
-    remainder_rays = num_rays - np.sum(num_points_kth_ring)
-
-    # Get the proportion of points in each rung
-    proportion = num_points_kth_ring/np.sum(num_points_kth_ring)
-
-    # resolve this proportion to an integer value, and reverse it
-    num_rays_to_each_ring = np.ceil(proportion*remainder_rays)[::-1]
-
-    # We need to decide on where to stop adding the remainder of rays to the
-    # rest of the rings. We find this point by summing the rays in each ring
-    # from outside to inside, and then getting the index where it is greater
-    # than or equal to the remainder
-    index_to_stop_adding_rays = np.where(
-        np.cumsum(num_rays_to_each_ring) >= remainder_rays)[0][0]
-
-    # We then get the total number of rays to add
-    rays_to_add = np.cumsum(num_rays_to_each_ring)[
-        index_to_stop_adding_rays].astype(np.int32)
-
-    # The number of rays to add isn't always matching the remainder, so we
-    # collect them here with this line
-    final_sub = rays_to_add - remainder_rays
-
-    # Here we take them away so we get the number of rays we want
-    num_rays_to_each_ring[index_to_stop_adding_rays] -= final_sub
-
-    # Then we add all of these rays to the correct ring
-    num_points_kth_ring[::-1][:index_to_stop_adding_rays+1] += num_rays_to_each_ring[
-        :index_to_stop_adding_rays+1
-    ].astype(int)
-
-    # Add one point for the centre, and take one away from the end
-    num_points_kth_ring[0] = 1
-    num_points_kth_ring[-1] = num_points_kth_ring[-1] - 1
-
-    # Make get the radii for the number of circles of rays we need
-    radii = np.linspace(0, outer_radius, num_circles_int+1)
-
-    # Repeat radii for each ring
-    radii_replicated = np.repeat(radii, num_points_kth_ring)
-
-    # Calculate angles for each ring
-    angles = np.concatenate([np.linspace(0, 2*np.pi, n, endpoint=False)
-                             for n in num_points_kth_ring])
-
-    if beam_type == 'circular_beam':
-        r[0, :] = radii_replicated * np.cos(angles)
-        r[2, :] = radii_replicated * np.sin(angles)
-    elif beam_type == 'point_beam':
-        r[1, :] = np.tan(outer_radius*radii_replicated)*np.cos(angles)
-        r[3, :] = np.tan(outer_radius*radii_replicated)*np.sin(angles)
-
-    return r, num_points_kth_ring
+        y, x = concentric_rings(num_rays_approx, outer_radius)
+    r = initial_r(y.shape[0])
+    r[0, :] = x
+    r[2, :] = y
+    return r
 
 
-def calculate_wavelength(phi_0):
+def point_beam(
+    num_rays_approx: int,
+    semiangle: float,
+    random: bool = False,
+) -> NDArray:
+    '''
+    Generates a diverging point source initial beam
+    in approximately equally-filled conic shells
+
+    Parameters
+    ----------
+    num_rays_approx : int
+        The approximate number of rays
+    semiangle : float
+        The maximum semiangle of the beam
+
+    Returns
+    -------
+    r : ndarray
+        Ray position & slope matrix
+    '''
+    if random:
+        y, x = random_coords(num_rays_approx, semiangle, with_radii=True)
+    else:
+        y, x = concentric_rings(num_rays_approx, semiangle)
+    r = initial_r(y.size)
+    r[1, :] = y
+    r[3, :] = x
+    return r
+
+
+def calculate_wavelength(phi_0: float):
     return h / (2 * abs(e) * m_e * phi_0) ** (1 / 2)
 
 
-def calculate_phi_0(wavelength):
-    return h**2 / (2*wavelength**2 * abs(e) * m_e)
+def calculate_phi_0(wavelength: float):
+    return h ** 2 / (2 * wavelength ** 2 * abs(e) * m_e)
