@@ -10,7 +10,7 @@ from temgymbasic.utils import calculate_phi_0, calculate_wavelength
 from numpy.testing import assert_allclose, assert_equal
 from temgymbasic.plotting import plot_model
 import scipy
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 from typing import Tuple, NamedTuple
 from scipy.constants import e, m_e, c
 
@@ -471,12 +471,18 @@ def test_sample_potential_deflection():
 
     # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
     # but their derivation is not well explained, and is verbose, so this is what we have.
-    dx_analytical_one = np.float64((e * rho ** 2)/(gamma*m_e*v*v)) * np.max(Ex)
+    dx_analytical_one = np.float64((e * rho ** 2)/(gamma * m_e * v * v)) * np.max(Ex)
+
+    # This other equation comes from solving the equation for an electrosatic deflector,
+    # I need to do the derivation from scratch in the
+    # relativistic sense, as there is another gamma that I don't quite understand
+    dx_analytical_two = (1.0*gamma)/(2*phi_hat_centre)
 
     assert_allclose(out_rays.dx, dx_analytical_one, atol=1e-7)
+    assert_allclose(out_rays.dx, dx_analytical_two, atol=1e-7)
 
 
-@pytest.mark.skip(reason="No way to numerically test this now, so visualise plot below to check")
+# @pytest.mark.skip(reason="No way to numerically test this now, so visualise plot below to check")
 def test_sample_phase_shift():
     from scipy.interpolate import RegularGridInterpolator as RGI, interp1d
 
@@ -557,5 +563,5 @@ def test_sample_phase_shift():
 
     # Uncomment these plotting lines to see if the wavefront looks correct
 
-    # plt.axis('equal')
-    # plt.show()
+    plt.axis('equal')
+    plt.show()
