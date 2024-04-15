@@ -90,8 +90,8 @@ def detector_px_to_specimen_px(
         overfocus, transformation_matrix, fov_size_y, fov_size_x):
     position_y, position_x = (y_px - cy) * detector_pixel_size, (x_px - cx) * detector_pixel_size
     position_y, position_x = transformation_matrix @ np.array((position_y, position_x))
-    specimen_position_y = position_y / camera_length * overfocus
-    specimen_position_x = position_x / camera_length * overfocus
+    specimen_position_y = position_y / (overfocus + camera_length) * overfocus
+    specimen_position_x = position_x / (overfocus + camera_length) * overfocus
     specimen_px_x = specimen_position_x / scan_pixel_size + fov_size_x / 2
     specimen_px_y = specimen_position_y / scan_pixel_size + fov_size_y / 2
     return specimen_px_y, specimen_px_x
@@ -108,6 +108,183 @@ def get_transformation_matrix(sim_params: OverfocusParams):
 
 
 @pytest.mark.parametrize(
+        'cy', (4, 7.5)
+)
+@pytest.mark.parametrize(
+        'cx', (3, 2.2)
+)
+@pytest.mark.parametrize(
+        'nav_shape', [(8, 8), (2, 3)]
+)
+@pytest.mark.parametrize(
+        'scan_y', [2, -1.1]
+)
+@pytest.mark.parametrize(
+        'scan_x', [3, 4.2]
+)
+@pytest.mark.parametrize(
+        'y_px', [13, -7]
+)
+@pytest.mark.parametrize(
+        'x_px', [2, 2.3]
+)
+def test_basic_scale(cy, cx, nav_shape, scan_y, scan_x, y_px, x_px):
+    params = OverfocusParams(
+        overfocus=0.01,
+        scan_pixel_size=0.0001,
+        camera_length=0,
+        detector_pixel_size=0.0001,
+        semiconv=0.01,
+        cy=cy,
+        cx=cx,
+        scan_rotation=0,
+        flip_y=False,
+    )
+    nav_shape = (8, 8)
+    transformation_matrix = get_transformation_matrix(params)
+    ref_specimen_y_u, ref_specimen_x_u = detector_px_to_specimen_px(
+        y_px=y_px,
+        x_px=x_px,
+        fov_size_y=float(nav_shape[0]),
+        fov_size_x=float(nav_shape[1]),
+        transformation_matrix=transformation_matrix,
+        cy=params['cy'],
+        cx=params['cx'],
+        detector_pixel_size=float(params['detector_pixel_size']),
+        scan_pixel_size=float(params['scan_pixel_size']),
+        camera_length=float(params['camera_length']),
+        overfocus=float(params['overfocus']),
+    )
+    offset_y = scan_y - nav_shape[0] / 2
+    offset_x = scan_x - nav_shape[1] / 2
+    image_px_y = ref_specimen_y_u + offset_y
+    image_px_x = ref_specimen_x_u + offset_x
+    print(image_px_y, image_px_x)
+    # Since camera length is 0 and we have the same pixel size without rotation or flip,
+    # the image pixel is the detector pixel plus scan position minus center
+    np.testing.assert_allclose(image_px_y, y_px + scan_y - cy)
+    np.testing.assert_allclose(image_px_x, x_px + scan_x - cx)
+
+
+@pytest.mark.parametrize(
+        'cy', (4, 7.5)
+)
+@pytest.mark.parametrize(
+        'cx', (3, 2.2)
+)
+@pytest.mark.parametrize(
+        'nav_shape', [(8, 8), (2, 3)]
+)
+@pytest.mark.parametrize(
+        'scan_y', [2, -1.1]
+)
+@pytest.mark.parametrize(
+        'scan_x', [3, 4.2]
+)
+@pytest.mark.parametrize(
+        'y_px', [13, -7]
+)
+@pytest.mark.parametrize(
+        'x_px', [2, 2.3]
+)
+def test_basic_rot(cy, cx, nav_shape, scan_y, scan_x, y_px, x_px):
+    params = OverfocusParams(
+        overfocus=0.01,
+        scan_pixel_size=0.0001,
+        camera_length=0,
+        detector_pixel_size=0.0001,
+        semiconv=0.01,
+        cy=cy,
+        cx=cx,
+        scan_rotation=180,
+        flip_y=False,
+    )
+    nav_shape = (8, 8)
+    transformation_matrix = get_transformation_matrix(params)
+    ref_specimen_y_u, ref_specimen_x_u = detector_px_to_specimen_px(
+        y_px=y_px,
+        x_px=x_px,
+        fov_size_y=float(nav_shape[0]),
+        fov_size_x=float(nav_shape[1]),
+        transformation_matrix=transformation_matrix,
+        cy=params['cy'],
+        cx=params['cx'],
+        detector_pixel_size=float(params['detector_pixel_size']),
+        scan_pixel_size=float(params['scan_pixel_size']),
+        camera_length=float(params['camera_length']),
+        overfocus=float(params['overfocus']),
+    )
+    offset_y = scan_y - nav_shape[0] / 2
+    offset_x = scan_x - nav_shape[1] / 2
+    image_px_y = ref_specimen_y_u + offset_y
+    image_px_x = ref_specimen_x_u + offset_x
+    print(image_px_y, image_px_x)
+    # Compared to previous test "scale", the detector coordinates (*-px and c*)
+    # are inverted
+    np.testing.assert_allclose(image_px_y, -y_px + scan_y + cy)
+    np.testing.assert_allclose(image_px_x, -x_px + scan_x + cx)
+
+
+@pytest.mark.parametrize(
+        'cy', (4, 7.5)
+)
+@pytest.mark.parametrize(
+        'cx', (3, 2.2)
+)
+@pytest.mark.parametrize(
+        'nav_shape', [(8, 8), (2, 3)]
+)
+@pytest.mark.parametrize(
+        'scan_y', [2, -1.1]
+)
+@pytest.mark.parametrize(
+        'scan_x', [3, 4.2]
+)
+@pytest.mark.parametrize(
+        'y_px', [13, -7]
+)
+@pytest.mark.parametrize(
+        'x_px', [2, 2.3]
+)
+def test_basic_flip(cy, cx, nav_shape, scan_y, scan_x, y_px, x_px):
+    params = OverfocusParams(
+        overfocus=0.01,
+        scan_pixel_size=0.0001,
+        camera_length=0,
+        detector_pixel_size=0.0001,
+        semiconv=0.01,
+        cy=cy,
+        cx=cx,
+        scan_rotation=0,
+        flip_y=True,
+    )
+    nav_shape = (8, 8)
+    transformation_matrix = get_transformation_matrix(params)
+    ref_specimen_y_u, ref_specimen_x_u = detector_px_to_specimen_px(
+        y_px=y_px,
+        x_px=x_px,
+        fov_size_y=float(nav_shape[0]),
+        fov_size_x=float(nav_shape[1]),
+        transformation_matrix=transformation_matrix,
+        cy=params['cy'],
+        cx=params['cx'],
+        detector_pixel_size=float(params['detector_pixel_size']),
+        scan_pixel_size=float(params['scan_pixel_size']),
+        camera_length=float(params['camera_length']),
+        overfocus=float(params['overfocus']),
+    )
+    offset_y = scan_y - nav_shape[0] / 2
+    offset_x = scan_x - nav_shape[1] / 2
+    image_px_y = ref_specimen_y_u + offset_y
+    image_px_x = ref_specimen_x_u + offset_x
+    print(image_px_y, image_px_x)
+    # Compared to previous test "scale", the detector coordinates (*-px and c*)
+    # are inverted
+    np.testing.assert_allclose(image_px_y, -y_px + scan_y + cy)
+    np.testing.assert_allclose(image_px_x, x_px + scan_x - cx)
+
+
+@pytest.mark.parametrize(
     'params_update', [
         {},
         {
@@ -116,6 +293,16 @@ def get_transformation_matrix(sim_params: OverfocusParams):
             'cx': 4.7,
             'overfocus': 0.00012345,
             'camera_length': 0.87654,
+            'detector_pixel_size': 0.0009876541,
+            'scan_pixel_size': 0.000000019876,
+            'flip_y': True,
+        },
+        {
+            'scan_rotation': 23,
+            'cy': 2.3,
+            'cx': 4.7,
+            'overfocus': 0.00012345,
+            'camera_length': 0.001,
             'detector_pixel_size': 0.0009876541,
             'scan_pixel_size': 0.000000019876,
             'flip_y': True,

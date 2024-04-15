@@ -25,14 +25,12 @@ class Model:
             raise InvalidModelError("Must have at least one component")
         if not isinstance(self.source, comp.Source):
             raise InvalidModelError("First component must always be a Source")
-        if any(
-            next_c.entrance_z <= this_c.exit_z
-            for this_c, next_c
-            in pairwise(self._components)
-        ):
-            raise InvalidModelError(
-                "Components must be sorted in increasing in z position with no overlap"
-            )
+        for this_c, next_c in pairwise(self._components):
+            if next_c.entrance_z <= this_c.exit_z:
+                raise InvalidModelError(
+                    "Components must be sorted in increasing in z position with no overlap: "
+                    f"{this_c}, {next_c}"
+                )
         for c in self._components:
             c._validate_component()
 
@@ -60,20 +58,24 @@ class Model:
     def last(self) -> comp.Detector:
         return self.components[-1]
 
-    def move_component(
-        self,
-        component: comp.Component,
-        z: float,
-    ):
-        old_z = component.z
-        component._set_z(z)
+    def move_components(self, components: Iterable[comp.Component], zs: Iterable[float]):
+        old_zs = [component.z for component in components]
+        for component, z in zip(components, zs):
+            component._set_z(z)
         self._sort_components()
         try:
             self._validate_components()
         except InvalidModelError as err:
             # Unwind the change but reraise
-            self.move_component(component, old_z)
+            self.move_components(components, old_zs)
             raise err from None
+
+    def move_component(
+        self,
+        component: comp.Component,
+        z: float,
+    ):
+        return self.move_components([component], [z])
 
     def add_component(self, component: comp.Component):
         original_components = tuple(self._components)
@@ -279,9 +281,20 @@ class STEMModel(Model):
         if scan_rotation is not None:
             self.sample.scan_rotation = scan_rotation
         if camera_length is not None:
-            self.move_component(
-                self.detector,
-                self.sample.z + camera_length
+            default_model = self.__class__()
+            descan_coil_z = np.min((
+                default_model.descan_coils.z,
+                self.sample.z + 0.5 * camera_length
+            ))
+            descan_coil_distance = np.min((
+                default_model.descan_coils.length,
+                0.5 * camera_length / 4
+            ))
+            self.descan_coils._set_length(descan_coil_distance)
+
+            self.move_components(
+                [self.descan_coils, self.detector],
+                [descan_coil_z, self.sample.z + camera_length],
             )
         self.move_to(self.scan_coord)
         return self
