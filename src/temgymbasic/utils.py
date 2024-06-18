@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .rays import Rays
     from . import Degrees, Radians
 
-RadiansNP: TypeAlias = np.float_
+RadiansNP: TypeAlias = np.float64
 
 try:
     from itertools import pairwise
@@ -26,11 +26,11 @@ except ImportError:
         return zip(a, b)
 
 
-def P2R(radii: NDArray[np.float_], angles: NDArray[RadiansNP]) -> NDArray[np.complex_]:
+def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex128]:
     return radii * np.exp(1j*angles)
 
 
-def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float_], NDArray[RadiansNP]]:
+def R2P(x: NDArray[np.complex128]) -> Tuple[NDArray[np.float64], NDArray[RadiansNP]]:
     return np.abs(x), np.angle(x)
 
 
