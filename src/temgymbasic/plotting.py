@@ -4,8 +4,8 @@ import matplotlib as mpl
 
 import numpy as np
 from temgymbasic.components import (
-    DoubleDeflector, Lens, Sample, Detector, Biprism, Aperture,
-    Deflector, RadialSpikesBeam, PotentialSample
+    DoubleDeflector, Lens, STEMSample, Detector, Biprism,
+    Deflector, RadialSpikesBeam, PotentialSample, Source
 )
 
 
@@ -94,7 +94,7 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
                     color='lightblue', alpha=1, linewidth=p.component_lw, zorder=999)
             ax.plot([-radius, radius], [component.second.z, component.second.z],
                     color='k', alpha=0.8, linewidth=p.component_lw+2, zorder=998)
-        if isinstance(component, Deflector):
+        elif isinstance(component, Deflector):
             radius = -component_x
             ax.text(extent, component.z, component.name, fontsize=p.label_fontsize,
                     va='center', zorder=1000)
@@ -127,13 +127,13 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
                 alpha=0.8,
                 linewidth=3
             )
-        elif isinstance(component, Sample):
+        elif isinstance(component, STEMSample):
             ax.text(extent, component.z,
                 component.name, fontsize=p.label_fontsize, zorder=1000, va='center')
             ax.plot(
                 [
-                    -component.pixel_size*component.shape[1]/2,
-                    component.pixel_size*component.shape[1]/2
+                    -component.scan_step_yx[1]*component.scan_shape[1]/2,
+                    component.scan_step_yx[1]*component.scan_shape[1]/2
                 ],
                 [component.z, component.z],
                 color='dimgrey',
@@ -150,9 +150,11 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
             radius = -component_x
             ax.add_patch(plt.Circle((0, component.z), 0.001,
                          edgecolor='k', facecolor='w', zorder=1000))
-        elif isinstance(component, Aperture):
-            raise NotImplementedError
-
+        elif isinstance(component, Source):
+            # Rays are plotted independent of components
+            pass
+        else:
+            raise NotImplementedError(f'Component {component} not implemented.')
     plt.subplots_adjust(right=0.7)
 
     return fig, ax
