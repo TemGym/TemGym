@@ -184,6 +184,16 @@ def initial_r(num_rays: int):
     return r
 
 
+def initial_r_rayset(num_rays: int):
+    r = np.zeros(
+        (5, num_rays * 5),
+        dtype=np.float64,
+    )  # x, theta_x, y, theta_y, 1
+
+    r[4, :] = 1.
+    return r
+
+
 @njit
 def multi_cumsum_inplace(values, partitions, start):
     part_idx = 0
@@ -281,6 +291,62 @@ def circular_beam(
     r = initial_r(y.shape[0])
     r[0, :] = x
     r[2, :] = y
+    return r
+
+
+def circular_beam_gauss_rayset(
+    num_rays_approx: int,
+    outer_radius: float,
+    wo: float,
+    wavelength: float,
+    random: bool = False,
+) -> NDArray:
+    '''
+    Generates a circular parallel initial beam
+    in approximately equally-filled concentric rings
+
+    Parameters
+    ----------
+    num_rays_approx : int
+        The approximate number of rays
+    outer_radius : float
+        Outer radius of the circular beam
+
+    Returns
+    -------
+    r : ndarray
+        Ray position & slope matrix
+    '''
+    div = wavelength / (np.pi * wo)
+    dPx = wo
+    dPy = wo
+    dHx = div
+    dHy = div
+
+    if random:
+        y, x = random_coords(num_rays_approx, outer_radius)
+    else:
+        y, x = concentric_rings(num_rays_approx, outer_radius)
+
+    r = initial_r_rayset(y.shape[0])
+
+    r[0, 0::5] = x
+    r[2, 0::5] = y
+
+    r[0, 1::5] = x + dPx
+    r[2, 1::5] = y
+
+    r[0, 2::5] = x
+    r[2, 2::5] = y + dPy
+
+    r[0, 3::5] = x
+    r[1, 3::5] += dHx
+    r[2, 3::5] = y
+
+    r[0, 4::5] = x
+    r[2, 4::5] = y
+    r[3, 4::5] += dHy
+
     return r
 
 

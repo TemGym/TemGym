@@ -6,7 +6,7 @@ from typing import (
 
 import numpy as np
 from numpy.typing import NDArray
-
+import warnings
 
 from . import (
     UsageError,
@@ -20,6 +20,7 @@ from .rays import Rays
 from .utils import (
     P2R, R2P,
     circular_beam,
+    circular_beam_gauss_rayset,
     point_beam,
 )
 
@@ -83,7 +84,9 @@ class Component(abc.ABC):
 
 
 class Lens(Component):
-    def __init__(self, z: float, f: float, name: Optional[str] = None):
+    def __init__(self, z: float,
+                 f: float,
+                 name: Optional[str] = None):
         super().__init__(name=name, z=z)
         self._f = f
 
@@ -135,6 +138,221 @@ class Lens(Component):
     def gui_wrapper():
         from .gui import LensGUI
         return LensGUI
+
+
+class PerfectLens(Lens):
+    def __init__(self, z: float,
+                 f: float,
+                 m: Optional[float] = None,
+                 z1: Optional[Tuple[float]] = None,
+                 z2: Optional[Tuple[float]] = None,
+                 name: Optional[str] = None):
+        super().__init__(name=name, z=z, f=f)
+        self._f = f
+
+        # Initial Numerical Aperture
+        self.NA1 = 0.1
+        self.NA2 = 0.1
+
+        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
+
+    @property
+    def f(self) -> float:
+        return self._f
+
+    @f.setter
+    def f(self, f: float):
+        self._f = f
+
+    @property
+    def ffp(self) -> float:
+        return self.z - abs(self.f)
+
+    def update_m_and_principal_planes(self, z1, z2, m):
+        f = self._f
+        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
+
+    def initalise_m_and_principal_planes(self, z1, z2, m, f):
+
+        # If statements to decide how to define z1, z2 and magnification.
+        # We check if magnification is too small or large,
+        # and thus a finite-long conjugate approximation is applied
+        if ((z1 or z2) is None) and (m is None):
+            assert ('Must have either m defined, or both z1 and z2')
+
+        if ((z1 and z2) is None) and (m is not None):
+            if np.abs(m) <= 1e-10:
+                z1 = -1e10
+                z2 = f
+            elif np.abs(m) > 1e10:
+                z1 = -f
+                z2 = 1e10
+            else:
+                z1 = f * (1/m - 1)
+                z2 = f * (1 - m)
+        elif (m is None) and ((z1 and z2) is not None):
+            if np.abs(z1) > 1e-10:
+                m = z2 / z1
+            elif z1 <= 1e-10:
+                m = 1e10
+        elif (
+            (m is not None)
+            and ((z1 and z2) is not None)
+        ):
+            warnings.warn("Overspecified magnification (m) and image and object planes (z1 and z2),\
+                          the provided magnification is ignored")
+            m = z2 / z1
+
+        # If finite long conjugate approximation,
+        # we need to set the signal that the numerical aperture is
+        # 0.0, which is neccessary for later
+        if np.abs(z1) >= 1e10:
+            z1 = 1e10 * (z1 / np.abs(z1))
+            self.NA1 = 0.0  # collimated input
+
+        if np.abs(z2) >= 1e10:
+            z2 = 1e10 * (z2 / np.abs(z2))
+            self.NA2 = 0.0  # collimated input
+
+        m = z2 / z1
+
+        return z1, z2, m
+
+    def step(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        f = self._f
+        m = self._m
+        z1 = self._z1
+        z2 = self._z2
+        NA1 = self.NA1
+        NA2 = self.NA2
+
+        # Convert slope into direction cosines
+        L1 = rays.dx / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+        M1 = rays.dy / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+        N1 = 1 / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+
+        u1 = rays.x
+        v1 = rays.y
+
+        # Ray object point coordinates (x1, y1) on front conjugate plane
+        if (self.NA1 == 0.0):
+            x1 = (L1 / N1) * z1
+            y1 = (M1 / N1) * z1
+            r1_mag = np.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
+
+            L1_est = -(x1 - u1) / r1_mag
+            M1_est = -(y1 - v1) / r1_mag
+        else:
+
+            x1 = (L1 / N1) * z1 + u1
+            y1 = (M1 / N1) * z1 + v1
+            r1_mag = np.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
+
+        # Principal Ray directions
+        if (self.NA1 == 0.0):
+            L1_p = rays.dx / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+            M1_p = rays.dy / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+            N1_p = 1 / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+            p1_mag = np.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2)
+        else:
+            p1_mag = np.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2)
+
+            # Obtain direction cosines of principal ray from second principal plane to image point
+            L1_p = (x1 / p1_mag) * z1 / np.abs(z1)
+            M1_p = (y1 / p1_mag) * z1 / np.abs(z1)
+            N1_p = np.sqrt(1 - L1_p ** 2 - M1_p ** 2)
+
+        # Coordinates in image plane or focal plane
+        if np.abs(m) <= 1.0:
+            x2 = z2 * (L1_p / N1_p)
+            y2 = z2 * (M1_p / N1_p)
+
+            p2_mag = np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+            L2_p = (x2 / p2_mag) * (z2 / np.abs(z2))
+            M2_p = (y2 / p2_mag) * (z2 / np.abs(z2))
+            N2_p = np.sqrt(1 - L2_p ** 2 - M2_p ** 2)
+        else:
+            a = x1 / z1
+            b = y1 / z1
+            N2_p = 1 / np.sqrt(1 + a ** 2 + b ** 2)
+            L2_p = a * N2_p
+            M2_p = b * N2_p
+            x2 = (L2_p / N2_p) * z2
+            y2 = (M2_p / N2_p) * z2
+            p2_mag = np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+
+        # Calculation to back propagate to right hand side principal plane
+        Cx = m * L2_p - L1_p
+        Cy = m * M2_p - M1_p
+
+        if (NA1 == 0.0):
+            L2 = (L1_est + Cx) / m
+            M2 = (M1_est + Cy) / m
+            N2 = np.sqrt(1 - L2 ** 2 - M2 ** 2)
+        else:
+            L2 = (L1 + Cx) / m
+            M2 = (M1 + Cy) / m
+            N2 = np.sqrt(1 - L2 ** 2 - M2 ** 2)
+
+        # We use a mask to find rays that have gone to the centre,
+        # because we are not inputting one ray at a time, but a vector of rays.
+        mask = np.sqrt(u1 ** 2 + v1 ** 2) < 1e-7
+
+        # Initialize the output arrays
+        u2 = np.zeros_like(u1)
+        v2 = np.zeros_like(v1)
+
+        # Handle the case where the mask is true and NA2 = 0.0
+        if NA2 == 0.0:
+            a = -x1 / f
+            b = -y1 / f
+            N2_p = 1 / np.sqrt(1 + a ** 2 + b ** 2)
+            L2_p = a * N2_p
+            M2_p = b * N2_p
+
+            L2[mask] = L2_p[mask]
+            M2[mask] = M2_p[mask]
+            N2[mask] = N2_p[mask]
+            u2[mask] = 0.0
+            v2[mask] = 0.0
+
+        # For the case where the mask is false, (rays are not going through the centre of the lens)
+        not_mask = ~mask
+        u2[not_mask] = -(L2[not_mask] / N2[not_mask]) * z2 + x2[not_mask]
+        v2[not_mask] = -(M2[not_mask] / N2[not_mask]) * z2 + y2[not_mask]
+
+        if NA2 == 0:
+            a = -x1 / f
+            b = -y1 / f
+            N2_p = 1 / np.sqrt(1 + a ** 2 + b ** 2)
+            L2_p = a * N2_p
+            M2_p = b * N2_p
+
+            L2[not_mask] = L2_p[not_mask]
+            M2[not_mask] = M2_p[not_mask]
+            N2[not_mask] = N2_p[not_mask]
+
+        # Calculate final distance from image/focal plane to point
+        # ray leaves lens for optical path length
+        r2_mag = np.sqrt((x2 - u2) ** 2 + (y2 - v2) ** 2 + z2 ** 2)
+
+        opl1 = r1_mag + r2_mag  # Ray opl
+        opl0 = p1_mag + p2_mag  # Principal ray opl
+
+        rays.path_length += (opl0 - opl1)
+        rays.dx = L2 / N2
+        rays.dy = M2 / N2
+
+        yield rays.new_with(
+            location=self,
+        )
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import PerfectLensGUI
+        return PerfectLensGUI
 
 
 class Sample(Component):
@@ -444,6 +662,32 @@ class XPointBeam(PointBeam):
     def gui_wrapper():
         from .gui import PointBeamGUI
         return PointBeamGUI
+
+
+class GaussBeam(Source):
+    def __init__(
+        self,
+        z: float,
+        radius: float,
+        wo: float,
+        voltage: Optional[float] = None,
+        tilt_yx: Tuple[float, float] = (0., 0.),
+        name: Optional[str] = None,
+    ):
+        super().__init__(name=name, z=z, voltage=voltage)
+        self.wo = wo
+        self.radius = radius
+        self.tilt_yx = tilt_yx
+
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+        wavelength = calculate_wavelength(self.voltage)
+        r = circular_beam_gauss_rayset(num_rays, self.radius, self.wo, wavelength, random=random)
+        return self._make_rays(r)
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import GaussBeamGUI
+        return GaussBeamGUI
 
 
 class Detector(Component):
