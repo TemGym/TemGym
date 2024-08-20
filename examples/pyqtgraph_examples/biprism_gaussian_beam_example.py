@@ -6,7 +6,7 @@ from temgymbasic import components as comp
 
 from PySide6.QtWidgets import QApplication
 from temgymbasic.gui import TemGymWindow
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import numpy as np
 from temgymbasic.utils import calculate_phi_0
 
@@ -22,10 +22,11 @@ det_shape = (101, 101)
 pixel_size = 0.001
 
 components = (
-    comp.PointBeam(
+    comp.GaussBeam(
         z=0.0,
         voltage=calculate_phi_0(wavelength),
-        semi_angle=0.5,
+        radius=0.1,
+        wo=0.2
     ),
     comp.Biprism(
         z=a,
@@ -48,17 +49,18 @@ components = (
 )
 
 model = Model(components)
-rays = tuple(model.run_iter(num_rays=2**20))
+rays = tuple(model.run_iter(num_rays=1000))
+
+end_rays = rays[-1].data
 image = model.detector.get_image(rays[-1])
 det_x = np.linspace(-det_shape[1]//2*pixel_size, det_shape[1]//2*pixel_size, det_shape[1])
 
-plt.axis('equal')
-plt.figure()
-plt.imshow(np.abs(image)**2/np.max(np.abs(image)**2))
-plt.show()
+# plt.axis('equal')
+# plt.figure()
+# plt.imshow(np.abs(image)**2/np.max(np.abs(image)**2))
+# plt.show()
 
-# AppWindow = QApplication(sys.argv)
-# viewer = TemGymWindow(model)
-# viewer.show()
-# AppWindow.exec()
-
+AppWindow = QApplication(sys.argv)
+viewer = TemGymWindow(model)
+viewer.show()
+AppWindow.exec()
