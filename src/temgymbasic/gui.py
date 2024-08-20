@@ -19,11 +19,9 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QCheckBox,
     QPushButton,
-    QLineEdit,
     QComboBox,
 )
 from PySide6.QtGui import (
-    QDoubleValidator,
     QKeyEvent,
 )
 from pyqtgraph.dockarea import Dock, DockArea
@@ -394,6 +392,10 @@ class TemGymWindow(QMainWindow):
             self.gui_components[0].num_rays,
             random=True,
         ))
+
+        if self.model.components[0] == comp.GaussBeam:
+            all_rays = all_rays[5::]
+
         vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
         self.ray_geometry.setData(
             pos=vertices,
@@ -592,26 +594,12 @@ class LensGUI(ComponentGUIWrapper):
             self.fslider.setValue(self.lens.f)
 
     def build(self) -> Self:
-        qdoublevalidator = QDoubleValidator()
         vbox = QVBoxLayout()
 
         self.fslider, _ = labelled_slider(
             self.lens.f, -5., 5., name="Focal Length", insert_into=vbox, decimals=2,
         )
         self.fslider.valueChanged.connect(self.set_f)
-
-        self.fwobblefreqlineedit = QLineEdit(f"{1:.4f}")
-        self.fwobbleamplineedit = QLineEdit(f"{0.5:.4f}")
-        self.fwobblefreqlineedit.setValidator(qdoublevalidator)
-        self.fwobbleamplineedit.setValidator(qdoublevalidator)
-        self.fwobble = QCheckBox('Wobble Lens Current')
-        hbox_wobble = QHBoxLayout()
-        hbox_wobble.addWidget(self.fwobble)
-        hbox_wobble.addWidget(QLabel('Wobble Frequency'))
-        hbox_wobble.addWidget(self.fwobblefreqlineedit)
-        hbox_wobble.addWidget(QLabel('Wobble Amplitude'))
-        hbox_wobble.addWidget(self.fwobbleamplineedit)
-        vbox.addLayout(hbox_wobble)
         self.box.setLayout(vbox)
 
         self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
@@ -637,6 +625,78 @@ class LensGUI(ComponentGUIWrapper):
                 width=5
             )
         ]
+
+
+class PerfectLensGUI(LensGUI):
+    @property
+    def perfectlens(self) -> 'comp.PerfectLens':
+        return self.component
+
+    @Slot(float)
+    def set_m(self, val):
+        self.perfectlens._m = (
+            self.mslider.value(),
+        )
+        self.perfectlens.update_m_and_principal_planes(None, None, val)
+        self.try_update()
+
+    @Slot(float)
+    def set_f(self, val: float):
+        if abs(val) < 1e-6:
+            return
+
+        self.perfectlens.f = val
+        self.perfectlens.update_m_and_principal_planes(None, None, self.perfectlens._m)
+        self.try_update()
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.fslider):
+            self.fslider.setValue(self.perfectlens.f)
+        with blocker(self.mslider):
+            self.mslider.setValue(self.perfectlens._m)
+
+    def build(self) -> Self:
+
+        vbox = QVBoxLayout()
+
+        self.fslider, _ = labelled_slider(
+            self.perfectlens.f, -5., 5., name="Focal Length",
+            insert_into=vbox, decimals=2,
+        )
+        self.fslider.valueChanged.connect(self.set_f)
+        self.box.setLayout(vbox)
+
+        self.mslider, _ = labelled_slider(
+            self.perfectlens._m, -5., 5., name="Magnification",
+            insert_into=vbox, decimals=2,
+        )
+        self.mslider.valueChanged.connect(self.set_m)
+        self.box.setLayout(vbox)
+
+        # self.flabel_table = QLabel('Focal Length = ' + f"{self.perfectlens.f:.2f}")
+        # self.flabel_table.setMinimumWidth(80)
+
+        # self.mlabel_table = QLabel('Magnification = ' + f"{self.perfectlens._m:.2f}")
+        # self.mlabel_table.setMinimumWidth(80)
+
+        # self.z1label_table = QLabel('Principal Plane z1 = ' + f"{self.perfectlens._z1:.2f}")
+        # self.z1label_table.setMinimumWidth(80)
+
+        # self.z2label_table = QLabel('Principal Plane z2 = ' + f"{self.perfectlens._z2:.2f}")
+        # self.z2label_table.setMinimumWidth(80)
+
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.flabel_table)
+        # hbox.addWidget(self.mlabel_table)
+        # hbox.addWidget(self.z1label_table)
+        # hbox.addWidget(self.z2label_table)
+
+        vbox = QVBoxLayout()
+        # vbox.addLayout(hbox)
+        self.table.setLayout(vbox)
+
+        return self
 
 
 class SourceGUI(ComponentGUIWrapper):
@@ -730,6 +790,67 @@ class ParallelBeamGUI(SourceGUI):
             beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=3
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.xangleslider)
+        hbox.addWidget(self.yangleslider)
+        vbox.addLayout(hbox)
+        self.box.setLayout(vbox)
+        return self
+
+    def _get_geom(self):
+        return comp_geom.lens(
+            self.beam.radius,
+            Z_ORIENT * self.component.z,
+            64,
+        ).T
+
+
+class GaussBeamGUI(SourceGUI):
+    @property
+    def beam(self) -> 'comp.GaussBeam':
+        return self.component
+
+    @Slot(float)
+    def set_radius(self, val):
+        self.beam.radius = val
+        self.try_update(geom=True)
+
+    @Slot(float)
+    def set_wo(self, val):
+        self.beam.wo = val
+        self.try_update(geom=True)
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.beamwidthslider):
+            self.beamwidthslider.setValue(self.beam.radius)
+        with blocker(self.xangleslider):
+            self.xangleslider.setValue(self.beam.tilt_yx[1])
+        with blocker(self.yangleslider):
+            self.yangleslider.setValue(self.beam.tilt_yx[0])
+        with blocker(self.woslider):
+            self.woslider.setValue(self.beam.wo)
+
+    def build(self) -> Self:
+
+        vbox = QVBoxLayout()
+
+        self._build()
+
+        vbox.addWidget(self.rayslider)
+
+        beam_radius = self.beam.radius
+        self.beamwidthslider, _ = labelled_slider(
+            beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=3
+        )
+        self.beamwidthslider.valueChanged.connect(self.set_radius)
+
+        wo = self.beam.wo
+        self.woslider, _ = labelled_slider(
+            wo, 0.001, 1, name='Gaussian Beam Width', insert_into=vbox, decimals=3
+        )
+        self.woslider.valueChanged.connect(self.set_wo)
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.xangleslider)
