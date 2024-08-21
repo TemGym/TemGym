@@ -387,3 +387,10 @@ def calculate_wavelength(phi_0: float):
 
 def calculate_phi_0(wavelength: float):
     return h ** 2 / (2 * wavelength ** 2 * abs(e) * m_e)
+
+
+def convert_slope_to_direction_cosines(dx, dy):
+    l_dir_cosine = dx / np.sqrt(1 + dx ** 2 + dy ** 2)
+    m_dir_cosine = dy / np.sqrt(1 + dx ** 2 + dy ** 2)
+    n_dir_cosine = 1 / np.sqrt(1 + dx ** 2 + dy ** 2)
+    return l_dir_cosine, m_dir_cosine, n_dir_cosine
