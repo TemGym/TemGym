@@ -53,16 +53,28 @@ def propagate_qpinv_abcd(Qinv, A, B, C, D):
     den = A + B @ Qinv
     return num @ np.linalg.inv(den)
 
-
 def misalign_phase(B, A, r1m, r2, k):
-    """Compute the extra phase factor from ray data for misaligned evaluation"""
+    """
+    Parameters
+    ----------
+    B,A : numpy.ndarrays
+        elements of the ray transfer matrix 
+    r1m : numpy.ndarray of size 2
+        misalignment in position in x then y
+    r2 : numpy.ndarray of dimension 2
+        detector coordinates in x and y. First dimension holds x/y, second holds coordinate
+    k : float, complex
+        wave number of simulation
+    """
+    Binv = np.linalg.inv(B)
+    BinvA = Binv @ A
+    
+    misalign = (r1m[...,0]*BinvA[...,0,0] + r1m[...,1]*BinvA[...,1,0])*r1m[...,0]
+    misalign = (misalign + (r1m[...,0]*BinvA[...,0,1] + r1m[...,1]*BinvA[...,1,1])*r1m[...,1])
 
-    Binv = mat_inv_2x2(B)
-    BA = np.einsum('...ij,...jk->...ik', Binv, A)
-
-    misalign = np.einsum('...i,...ij,...j', r1m, BA, r1m)
-    cross = -2 * np.einsum('...i,...ij,...j', r1m, Binv, r2)
-
+    cross = (r1m[...,0]*Binv[...,0,0] + r1m[...,1]*Binv[...,1,0])*r2[...,0]
+    cross = -2*(cross + (r1m[...,0]*Binv[...,0,1] + r1m[...,1]*Binv[...,1,1])*r2[...,1])
+    
     return np.exp(-1j * k / 2 * (misalign + cross))
 
 
@@ -75,22 +87,25 @@ def transversal_phase(Qpinv, r, k):
         N x 2 x 2 complex curvature matrix
     r : numpy.ndarray
         N x 2 radial coordinate vector
-    k : float
-        wave number
+
     Returns
     -------
     numpy.ndarray
-        phase of the gaussian profile in the plane perpendicular to the ray propagation axis
+        phase of the gaussian profile
     """
 
-    transversal = np.einsum('...i,...ij,...j->...', r, Qpinv, r)
+    transversal = (r[...,0]*Qpinv[...,0,0] + r[...,1]*Qpinv[...,1,0])*r[...,0]
+    transversal = (transversal + (r[...,0]*Qpinv[...,0,1] + r[...,1]*Qpinv[...,1,1])*r[...,1])/2
 
-    return np.exp(1j * k / 2 * transversal)
+    return np.exp(1j * k * transversal)
 
 
-def phase_correction(r1m, p1m, k):
+def phase_correction(r1m, p1m, r2m, p2m, k):
     # See https://www.tandfonline.com/doi/abs/10.1080/09500340600842237
-    return np.exp(-1j * k / 2 * (r1m.T @ p1m))
+    z1_phase = np.sum(r1m * p1m, axis=0)
+    z2_phase = np.sum(r2m * p2m, axis=0)
+    print(z2_phase, z1_phase, (-z2_phase + z1_phase))
+    return np.exp(-1j * k / 2 * (-z2_phase + z1_phase))
 
 
 def gaussian_amplitude(Qinv, A, B):
@@ -117,15 +132,15 @@ def guoy_phase(Qpinv):
     return np.exp(-1j * guoy)
 
 
-def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2, k, A, B, path_length):
+def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, B, path_length):
 
-    misalign = misalign_phase(B, A, r1m, r2, k)  # First misalignment factor
-    misalign_corr = phase_correction(r1m, p1m, k)  # Second misalignment factor
+    misalign = misalign_phase(B, A, r1m.T, r2, k)  # First misalignment factor
+    misalign_corr = phase_correction(r1m, p1m, r2m, p2m, k)  # Second misalignment factor
     aligned = transversal_phase(Qpinv, r, k)  # Phase and Amplitude at transversal plane to beam dir
     opl = np.exp(1j * k * path_length)  # Optical path length phase
     guoy = guoy_phase(Qpinv)  # Guoy phase
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
-    return np.abs(amplitude) * aligned * opl * misalign * misalign_corr * guoy
+    return np.sum(np.abs(amplitude) * aligned * opl * misalign * misalign_corr * guoy, axis = -1)
 
 
 def eigenvalues_2x2(array):
