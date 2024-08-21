@@ -26,11 +26,11 @@ except ImportError:
         return zip(a, b)
 
 
-def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex_]:
+def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex128]:
     return radii * np.exp(1j*angles)
 
 
-def R2P(x: NDArray[np.complex_]) -> Tuple[NDArray[np.float64], NDArray[RadiansNP]]:
+def R2P(x: NDArray[np.complex128]) -> Tuple[NDArray[np.float64], NDArray[RadiansNP]]:
     return np.abs(x), np.angle(x)
 
 
