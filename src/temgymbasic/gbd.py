@@ -104,7 +104,6 @@ def phase_correction(r1m, p1m, r2m, p2m, k):
     # See https://www.tandfonline.com/doi/abs/10.1080/09500340600842237
     z1_phase = np.sum(r1m * p1m, axis=0)
     z2_phase = np.sum(r2m * p2m, axis=0)
-    print(z2_phase, z1_phase, (-z2_phase + z1_phase))
     return np.exp(-1j * k / 2 * (-z2_phase + z1_phase))
 
 
@@ -140,7 +139,8 @@ def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, 
     opl = np.exp(1j * k * path_length)  # Optical path length phase
     guoy = guoy_phase(Qpinv)  # Guoy phase
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
-    return np.sum(np.abs(amplitude) * aligned * opl * misalign * misalign_corr * guoy, axis = -1)
+    
+    return np.sum(amplitude * aligned * opl * misalign * misalign_corr * guoy, axis = -1)
 
 
 def eigenvalues_2x2(array):
