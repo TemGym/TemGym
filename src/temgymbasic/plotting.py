@@ -10,7 +10,7 @@ from temgymbasic.components import (
 
 
 class PlotParams(NamedTuple):
-    num_rays: int = 512
+    num_rays: int = 4
     ray_color: str = 'dimgray'
     fill_color: str = 'aquamarine'
     fill_color_pair: Tuple[str, str] = ('khaki', 'deepskyblue')
@@ -26,7 +26,7 @@ class PlotParams(NamedTuple):
 
 def plot_model(model, *, plot_params: PlotParams = PlotParams()):
     p = plot_params
-    rays = tuple(model.run_iter(num_rays=p.num_rays))
+    rays = tuple(model.run_iter(num_rays=1))
 
     if isinstance(model.components[0], RadialSpikesBeam):
         raise NotImplementedError
