@@ -102,8 +102,8 @@ def transversal_phase(Qpinv, r, k):
 
 def phase_correction(r1m, p1m, r2m, p2m, k):
     # See https://www.tandfonline.com/doi/abs/10.1080/09500340600842237
-    z1_phase = np.sum(r1m * p1m, axis=0)
-    z2_phase = np.sum(r2m * p2m, axis=0)
+    z1_phase = np.sum(r1m * p1m, axis=1)
+    z2_phase = np.sum(r2m * p2m, axis=1)
     return np.exp(-1j * k / 2 * (-z2_phase + z1_phase))
 
 
@@ -133,8 +133,10 @@ def guoy_phase(Qpinv):
 
 def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, B, path_length):
 
-    misalign = misalign_phase(B, A, r1m.T, r2, k)  # First misalignment factor
+    misalign = misalign_phase(B, A, r1m, r2, k)  # First misalignment factor
     misalign_corr = phase_correction(r1m, p1m, r2m, p2m, k)  # Second misalignment factor
+    # misalign_corr = misalign_phase(B, A, r1m, r1m[np.newaxis, ...], k)
+
     aligned = transversal_phase(Qpinv, r, k)  # Phase and Amplitude at transversal plane to beam dir
     opl = np.exp(1j * k * path_length)  # Optical path length phase
     guoy = guoy_phase(Qpinv)  # Guoy phase
