@@ -140,7 +140,7 @@ def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, 
     guoy = guoy_phase(Qpinv)  # Guoy phase
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
     
-    return np.sum(amplitude * aligned * opl * misalign * misalign_corr * guoy, axis = -1)
+    return np.sum(np.abs(amplitude) * aligned * opl * misalign * misalign_corr * guoy, axis = -1)
 
 
 def eigenvalues_2x2(array):
