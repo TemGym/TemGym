@@ -142,6 +142,14 @@ class Rays:
         )
 
     def propagate(self, distance: float) -> Self:
+        degree_x = np.rad2deg(np.arctan(self.dx))
+        degree_y = np.rad2deg(np.arctan(self.dy))
+        
+        if np.any(degree_x > 15):
+            raise ValueError(f"dx is too large for parabasal representation: {degree_x}")
+        elif np.any(degree_y > 15):
+            raise ValueError(f"dy is too large for parabasal representation: {degree_y}")
+        
         return self.new_with(
             data=np.matmul(
                 self.propagation_matrix(distance),
