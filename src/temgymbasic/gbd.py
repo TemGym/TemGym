@@ -218,3 +218,231 @@ def calculate_Qpinv(A, B, C, D, Qinv):
     DEN = mat_inv_2x2(A + B @ Qinv)
 
     return NUM @ DEN
+
+
+def center_transversal_plane(r_pixels, r_ray, O):
+
+    """Centers the coordinate system on the transversal plane
+
+    Returns
+    -------
+    r
+        coordinates of distances from the center of the transversal plane to the pixels
+    """
+    r_ray = np.moveaxis(r_ray,1,0)
+    
+    # pre-treat r pixel
+    r_pixels = np.broadcast_to(r_pixels,(O.shape[0], *r_pixels.shape))
+    r_pixels = np.moveaxis(r_pixels,-1,0)
+    r_pixels = r_pixels[...,np.newaxis]
+
+    r_pixels = O @ r_pixels
+    r_origin = r_ray[:,0]
+
+    r = r_pixels-r_origin
+    r = r[...,0]
+
+    return r
+
+def distance_to_transversal(r_pixel, r_ray, k_ray):
+    n = k_ray[0]
+
+    RHS = n @ r_pixel
+    RHS = np.broadcast_to(RHS,(r_ray.shape[0],RHS.shape[0],RHS.shape[1]))
+
+    LHS = np.sum(n*r_ray,axis=-1)
+    DEN = np.sum(n*k_ray,axis=-1)
+    
+    LHS = np.broadcast_to(LHS,(RHS.shape[-1],LHS.shape[0],LHS.shape[1]))
+    LHS = np.moveaxis(LHS,0,-1)
+
+    DEN = np.broadcast_to(DEN,(LHS.shape[-1],DEN.shape[0],DEN.shape[1]))
+    DEN = np.moveaxis(DEN,0,-1)
+
+    Delta = (RHS-LHS)/DEN
+    Delta = Delta[...,np.newaxis]
+
+    return Delta
+
+def propagate_rays_and_transform(r_ray,k_ray,Delta,O):
+    """propagate rays in free space 
+
+    Parameters
+    ----------
+    r_rays : ndarray
+        position vectors
+    k_rays : ndarray
+        direction cosine vectors
+    Delta : _type_
+        distances to propagate along k_rays
+
+    Returns
+    -------
+    r_rays,k_rays
+        broadcasted r and k rays after propagating
+    """
+
+    # swap Delta to match rays
+    Delta = np.moveaxis(Delta, -2, 0)
+
+    r_ray = r_ray + k_ray*Delta
+    r_ray = np.moveaxis(r_ray, 1, 0) # get the ray back in the first index
+
+    r_ray = r_ray[..., np.newaxis]
+    k_ray = k_ray[..., np.newaxis]
+
+    r_ray = O @ r_ray
+    k_ray = O @ k_ray
+
+    # swap axes so we can broadcast to the right shape
+    r_ray =  np.swapaxes(r_ray, 0, 1)
+
+    # broadcast k_ray
+    k_ray = np.broadcast_to(k_ray,r_ray.shape)
+
+    # put the axes back pls
+    r_ray = np.swapaxes(r_ray,0,1)
+    k_ray = np.swapaxes(k_ray,0,1)
+
+    return r_ray, k_ray
+
+def orthogonal_transformation_matrix(n,normal):
+    """generates the orthogonal transformation to the transversal plane
+
+    Parameters
+    ----------
+    n : N x 3 vector, typically k_ray[0]
+        vector normal to the transversal plane, typically the central ray of a beamlet
+    normal : N x 3 vector, typically (0,0,1)
+        local surface normal of the detector plane
+
+    Returns
+    -------
+    O : Nx3x3 ndarray
+        orthogonal transformation matrix
+    """
+    l = np.cross(n, -normal)
+    aligned_mask = np.all(np.isclose(l, 0), axis=-1)
+
+    # Initialize l with an orthogonal vector for the aligned case
+    l[aligned_mask] = np.array([1, 0, 0])
+
+    # If n is [1, 0, 0], use [0, 1, 0] for l in the aligned case
+    special_case_mask = aligned_mask & np.all(np.isclose(n, [1, 0, 0]), axis=-1)
+    l[special_case_mask] = np.array([0, 1, 0])
+
+    # Normalize l for non-aligned cases
+    non_aligned_mask = ~aligned_mask
+    l[non_aligned_mask] = l[non_aligned_mask] / vector_norm(l[non_aligned_mask])[..., np.newaxis]
+
+    
+    m = np.cross(n,l)
+    
+    O = np.asarray([[l[...,0],l[...,1],l[...,2]],
+                    [m[...,0],m[...,1],m[...,2]],
+                    [n[...,0],n[...,1],n[...,2]]])
+    
+    O = np.moveaxis(O,-1,0)
+
+    return O
+
+def vector_norm(vector):
+    """computes the magnitude of a vector
+
+    Parameters
+    ----------
+    vector : numpy.ndarray
+        N x 3 array containing a 3-vector
+
+    Returns
+    -------
+    numpy.ndarray
+        magnitude of the vector
+    """
+    vx = vector[..., 0] * vector[..., 0]
+    vy = vector[..., 1] * vector[..., 1]
+    vz = vector[..., 2] * vector[..., 2]
+
+    return np.sqrt(vx + vy + vz)
+
+
+def optical_path_and_delta(OPD, Delta, k):
+    """compute the total optical path experienced by a beamlet
+
+    Parameters
+    ----------
+    OPD : numpy.ndarray
+        optical path difference from raytracing code
+    Delta : numpy.ndarray
+        optical path propagation from evaluation plane to transversal plane
+
+    Returns
+    -------
+    numpy.ndarray
+        the total optical path experienced by a ray
+    """
+    OPD = OPD[0] # central ray
+    Delta = np.moveaxis(Delta[0,...,0], -1, 0) # central ray
+    opticalpath = OPD + Delta # grab central ray of OPD
+
+    return np.exp(1j * k * opticalpath)
+
+def convert_slope_to_direction_cosines(dx, dy):
+    l = dx / np.sqrt(1 + dx ** 2 + dy ** 2)
+    m = dy / np.sqrt(1 + dx ** 2 + dy ** 2)
+    n = 1 / np.sqrt(1 + dx** 2 + dy ** 2)
+    return l, m, n
+
+
+def differential_matrix_calculation(central_u,central_v,diff_uu,diff_uv,diff_vu,diff_vv,du,dv):
+    """computes a sub-matrix of the ray transfer tensor
+
+    diff_ij means a differential ray with initial differential in dimension i, evaluated in j
+    diff_xy means the differential ray with an initial dX in the x dimension on the source plane,
+    and these are the coordinates of that ray in the y-axis on the detector plane
+
+    Parameters
+    ----------
+    central_u : numpy.ndarray
+        array describing the central rays position or angle in x or l
+    central_v : numpy.ndarray
+        array describing the central rays position or angle in y or m
+    diff_uu : numpy.ndarray
+        array describing the differential rays position or angle in x or l
+    diff_uv : numpy.ndarray
+        array describing the differential rays position or angle in y or m
+    diff_vu : numpy.ndarray
+        array describing the differential rays position or angle in y or m
+    diff_vv : numpy.ndarray
+        array describing the differential rays position or angle in y or m
+    du : float
+        differential on sourc plane in position or angle in x or l
+    dv : float
+        differential on sourc plane in position or angle in y or m
+
+    Returns
+    -------
+    numpy.ndarray
+        sub-matrix of the ray transfer tensor
+    """
+    Mxx = (diff_uu - central_u)/du # Axx
+    Myx = (diff_uv - central_v)/du # Ayx
+    Mxy = (diff_vu - central_u)/dv # Axy
+    Myy = (diff_vv - central_v)/dv # Ayy
+
+    diffmat = np.moveaxis(np.asarray([[Mxx,Mxy],[Myx,Myy]]),-1,0)
+    diffmat = np.moveaxis(diffmat,-1,0)
+
+    return diffmat
+
+
+def det_2x2(array):
+    """compute determinant of 2x2 matrix, broadcasted"""
+    a = array[..., 0, 0]
+    b = array[..., 0, 1]
+    c = array[..., 1, 0]
+    d = array[..., 1, 1]
+
+    det = a * d - b * c
+
+    return det
