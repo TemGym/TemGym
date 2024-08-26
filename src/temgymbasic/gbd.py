@@ -53,6 +53,11 @@ def propagate_qpinv_abcd(Qinv, A, B, C, D):
     den = A + B @ Qinv
     return num @ np.linalg.inv(den)
 
+def Matmulvec(r0, Mat, r1):
+    out = (r0[...,0]*Mat[...,0,0] + r0[...,1]*Mat[...,1,0])*r1[...,0]
+    out = (out + (r0[...,0]*Mat[...,0,1] + r0[...,1]*Mat[...,1,1])*r1[...,1])
+    return out
+
 def misalign_phase(B, A, r1m, r2, k):
     """
     Parameters
@@ -130,11 +135,23 @@ def guoy_phase(Qpinv):
     guoy = (np.arctan(np.real(e1) / np.imag(e1)) + np.arctan(np.real(e2) / np.imag(e2))) / 2
     return np.exp(-1j * guoy)
 
+def misalign_phase_plane_wave(r2, p2m, k):
+    l0_x = r2[:, 0, 0] * p2m[0, 0]
+    l0_y = r2[:, 0, 1] * p2m[1, 0]
+    phi_x = k * l0_x * (1 + ((p2m[0, 0] ** 2) / 2))
+    phi_y = k * l0_y * (1 + ((p2m[1, 0] ** 2) / 2))
+    phi = phi_x + phi_y
+    return np.exp(1j * phi)
 
 def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, B, path_length):
 
-    misalign = misalign_phase(B, A, r1m, r2, k)  # First misalignment factor
-    misalign_corr = phase_correction(r1m, p1m, r2m, p2m, k)  # Second misalignment factor
+    misaligned_phase = misalign_phase_plane_wave(r, p2m, k)[..., np.newaxis] 
+    # l0 = r2[:, 0, 0] * p2m[0, 0]
+    # misaligned_phase = np.exp(1j * k * l0 * (1 + ((p2m[0, 0] ** 2) / 2)))[..., np.newaxis]
+    # Misalignment factor
+    # misalign = misalign_phase_new(A, B, C, D, r2m, p2m, k)
+    # misalign_abs = np.abs(misalign_phase(B, A, r1m, r2, k))  # First misalignment factor
+    # misalign = phase_correction(r1m, p1m, r2m, p2m, k)  # Second misalignment factor
     # misalign_corr = misalign_phase(B, A, r1m, r1m[np.newaxis, ...], k)
 
     aligned = transversal_phase(Qpinv, r, k)  # Phase and Amplitude at transversal plane to beam dir
@@ -142,7 +159,7 @@ def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, 
     guoy = guoy_phase(Qpinv)  # Guoy phase
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
     
-    return np.sum(np.abs(amplitude) * aligned * opl * misalign * misalign_corr * guoy, axis = -1)
+    return np.sum(np.abs(amplitude) * aligned * opl * misaligned_phase * guoy, axis = -1)
 
 
 def eigenvalues_2x2(array):
