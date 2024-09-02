@@ -16,6 +16,7 @@ from . import (
     Radians,
     Degrees,
 )
+from .aber import aberrated_sphere, ref_sphere
 from .rays import Rays
 from .utils import (
     P2R, R2P,
@@ -41,6 +42,7 @@ class Component(abc.ABC):
     def __init__(self, z: float, name: Optional[str] = None):
         if name is None:
             name = type(self).__name__
+            
         self._name = name
         self._z = z
 
@@ -217,10 +219,9 @@ class PerfectLens(Lens):
         m = z2 / z1
 
         return z1, z2, m
-
-    def step(
-        self, rays: Rays
-    ) -> Generator[Rays, None, None]:
+    
+    def get_exit_pupil_coords(self, rays):
+        
         f = self._f
         m = self._m
         z1 = self._z1
@@ -245,7 +246,6 @@ class PerfectLens(Lens):
             L1_est = -(x1 - u1) / r1_mag
             M1_est = -(y1 - v1) / r1_mag
         else:
-
             x1 = (L1 / N1) * z1 + u1
             y1 = (M1 / N1) * z1 + v1
             r1_mag = np.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
@@ -341,10 +341,31 @@ class PerfectLens(Lens):
         opl1 = r1_mag + r2_mag  # Ray opl
         opl0 = p1_mag + p2_mag  # Principal ray opl
 
-        rays.path_length += (opl0 - opl1)
+        dopl = (opl0 - opl1)
+
+        return x1, y1, u2, v2, x2, y2, L2, M2, N2, dopl
+
+    def step(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        
+        #x1 - object plane x coordinate of ray
+        #y1 - object plane y coordinate of ray
+        #u2 - exit pupil x coordinate of ray
+        #v2 - exit pupil y coordinate of ray
+        #x2 - image plane x coordinate of ray
+        #y2 - image plane y coordinate of ray
+        #L2, M2, N2 - direction cosines of the ray at the exit pupil
+        #R - reference sphere radius
+        #dopl - optical path length change
+        x1, y1, u2, v2, x2, y2, L2, M2, N2, R, dopl = self.get_exit_pupil_coords(rays)
+        
+        rays.x = u2
+        rays.y = v2
         rays.dx = L2 / N2
         rays.dy = M2 / N2
-
+        rays.path_length += dopl
+        
         yield rays.new_with(
             location=self,
         )
@@ -354,6 +375,75 @@ class PerfectLens(Lens):
         from .gui import PerfectLensGUI
         return PerfectLensGUI
 
+class AberratedLens(PerfectLens):
+    def __init__(self, z: float, 
+                 f: float, 
+                 m: Optional[float] = None,
+                 z1: Optional[Tuple[float]] = None, 
+                 z2: Optional[Tuple[float]] = None,
+                 name: Optional[str] = None, 
+                 coeffs: Tuple = [0,0,0,0,0]): # 5 aberration coefficients (C, K, A, D, F)
+        
+        super().__init__(z=z, f=f, m=m, z1=z1, z2=z2, name=name)
+        self.coeffs = coeffs
+        
+        self._f = f
+
+        # Initial Numerical Aperture
+        self.NA1 = 0.1
+        self.NA2 = 0.1
+
+        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
+        
+    def step(self, rays: Rays
+        ) -> Generator[Rays, None, None]:
+        # # Call the step function of the parent class
+        # yield from super().step(rays)
+
+        z2 = self._z2
+        x1, y1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays)
+        
+        coeffs = self.coeffs
+        
+        # Find x, y, z coordinates of ray on the reference circle - This is needed for aberration function
+        u2_circle = -z2 * L2 + x2
+        v2_circle = -z2 * M2 + y2
+        z2_circle = ref_sphere(u2_circle, v2_circle, z2, x2, y2, z2)
+        
+        #Height of object point from the optical axis
+        h = np.sqrt(x1 ** 2 + y1 ** 2)
+
+        aber_ray_dir_cosine, aber_ray_coord, W = aberrated_sphere(u2_circle, v2_circle, x2, y2, h, z2, coeffs)
+
+        nx = aber_ray_dir_cosine[:, 0]
+        ny = aber_ray_dir_cosine[:, 1]
+        nz = aber_ray_dir_cosine[:, 2]
+        phi_xn = aber_ray_coord[:, 0]
+        phi_yn = aber_ray_coord[:, 1]
+        phi_zn = z2_circle + (aber_ray_coord[:, 2] - z2) 
+
+        u2_aber = -nx / nz * (phi_zn) + phi_xn
+        v2_aber = -ny / nz * (phi_zn) + phi_yn
+        
+        extra_distance = np.sqrt((u2_circle - u2_aber) ** 2 + (v2_circle - v2_aber) ** 2 + (z2_circle - phi_zn) ** 2)
+        
+        rays.path_length += -extra_distance + W
+        
+        rays.x = u2_aber
+        rays.y = v2_aber
+        rays.dx = nx / nz
+        rays.dy = ny / nz
+        
+        # Return the modified rays
+        yield rays.new_with(
+            location=self,
+        )
+        
+    # @staticmethod
+    # def gui_wrapper():
+    #     from .gui import AberratedLensGUI
+    #     return AberratedLensGUI
+        
 
 class Sample(Component):
     def __init__(self, z: float, name: Optional[str] = None):
