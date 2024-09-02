@@ -1,5 +1,7 @@
 import numpy as np
 
+import numpy as np
+
 def ref_sphere(X, Y, r, xs, ys, zs):
     """
     Evaluate the reference sphere.
@@ -14,46 +16,6 @@ def ref_sphere(X, Y, r, xs, ys, zs):
     """
     return zs - np.sqrt(r**2 - (X - xs)**2 - (Y - ys)**2)
 
-def dref_sphere_dx(X, Y, r, xs, ys):
-    """
-    Evaluate the first derivative of the reference sphere with respect to x.
-
-    Parameters:
-    X, Y (float or ndarray): Coordinates.
-    r (float): Radius of the sphere.
-    xs, ys, zs (float): Coordinates of the sphere center.
-
-    Returns:
-    float or ndarray: The first derivative with respect to x.
-    """
-    return (X - xs) / np.sqrt(r**2 - (X - xs)**2 - (Y - ys)**2)
-
-def dref_sphere_dy(X, Y, r, xs, ys):
-    """
-    Evaluate the first derivative of the reference sphere with respect to y.
-
-    Parameters:
-    X, Y (float or ndarray): Coordinates.
-    r (float): Radius of the sphere.
-    xs, ys, zs (float): Coordinates of the sphere center.
-
-    Returns:
-    float or ndarray: The first derivative with respect to y.
-    """
-    return (Y - ys) / np.sqrt(r**2 - (X - xs)**2 - (Y - ys)**2)
-
-def ref_sphere_hat(xhat, yhat, r):
-    """
-    Evaluate the reference sphere in normalized coordinates.
-
-    Parameters:
-    xhat, yhat (float or ndarray): Normalized coordinates.
-    r (float): Radius of the sphere.
-
-    Returns:
-    float or ndarray: The z-coordinate on the reference sphere.
-    """
-    return r - np.sqrt(r**2 - xhat**2 - yhat**2)
 
 def aber(r_aperture, theta_aperture, r_object, coeffs):
     C, K, A, F, D = coeffs
@@ -138,7 +100,7 @@ def opd(X, Y, h, coeffs):
     float or ndarray: The optical path difference (OPD).
     """
     RHO = np.sqrt(X**2 + Y**2)
-    THETA = np.arctan2(X, Y)
+    THETA = np.arctan2(Y, X)
     
     return aber(RHO, THETA, h, coeffs)
 
@@ -159,7 +121,7 @@ def dopd_dx(X, Y, h, coeffs):
     """
     
     RHO = np.sqrt(X**2 + Y**2)
-    THETA = np.arctan2(X, Y)
+    THETA = np.arctan2(Y, X)
     
     dWdrho = daber_drho(RHO, THETA, h, coeffs)
     dWdtheta = daber_dtheta(RHO, THETA, h, coeffs)
@@ -186,7 +148,7 @@ def dopd_dy(X, Y, h, coeffs):
     """
     
     RHO = np.sqrt(X**2 + Y**2)
-    THETA = np.arctan2(X, Y)
+    THETA = np.arctan2(Y, X)
     
     dWdrho = daber_drho(RHO, THETA, h, coeffs)
     dWdtheta = daber_dtheta(RHO, THETA, h, coeffs)
