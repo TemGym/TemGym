@@ -394,3 +394,19 @@ def convert_slope_to_direction_cosines(dx, dy):
     m_dir_cosine = dy / np.sqrt(1 + dx ** 2 + dy ** 2)
     n_dir_cosine = 1 / np.sqrt(1 + dx ** 2 + dy ** 2)
     return l_dir_cosine, m_dir_cosine, n_dir_cosine
+
+
+def calculate_direction_cosines(x0, y0, z0, x1, y1, z1):
+    # Calculate the principal ray vector from ray coordinate on object to centre of lens
+    vx = x1 - x0
+    vy = y1 - y0
+    vz = z1 - z0
+    v_mag = np.sqrt(vx**2 + vy**2 + vz**2)
+    
+    # And it's direction cosines
+    M = vy / v_mag 
+    L = vx / v_mag
+    N = vz / v_mag
+    
+    return L, M, N
+

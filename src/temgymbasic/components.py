@@ -16,13 +16,20 @@ from . import (
     Radians,
     Degrees,
 )
-from .aber import aberrated_sphere, ref_sphere
+from .aber import dopd_dx, dopd_dy, opd
+from .gbd import (
+    differential_matrix, 
+    calculate_Qinv,
+    calculate_Qpinv,
+    propagate_misaligned_gaussian
+)
 from .rays import Rays
 from .utils import (
     P2R, R2P,
     circular_beam,
     circular_beam_gauss_rayset,
     point_beam,
+    calculate_direction_cosines
 )
 
 from .utils import (
@@ -343,7 +350,7 @@ class PerfectLens(Lens):
 
         dopl = (opl0 - opl1)
 
-        return x1, y1, u2, v2, x2, y2, L2, M2, N2, dopl
+        return x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl
 
     def step(
         self, rays: Rays
@@ -358,7 +365,7 @@ class PerfectLens(Lens):
         #L2, M2, N2 - direction cosines of the ray at the exit pupil
         #R - reference sphere radius
         #dopl - optical path length change
-        x1, y1, u2, v2, x2, y2, L2, M2, N2, R, dopl = self.get_exit_pupil_coords(rays)
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, R, dopl = self.get_exit_pupil_coords(rays)
         
         rays.x = u2
         rays.y = v2
@@ -401,33 +408,43 @@ class AberratedLens(PerfectLens):
         # yield from super().step(rays)
 
         z2 = self._z2
-        x1, y1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays)
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays)
         
         coeffs = self.coeffs
         
-        # Find x, y, z coordinates of ray on the reference circle - This is needed for aberration function
-        u2_circle = -z2 * L2 + x2
-        v2_circle = -z2 * M2 + y2
-        z2_circle = ref_sphere(u2_circle, v2_circle, z2, x2, y2, z2)
+        # Reference sphere radius
+        R = np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+
+        #Coordinates of reference sphere
+        u2_circle = x2 - L2 * R
+        v2_circle = y2 - M2 * R
+        z2_circle = z2 - N2 * R
         
         #Height of object point from the optical axis
         h = np.sqrt(x1 ** 2 + y1 ** 2)
 
-        aber_ray_dir_cosine, aber_ray_coord, W = aberrated_sphere(u2_circle, v2_circle, x2, y2, h, z2, coeffs)
+        # Calculate the aberration in x and y (Approximate)
+        eps_x = -dopd_dx(u1, v1, h, coeffs) * z2
+        eps_y = -dopd_dy(u1, v1, h, coeffs) * z2
 
-        nx = aber_ray_dir_cosine[:, 0]
-        ny = aber_ray_dir_cosine[:, 1]
-        nz = aber_ray_dir_cosine[:, 2]
-        phi_xn = aber_ray_coord[:, 0]
-        phi_yn = aber_ray_coord[:, 1]
-        phi_zn = z2_circle + (aber_ray_coord[:, 2] - z2) 
+        W = opd(u1, v1, h, coeffs)
 
-        u2_aber = -nx / nz * (phi_zn) + phi_xn
-        v2_aber = -ny / nz * (phi_zn) + phi_yn
+        #Get aberration direction cosines - remember the aberrated rays must go through the same point on the reference sphere
+        # as the perfect rays
+        nx, ny, nz = calculate_direction_cosines(x2 + eps_x, y2 + eps_y, z2, u2_circle, v2_circle, z2_circle)
+
+        #Calculate the new aberrated ray coordinates in the image plane
+        x2_aber = x2 + eps_x
+        y2_aber = y2 + eps_y
+
+        # Calculate the new aberrated ray coordinates in the exit pupil plane
+        u2_aber = x2_aber - nx / nz * (z2)
+        v2_aber = y2_aber - ny / nz * (z2)
+
+        # u2_aber = -nx / nz * (phi_zn) + phi_xn
+        # v2_aber = -ny / nz * (phi_zn) + phi_yn
         
-        extra_distance = np.sqrt((u2_circle - u2_aber) ** 2 + (v2_circle - v2_aber) ** 2 + (z2_circle - phi_zn) ** 2)
-        
-        rays.path_length += -extra_distance + W
+        rays.path_length += W
         
         rays.x = u2_aber
         rays.y = v2_aber
@@ -862,9 +879,27 @@ class Detector(Component):
             rotation=self.rotation,
             as_int=as_int,
         )
+    
+    def get_det_coords_for_gauss_rays(self, n_rays, yEnd, xEnd):
+        det_size_y = self.shape[0] * self.pixel_size
+        det_size_x = self.shape[1] * self.pixel_size
+
+        x_det = np.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
+        y_det = np.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
+        y, x = np.meshgrid(y_det, x_det)
+        
+        r = np.array([x.ravel(), y.ravel()]).T
+        r = np.broadcast_to(r, [n_rays, *r.shape])
+        r = np.swapaxes(r, 0, 1)
+        
+        r = r.copy()
+        r[:, :,  0] -= xEnd
+        r[:, :,  1] -= yEnd
+
+        return r
 
     def get_image(
-        self, rays: Rays, interference: bool = False, out: Optional[NDArray] = None
+        self, rays: Rays, interference: str = None, out: Optional[NDArray] = None
     ) -> NDArray:
 
         # Convert rays from detector positions to pixel positions
@@ -881,14 +916,14 @@ class Detector(Component):
             )
         )
 
-        if interference:
+        if interference == 'ray':
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
             wavefronts = 1.0 * np.exp(-1j * (2 * np.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
             image_dtype = valid_wavefronts.dtype
-        else:
+        elif interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
             image_dtype = type(valid_wavefronts)
@@ -914,6 +949,46 @@ class Detector(Component):
             flat_icds,
             valid_wavefronts,
         )
+        
+        return out
+    
+    def get_gauss_image(        
+                            self, rays: Rays, out: Optional[NDArray] = None
+    ) -> NDArray:
+            
+        wo = rays[0].data[0, 1::5] - rays[0].data[0, 0::5]
+        wavelength = rays[-1].wavelength
+        div = rays[-1].wavelength / (np.pi * wo)
+        k = 2 * np.pi / wavelength
+        z_r = np.pi * wo ** 2 / wavelength
+        dPx = wo
+        dPy = wo
+        dHx = div
+        dHy = div
+        
+        n_rays = rays[-1].num//5
+        
+        end_rays = rays[-1].data[0:4, :].T
+        path_length = rays[-1].path_length[0::5]
+
+        split_end_rays = np.split(end_rays, n_rays, axis=0)
+
+        rayset1 = np.stack(split_end_rays, axis=-1)
+
+        xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
+
+        phi_x2m = rays[-2].data[1, 0::5]
+        phi_y2m = rays[-2].data[3, 0::5]
+
+        p2m = np.array([phi_x2m, phi_y2m]).T
+        
+        det_coords = self.get_det_coords_for_gauss_rays(n_rays, xEnd, yEnd)
+        
+        A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy)
+        Qinv = calculate_Qinv(z_r)
+        Qpinv = calculate_Qpinv(A, B, C, D, Qinv)
+        out += propagate_misaligned_gaussian(Qinv, Qpinv, det_coords, p2m.T, k, A, B, path_length).reshape(self.shape)
+        
         return out
 
     @staticmethod
@@ -933,6 +1008,7 @@ class AccumulatingDetector(Detector):
         flip_y: bool = False,
         center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
+        ray_type: str = 'Gauss',
     ):
         super().__init__(
             z=z,
@@ -943,6 +1019,7 @@ class AccumulatingDetector(Detector):
             center=center,
             name=name,
         )
+        self.ray_type = ray_type
         self.buffer = None
         self.buffer_length = buffer_length
 
@@ -955,7 +1032,7 @@ class AccumulatingDetector(Detector):
     def reset_buffer(self, rays: Rays):
         self.buffer = np.zeros(
             (self.buffer_length, *self.shape),
-            dtype=int if rays.wavelength is None else np.complex128,
+            dtype=np.complex128,
         )
         # the next index to write into
         self.buffer_idx = 0
@@ -965,11 +1042,19 @@ class AccumulatingDetector(Detector):
             self.reset_buffer(rays)
         else:
             self.buffer[self.buffer_idx] = 0.
-        super().get_image(
-            rays,
-            interference=rays.wavelength is not None,
-            out=self.buffer[self.buffer_idx],
-        )
+            
+        if self.ray_type == 'Gauss':
+            super().get_gauss_image( 
+                                rays, 
+                                out=self.buffer[self.buffer_idx]
+                                )
+        else:
+            super().get_image(
+                rays,
+                interference=rays.wavelength is not None,
+                out=self.buffer[self.buffer_idx],
+            )
+
         self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
         return np.abs(self.buffer.sum(axis=0))
 
