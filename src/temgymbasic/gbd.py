@@ -143,17 +143,9 @@ def misalign_phase_plane_wave(r2, p2m, k):
     phi = phi_x + phi_y
     return np.exp(1j * phi)
 
-def propagate_misaligned_gaussian(Qinv, Qpinv, r, r1m, p1m, r2m, p2m, r2, k, A, B, path_length):
+def propagate_misaligned_gaussian(Qinv, Qpinv, r, p2m, k, A, B, path_length):
 
     misaligned_phase = misalign_phase_plane_wave(r, p2m, k)[..., np.newaxis] 
-    # l0 = r2[:, 0, 0] * p2m[0, 0]
-    # misaligned_phase = np.exp(1j * k * l0 * (1 + ((p2m[0, 0] ** 2) / 2)))[..., np.newaxis]
-    # Misalignment factor
-    # misalign = misalign_phase_new(A, B, C, D, r2m, p2m, k)
-    # misalign_abs = np.abs(misalign_phase(B, A, r1m, r2, k))  # First misalignment factor
-    # misalign = phase_correction(r1m, p1m, r2m, p2m, k)  # Second misalignment factor
-    # misalign_corr = misalign_phase(B, A, r1m, r1m[np.newaxis, ...], k)
-
     aligned = transversal_phase(Qpinv, r, k)  # Phase and Amplitude at transversal plane to beam dir
     opl = np.exp(1j * k * path_length)  # Optical path length phase
     guoy = guoy_phase(Qpinv)  # Guoy phase
