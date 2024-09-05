@@ -214,6 +214,7 @@ def multi_cumsum_inplace(values, partitions, start):
 def concentric_rings(
     num_points_approx: int,
     radius: float,
+    subset_size: int = None,
 ):
     num_rings = max(
         1,
@@ -240,6 +241,11 @@ def concentric_rings(
 
     all_radii = all_params[0, :]
     all_angles = all_params[1, :]
+
+    if subset_size is not None:
+        indices = np.random.choice(len(all_radii), size=subset_size, replace=False)
+        all_radii = all_radii[indices]
+        all_angles = all_angles[indices]
 
     return (
         all_radii * np.sin(all_angles),
@@ -350,6 +356,62 @@ def circular_beam_gauss_rayset(
     return r
 
 
+def fibonacci_beam_gauss_rayset(
+    num_rays_approx: int,
+    outer_radius: float,
+    wo: float,
+    wavelength: float,
+    random: bool = False,
+) -> NDArray:
+    '''
+    Generates a circular parallel initial beam
+    in approximately equally-filled concentric rings
+
+    Parameters
+    ----------
+    num_rays_approx : int
+        The approximate number of rays
+    outer_radius : float
+        Outer radius of the circular beam
+
+    Returns
+    -------
+    r : ndarray
+        Ray position & slope matrix
+    '''
+    div = wavelength / (np.pi * wo)
+    dPx = wo
+    dPy = wo
+    dHx = div
+    dHy = div
+
+    if random:
+        y, x = random_coords(num_rays_approx, outer_radius)
+    else:
+        y, x = concentric_rings(num_rays_approx, outer_radius)
+
+    r = initial_r_rayset(y.shape[0])
+
+    r[0, 0::5] = x
+    r[2, 0::5] = y
+
+    r[0, 1::5] = x + dPx
+    r[2, 1::5] = y
+
+    r[0, 2::5] = x
+    r[2, 2::5] = y + dPy
+
+    r[0, 3::5] = x
+    r[1, 3::5] += dHx
+    r[2, 3::5] = y
+
+    r[0, 4::5] = x
+    r[2, 4::5] = y
+    r[3, 4::5] += dHy
+
+    return r
+
+
 def point_beam(
     num_rays_approx: int,
     semiangle: float,
@@ -397,16 +459,16 @@ def convert_slope_to_direction_cosines(dx, dy):
 
 
 def calculate_direction_cosines(x0, y0, z0, x1, y1, z1):
+    pass
     # Calculate the principal ray vector from ray coordinate on object to centre of lens
     vx = x1 - x0
     vy = y1 - y0
     vz = z1 - z0
     v_mag = np.sqrt(vx**2 + vy**2 + vz**2)
-    
+
     # And it's direction cosines
-    M = vy / v_mag 
+    M = vy / v_mag
     L = vx / v_mag
     N = vz / v_mag
-    
-    return L, M, N
 
+    return L, M, N

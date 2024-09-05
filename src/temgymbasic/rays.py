@@ -30,6 +30,7 @@ class Rays:
     wavelength: Optional[float] = None
     mask: Optional[NDArray] = None
     blocked: Optional[NDArray] = None
+    wo: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -41,6 +42,7 @@ class Rays:
         location: LocationT,
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
+        wo: Optional[NDArray] = None,
     ):
         num_rays = data.shape[1]
         if np.isscalar(path_length):
@@ -50,6 +52,7 @@ class Rays:
             location=location,
             path_length=path_length,
             wavelength=wavelength,
+            wo=wo
         )
 
     @property
@@ -144,12 +147,12 @@ class Rays:
     def propagate(self, distance: float) -> Self:
         degree_x = np.rad2deg(np.arctan(self.dx))
         degree_y = np.rad2deg(np.arctan(self.dy))
-        
+
         if np.any(degree_x > 15):
             raise ValueError(f"dx is too large for parabasal representation: {degree_x}")
         elif np.any(degree_y > 15):
             raise ValueError(f"dy is too large for parabasal representation: {degree_y}")
-        
+
         return self.new_with(
             data=np.matmul(
                 self.propagation_matrix(distance),
