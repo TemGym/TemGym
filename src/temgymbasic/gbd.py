@@ -103,7 +103,8 @@ def transversal_phase(Qpinv, r, k):
     """
 
     transversal = (r[..., 0]*Qpinv[..., 0, 0] + r[..., 1]*Qpinv[..., 1, 0])*r[..., 0]
-    transversal += (r[..., 0]*Qpinv[..., 0, 1] + r[..., 1]*Qpinv[..., 1, 1])*r[..., 1] / 2
+    transversal += (r[..., 0]*Qpinv[..., 0, 1] + r[..., 1]*Qpinv[..., 1, 1])*r[..., 1]
+    transversal /= 2
 
     return np.exp(1j * k * transversal)
 
@@ -323,7 +324,7 @@ def propagate_rays_and_transform(r_ray, k_ray, Delta, orthogonal_matrix):
     return r_ray, k_ray
 
 
-def orthogonal_transformation_matrix(n_dir, normal):
+def orthogonal_transformation_matrix(n, normal):
     """generates the orthogonal transformation to the transversal plane
 
     Parameters
@@ -338,26 +339,25 @@ def orthogonal_transformation_matrix(n_dir, normal):
     orthogonal_matrix : Nx3x3 ndarray
         orthogonal transformation matrix
     """
-    l_dir = np.cross(n_dir, -normal)
+    l_dir = np.cross(n, -normal)
     aligned_mask = np.all(np.isclose(l_dir, 0), axis=-1)
 
     # Initialize l with an orthogonal vector for the aligned case
     l_dir[aligned_mask] = np.array([1, 0, 0])
 
     # If n is [1, 0, 0], use [0, 1, 0] for l in the aligned case
-    special_case_mask = aligned_mask & np.all(np.isclose(n_dir, [1, 0, 0]), axis=-1)
+    special_case_mask = aligned_mask & np.all(np.isclose(n, [1, 0, 0]), axis=-1)
     l_dir[special_case_mask] = np.array([0, 1, 0])
 
     # Normalize l for non-aligned cases
     non_aligned_mask = ~aligned_mask
-    l_dir[non_aligned_mask] = l_dir[non_aligned_mask] / vector_norm(l_dir[non_aligned_mask])
-    l_dir[non_aligned_mask] = l_dir[non_aligned_mask][..., np.newaxis]
+    l_dir[non_aligned_mask] /= vector_norm(l_dir[non_aligned_mask])[..., np.newaxis]
 
-    m_dir = np.cross(n_dir, l_dir)
+    m = np.cross(n, l_dir)
 
     orthogonal_matrix = np.asarray([[l_dir[..., 0], l_dir[..., 1], l_dir[..., 2]],
-                    [m_dir[..., 0], m_dir[..., 1], m_dir[..., 2]],
-                    [n_dir[..., 0], n_dir[..., 1], n_dir[..., 2]]])
+                    [m[..., 0], m[..., 1], m[..., 2]],
+                    [n[..., 0], n[..., 1], n[..., 2]]])
 
     orthogonal_matrix = np.moveaxis(orthogonal_matrix, -1, 0)
 

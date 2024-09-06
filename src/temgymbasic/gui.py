@@ -763,7 +763,7 @@ class AberratedLensGUI(PerfectLensGUI):
         vbox = QVBoxLayout()
 
         self.fslider, _ = labelled_slider(
-            self.aberratedlens.fslider, self.aberratedlens.f, -5., 5., name="Focal Length",
+            self.aberratedlens.f, -5., 5., name="Focal Length",
             insert_into=vbox, decimals=2)
 
         self.fslider.valueChanged.connect(self.set_f)
