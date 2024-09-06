@@ -1,6 +1,5 @@
 import numpy as np
 
-import numpy as np
 
 def ref_sphere(X, Y, r, xs, ys, zs):
     """
@@ -19,39 +18,41 @@ def ref_sphere(X, Y, r, xs, ys, zs):
 
 def aber(r_aperture, theta_aperture, r_object, coeffs):
     C, K, A, F, D = coeffs
-    
+
     Spherical = 1/4 * C * r_aperture ** 4
     Coma = (K * np.cos(theta_aperture)) * r_aperture ** 3 * r_object
     Astig = 1/2 * (A * np.cos(2*theta_aperture)) * r_aperture ** 2 * r_object ** 2
-    Field  = 1/2 * F * r_aperture ** 2 * r_object ** 2
+    Field = 1/2 * F * r_aperture ** 2 * r_object ** 2
     Dist = r_object ** 3 * r_aperture * (D * np.cos(theta_aperture))
-    
+
     W = Spherical + Coma + Astig + Field + Dist
-    
+
     return W
+
 
 def daber_drho(r_aperture, theta_aperture, r_object, coeffs):
     C, K, A, F, D = coeffs
-    
+
     dSpherical = C * r_aperture ** 3
-    dComa = 3 *K * r_aperture ** 2 * r_object * np.cos(theta_aperture)
-    dAstig = A * r_aperture * r_object **2 * np.cos(2 * theta_aperture)
-    dField  = F * r_aperture * r_object ** 2
+    dComa = 3 * K * r_aperture ** 2 * r_object * np.cos(theta_aperture)
+    dAstig = A * r_aperture * r_object ** 2 * np.cos(2 * theta_aperture)
+    dField = F * r_aperture * r_object ** 2
     dDist = D * r_object ** 3 * np.cos(theta_aperture)
 
     dWdrho = dSpherical + dComa + dAstig + dField + dDist
-    
+
     return dWdrho
+
 
 def daber_dtheta(r_aperture, theta_aperture, r_object, coeffs):
     _, K, A, _, D = coeffs
-    
+
     dComa = - K*r_aperture**3*r_object*np.sin(theta_aperture)
-    dAstig = -2*A*r_aperture**2*r_object**2*np.sin(2*theta_aperture)/2 
+    dAstig = -2*A*r_aperture**2*r_object**2*np.sin(2*theta_aperture)/2
     dDist = D*r_aperture*r_object**3*np.sin(theta_aperture)
-    
+
     dWdtheta = dComa + dAstig + dDist
-    
+
     return dWdtheta
 
 
@@ -65,9 +66,12 @@ def grad_Rho(X, Y):
     Returns:
     tuple: Gradients (dRhodx, dRhody).
     """
-    dRhodx = X / np.sqrt(X**2 + Y**2)
-    dRhody = Y / np.sqrt(X**2 + Y**2)
+    mask = (np.abs(X) < 1e-12) & (np.abs(Y) < 1e-12)
+    dRhodx = np.where(mask, 0, X / np.sqrt(X**2 + Y**2))
+    dRhody = np.where(mask, 0, Y / np.sqrt(X**2 + Y**2))
+
     return dRhodx, dRhody
+
 
 def grad_Theta(X, Y):
     """
@@ -79,10 +83,12 @@ def grad_Theta(X, Y):
     Returns:
     tuple: Gradients (dThetadx, dThetady).
     """
-    dThetadx = -Y / (X ** 2 + Y ** 2)
-    dThetady = 1 / (X ** 2 + Y ** 2)
-    
+    mask = (np.abs(X) < 1e-12) & (np.abs(Y) < 1e-12)
+    dThetadx = np.where(mask, 0, -Y / (X ** 2 + Y ** 2))
+    dThetady = np.where(mask, 0, 1 / (X ** 2 + Y ** 2))
+
     return dThetadx, dThetady
+
 
 def opd(X, Y, h, coeffs):
     """
@@ -101,8 +107,9 @@ def opd(X, Y, h, coeffs):
     """
     RHO = np.sqrt(X**2 + Y**2)
     THETA = np.arctan2(Y, X)
-    
+
     return aber(RHO, THETA, h, coeffs)
+
 
 def dopd_dx(X, Y, h, coeffs):
     """
@@ -119,17 +126,18 @@ def dopd_dx(X, Y, h, coeffs):
     Returns:
     float or ndarray: The derivative of the OPD with respect to x.
     """
-    
+
     RHO = np.sqrt(X**2 + Y**2)
     THETA = np.arctan2(Y, X)
-    
+
     dWdrho = daber_drho(RHO, THETA, h, coeffs)
     dWdtheta = daber_dtheta(RHO, THETA, h, coeffs)
     dRhodx, _ = grad_Rho(X, Y)
     dThetadx, _ = grad_Theta(X, Y)
     dWdx = (dWdrho * dRhodx + dWdtheta * dThetadx)
-    
+
     return dWdx
+
 
 def dopd_dy(X, Y, h, coeffs):
     """
@@ -146,10 +154,10 @@ def dopd_dy(X, Y, h, coeffs):
     Returns:
     float or ndarray: The derivative of the OPD with respect to y.
     """
-    
+
     RHO = np.sqrt(X**2 + Y**2)
     THETA = np.arctan2(Y, X)
-    
+
     dWdrho = daber_drho(RHO, THETA, h, coeffs)
     dWdtheta = daber_dtheta(RHO, THETA, h, coeffs)
     _, dRhody = grad_Rho(X, Y)
@@ -157,9 +165,10 @@ def dopd_dy(X, Y, h, coeffs):
     dWdy = (dWdrho * dRhody + dWdtheta * dThetady)
     return dWdy
 
+
 def compute_Tpinv(X, Y, IMAGE_POINT, REF_SPHERE_RADIUS):
     n = len(X)
-    
+
     DX = X - IMAGE_POINT[0]
     DY = Y - IMAGE_POINT[1]
     r = REF_SPHERE_RADIUS
@@ -189,8 +198,8 @@ def compute_Tpinv(X, Y, IMAGE_POINT, REF_SPHERE_RADIUS):
     Tpinv[:, 3, 1] = 0
     Tpinv[:, 3, 2] = 0
     Tpinv[:, 3, 3] = 1
-    
-    #matrix to transform the local gradient into the global one
+
+    # matrix to transform the local gradient into the global one
     Tbar = np.zeros((n, 2, 2))
     Tbar[:, 0, 0] = Tpinv[:, 0, 0]
     Tbar[:, 1, 0] = Tpinv[:, 0, 1]
@@ -199,20 +208,21 @@ def compute_Tpinv(X, Y, IMAGE_POINT, REF_SPHERE_RADIUS):
 
     return Tpinv, Tbar
 
+
 def transform_to_global(Tbar, gradW, W, Tpinv):
     # Initialize arrays for nhat0, phihat0, n, and phi
-    
+
     nhat0 = np.zeros_like(Tpinv[..., 0])
     phihat0 = np.zeros_like(Tpinv[..., 0])
     n = np.zeros_like(Tpinv[..., 0])
     phi = np.zeros_like(Tpinv[..., 0])
 
     # Step 1: Local results from global variables
-    #gradWhat0 = np.dot(Tbar, gradW)
+    # gradWhat0 = np.dot(Tbar, gradW)
     gradWhat0 = np.einsum('ijk,ik->ij', Tbar, gradW)
-    
+
     nhat0[:, 0:2] = -gradWhat0
-    nhat0[:, 2] = np.sqrt(1 - np.sum(gradWhat0**2, axis = 1))
+    nhat0[:, 2] = np.sqrt(1 - np.sum(gradWhat0**2, axis=1))
     nhat0[:, 3] = 0
 
     phihat0 = W[:, np.newaxis] * nhat0 + np.array([0, 0, 0, 1])
@@ -223,7 +233,7 @@ def transform_to_global(Tbar, gradW, W, Tpinv):
 
     # Wavefront point in global coordinates
     phi = np.einsum('ijk,ik->ij', Tpinv, phihat0)
-    
+
     return n, phi
 
 
@@ -232,8 +242,9 @@ def aberrated_sphere(x, y, xs, ys, h, R, coeffs):
     W = opd(x, y, h, coeffs)
     dWdx = dopd_dx(x, y, h, coeffs)
     dWdy = dopd_dy(x, y, h, coeffs)
-    
+
     Tpinv, Tbar = compute_Tpinv(x, y, [xs, ys], R)
-    aber_ray_dir_cosine, aber_ray_coord = transform_to_global(Tbar, np.array([dWdx, dWdy]).T, W, Tpinv)
-    
+    aber_ray_dir_cosine, aber_ray_coord = transform_to_global(Tbar, np.array([dWdx, dWdy]).T, W,
+                                                              Tpinv)
+
     return aber_ray_dir_cosine, aber_ray_coord, W
