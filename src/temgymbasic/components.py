@@ -1007,15 +1007,15 @@ class Detector(Component):
 
         det_coords = self.get_det_coords_for_gauss_rays(n_rays, xEnd, yEnd)
 
-        rayset1 = cp.array(rayset1)
+        # rayset1 = cp.array(rayset1)
         A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy)
         Qinv = calculate_Qinv(z_r, n_rays)
         Qpinv = calculate_Qpinv(A, B, C, D, Qinv)
         
-        det_coords = cp.array(det_coords)
-        p2m = cp.array(p2m)
-        path_length = cp.array(path_length)
-        k = cp.array(k)
+        # det_coords = cp.array(det_coords)
+        # p2m = cp.array(p2m)
+        # path_length = cp.array(path_length)
+        # k = cp.array(k)
         
         out += propagate_misaligned_gaussian(Qinv, Qpinv, det_coords,
                                              p2m.T, k, A, B, path_length).reshape(self.shape)
