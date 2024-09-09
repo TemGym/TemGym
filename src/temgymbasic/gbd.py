@@ -1,7 +1,8 @@
 import numpy as np
 import cupy as cp
+import cProfile
 
-xp = cp
+xp = np
 
 def differential_matrix(rayset, dPx, dPy, dHx, dHy):
 
