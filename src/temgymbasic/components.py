@@ -241,7 +241,7 @@ class PerfectLens(Lens):
         # Convert slope into direction cosines
         L1 = rays.dx / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
         M1 = rays.dy / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
-        N1 = 1 / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+        N1 = np.sqrt(1 - L1 ** 2 - M1 ** 2)
 
         u1 = rays.x
         v1 = rays.y
@@ -367,7 +367,7 @@ class PerfectLens(Lens):
         # L2, M2, N2 - direction cosines of the ray at the exit pupil
         # R - reference sphere radius
         # dopl - optical path length change
-        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, R, dopl = self.get_exit_pupil_coords(rays)
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays)
 
         rays.x = u2
         rays.y = v2
@@ -972,6 +972,7 @@ class Detector(Component):
 
         return out
 
+    #@profile
     def get_gauss_image(
         self,
         rays: Rays,
