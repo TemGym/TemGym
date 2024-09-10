@@ -1003,7 +1003,7 @@ class Detector(Component):
         phi_x2m = rays.data[1, 0::5]
         phi_y2m = rays.data[3, 0::5]
 
-        p2m = np.array([phi_x2m, phi_y2m]).T
+        p2m = np.array([phi_y2m, phi_x2m]).T
 
         det_coords = self.get_det_coords_for_gauss_rays(n_rays, xEnd, yEnd)
 
@@ -1079,7 +1079,7 @@ class AccumulatingDetector(Detector):
         )
 
         self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
-        return np.abs(self.buffer.sum(axis=0))
+        return self.buffer.sum(axis=0)
 
 
 class Deflector(Component):
