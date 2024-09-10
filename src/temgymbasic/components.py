@@ -28,7 +28,7 @@ from .rays import Rays
 from .utils import (
     P2R, R2P,
     circular_beam,
-    circular_beam_gauss_rayset,
+    fibonacci_beam_gauss_rayset,
     point_beam,
     calculate_direction_cosines
 )
@@ -791,12 +791,12 @@ class GaussBeam(Source):
         self.radius = radius
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int, beam_type: str = 'circular', random: bool = False) -> Rays:
+    def get_rays(self, num_rays: int, beam_type: str = 'fibonacci', random: str = 'False') -> Rays:
         wavelength = calculate_wavelength(self.voltage)
 
-        if beam_type == 'circular':
-            r = circular_beam_gauss_rayset(num_rays, self.radius, self.wo,
-                                           wavelength, random=random)
+        if beam_type == 'fibonacci':
+            r = fibonacci_beam_gauss_rayset(num_rays, self.radius, self.wo,
+                                           wavelength)
         return self._make_rays(r, self.wo)
 
     @staticmethod
