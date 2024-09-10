@@ -1,7 +1,4 @@
 import numpy as np
-import cupy as cp
-import cProfile
-
 xp = np
 
 def differential_matrix(rayset, dPx, dPy, dHx, dHy):
@@ -89,6 +86,7 @@ def misalign_phase(B, A, r1m, r2, k):
     return xp.exp(-1j * k / 2 * (misalign + cross))
 
 
+#@profile
 def transversal_phase(Qpinv, r, k):
     """compute the transverse gaussian phase of a gaussian beam
 
@@ -152,6 +150,7 @@ def misalign_phase_plane_wave(r2, p2m, k):
     return xp.exp(1j * phi)
 
 
+#@profile
 def propagate_misaligned_gaussian(Qinv, Qpinv, r, p2m, k, A, B, path_length):
 
     misaligned_phase = misalign_phase_plane_wave(r, p2m, k)[..., xp.newaxis]
@@ -160,7 +159,7 @@ def propagate_misaligned_gaussian(Qinv, Qpinv, r, p2m, k, A, B, path_length):
     guoy = guoy_phase(Qpinv)  # Guoy phase
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
     field = xp.sum(xp.abs(amplitude) * aligned * opl * misaligned_phase * guoy, axis=-1)
-    field = cp.asnumpy(field)
+    # field = cp.asnumpy(field)
     
     return field
 
