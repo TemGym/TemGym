@@ -161,6 +161,7 @@ def propagate_misaligned_gaussian(Qinv, Qpinv, r, p2m, k, A, B, path_length):
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
     field = xp.sum(xp.abs(amplitude) * aligned * opl * misaligned_phase * guoy, axis=-1)
     field = cp.asnumpy(field)
+    
     return field
 
 

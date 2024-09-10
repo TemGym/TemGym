@@ -214,7 +214,6 @@ def multi_cumsum_inplace(values, partitions, start):
 def concentric_rings(
     num_points_approx: int,
     radius: float,
-    subset_size: int = None,
 ):
     num_rings = max(
         1,
@@ -242,15 +241,42 @@ def concentric_rings(
     all_radii = all_params[0, :]
     all_angles = all_params[1, :]
 
-    if subset_size is not None:
-        indices = np.random.choice(len(all_radii), size=subset_size, replace=False)
-        all_radii = all_radii[indices]
-        all_angles = all_angles[indices]
-
     return (
         all_radii * np.sin(all_angles),
         all_radii * np.cos(all_angles),
     )
+
+def fibonacci_spiral(nb_samples: int,
+                    radius: float,
+                    alpha=2):
+    # From https://github.com/matt77hias/fibpy/blob/master/src/sampling.py
+    # Fibonacci spiral sampling in a unit circle
+    # Alpha parameter determines smoothness of boundary - default of 2 means a smooth boundary
+    # 0 for a rough boundary.
+    # Returns a tuple of y, x coordinates of the samples
+    
+    nb_samples * np.random.random()
+ 
+    ga = np.pi * (3.0 - np.sqrt(5.0))
+    
+    # Boundary points
+    np_boundary = round(alpha * np.sqrt(nb_samples))
+    
+    ss = np.zeros((nb_samples,2))
+    j = 0
+    for i in range(nb_samples):
+        if i > nb_samples - (np_boundary + 1):
+            r = radius
+        else:
+            r = radius * np.sqrt((i + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
+        phi   = ga * (i)
+        ss[j,:] = np.array([r * np.sin(phi), r * np.cos(phi)])
+        j += 1
+        
+    y = ss[:, 0]
+    x = ss[:, 1]
+    
+    return y, x
 
 
 def random_coords(num: int, max_r: float, with_radii: bool = False):
@@ -300,68 +326,11 @@ def circular_beam(
     return r
 
 
-def circular_beam_gauss_rayset(
-    num_rays_approx: int,
-    outer_radius: float,
-    wo: float,
-    wavelength: float,
-    random: bool = False,
-) -> NDArray:
-    '''
-    Generates a circular parallel initial beam
-    in approximately equally-filled concentric rings
-
-    Parameters
-    ----------
-    num_rays_approx : int
-        The approximate number of rays
-    outer_radius : float
-        Outer radius of the circular beam
-
-    Returns
-    -------
-    r : ndarray
-        Ray position & slope matrix
-    '''
-    div = wavelength / (np.pi * wo)
-    dPx = wo
-    dPy = wo
-    dHx = div
-    dHy = div
-
-    if random:
-        y, x = random_coords(num_rays_approx, outer_radius)
-    else:
-        y, x = concentric_rings(num_rays_approx, outer_radius)
-
-    r = initial_r_rayset(y.shape[0])
-
-    r[0, 0::5] = x
-    r[2, 0::5] = y
-
-    r[0, 1::5] = x + dPx
-    r[2, 1::5] = y
-
-    r[0, 2::5] = x
-    r[2, 2::5] = y + dPy
-
-    r[0, 3::5] = x
-    r[1, 3::5] += dHx
-    r[2, 3::5] = y
-
-    r[0, 4::5] = x
-    r[2, 4::5] = y
-    r[3, 4::5] += dHy
-
-    return r
-
-
 def fibonacci_beam_gauss_rayset(
     num_rays_approx: int,
     outer_radius: float,
     wo: float,
     wavelength: float,
-    random: bool = False,
 ) -> NDArray:
     '''
     Generates a circular parallel initial beam
@@ -385,10 +354,7 @@ def fibonacci_beam_gauss_rayset(
     dHx = div
     dHy = div
 
-    if random:
-        y, x = random_coords(num_rays_approx, outer_radius)
-    else:
-        y, x = concentric_rings(num_rays_approx, outer_radius)
+    y, x = fibonacci_spiral(num_rays_approx, outer_radius)
 
     r = initial_r_rayset(y.shape[0])
 
