@@ -32,3 +32,4 @@ junit.xml
 *.sif
 examples/generated/
 dist/
+*.lprof
