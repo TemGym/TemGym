@@ -1,4 +1,5 @@
 import numpy as np
+import numexpr as ne
 import line_profiler
 xp = np
 
@@ -107,7 +108,7 @@ def transversal_phase(Qpinv, r, k):
     """
     # r: (n_px, n_gauss, 2:[x ,y])
     # Qpinv: (n_gauss, 2, 2)
-    # transversal = (
+    # transversal_ref = (
     #     (
     #         r[..., 0]
     #         * Qpinv[..., 0, 0]
@@ -117,7 +118,7 @@ def transversal_phase(Qpinv, r, k):
     #         * Qpinv[..., 1, 0]
     #     )
     # ) * r[..., 0]
-    # transversal += (
+    # transversal_ref += (
     #     (
     #         r[..., 0]
     #         * Qpinv[..., 0, 1]
@@ -127,18 +128,26 @@ def transversal_phase(Qpinv, r, k):
     #         * Qpinv[..., 1, 1]
     #     )
     # ) * r[..., 1]
-    # transversal /= 2
+    # transversal_ref /= 2
 
-    Qpinv_t = np.transpose(Qpinv, (0, 2, 1))
     # The intermediate array here is quite large
     # of shape (n_px, n_gauss, 2, 2), can be improved
     # using some form of one-step sumproduct
-    transversal = (
-        r[..., np.newaxis, :]
-        * Qpinv_t[np.newaxis, ...] / 2
-    ).sum(axis=-1)
-    transversal *= r
-    return transversal.sum(axis=-1)
+    # transversal = (
+    #     r[..., np.newaxis]
+    #     * Qpinv[np.newaxis, ...] / 2
+    # ).sum(axis=-1)
+    # transversal *= r
+    # transversal = transversal.sum(axis=-1)
+
+    # transversal = (r * Qpinv[np.newaxis, ..., 0] / 2)
+    # transversal += (r * Qpinv[np.newaxis, ..., 1] / 2)
+    # transversal *= r
+    # transversal = transversal.sum(axis=-1)
+
+    transversal = (r[..., 0] ** 2 * Qpinv[np.newaxis, ..., 0, 0] / 2)
+    transversal += (r[..., 1] ** 2 * Qpinv[np.newaxis, ..., 1, 1] / 2)
+    return transversal
     # return xp.exp(1j * k * transversal)
 
 
@@ -173,18 +182,19 @@ def guoy_phase(Qpinv):
     e1, e2 = eigenvalues_2x2(Qpinv)
     guoy = (xp.arctan(xp.real(e1) / xp.imag(e1)) + xp.arctan(xp.real(e2) / xp.imag(e2))) / 2
     # return xp.exp(-1j * guoy)
-    return -1 * guoy
+    return guoy
 
 
 @line_profiler.profile
 def misalign_phase_plane_wave(r2, p2m, k):
     # r2: (n_px, n_gauss, 2:[x ,y])
     # p2m: (n_gauss, 2:[x ,y])
-    # l0_x = r2[:, :, 0] * p2m[:, 0]
-    # l0_y = r2[:, :, 1] * p2m[:, 1]
-    # phi_x = l0_x * (1 + ((p2m[:, 0] ** 2) / 2))
+    # l0 = r2 * p2m
+    phi_x = r2[:, :, 0] * p2m[:, 0] * (1 + ((p2m[:, 0] ** 2) / 2))
     # phi_y = l0_y * (1 + ((p2m[:, 1] ** 2) / 2))
     # phi = phi_x + phi_y
+    phi_x += r2[:, :, 1] * p2m[:, 1] * (1 + ((p2m[:, 1] ** 2) / 2))
+    return phi_x
     return (
         r2
         * p2m[np.newaxis, ...]
@@ -206,6 +216,7 @@ def propagate_misaligned_gaussian(
     A,
     B,
     path_length,
+    out,
 ):
     # Qinv : (n_gauss, 2, 2), complex
     # Qpinv : (n_gauss, 2, 2), complex
@@ -220,24 +231,27 @@ def propagate_misaligned_gaussian(
     # (n_px, n_gauss): complex
     aligned = transversal_phase(Qpinv, r, k)  # Phase and Amplitude at transversal plane to beam dir
     # (n_px, n_gauss): complex
-    opl = xp.exp(1j * k * path_length)  # Optical path length phase
+    # opl = xp.exp(1j * k * path_length)  # Optical path length phase
     # (n_gauss,): complex
     guoy = guoy_phase(Qpinv)  # Guoy phase
     # (n_gauss,): complex
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
     # (n_gauss,): complex
-    field = xp.sum(
-        xp.abs(amplitude)
-        * xp.exp(
-            1j
-            * (
-                k * (aligned + opl + misaligned_phase) + guoy
-            )
-        ),
-        axis=-1,
-    )
+    aligned *= 1j
+    aligned += 1j * misaligned_phase
+    aligned += 1j * path_length[np.newaxis, :]
+    aligned *= k
+    aligned -= 1j * guoy[np.newaxis, :]
+    aligned = ne.evaluate('exp(aligned)')
+    # xp.exp(aligned, out=aligned)
+    aligned *= xp.abs(amplitude)
+    # It should be possible to avoid this intermediate .sum
+    # if we could reduce directly into out, but I can't find
+    # a way to express that with numpy. Numba could be an option
+    out += aligned.sum(axis=-1)
+    # return aligned.sum(axis=-1)
     # (n_px,): complex
-    return field
+    # return field
 
 
 def eigenvalues_2x2(array):
