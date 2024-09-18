@@ -1,6 +1,9 @@
 import numpy as np
+import line_profiler
 xp = np
 
+
+@line_profiler.profile
 def differential_matrix(rayset, dPx, dPy, dHx, dHy):
 
     x_cen_T = rayset[0, 0, :]
@@ -86,7 +89,7 @@ def misalign_phase(B, A, r1m, r2, k):
     return xp.exp(-1j * k / 2 * (misalign + cross))
 
 
-#@profile
+@line_profiler.profile
 def transversal_phase(Qpinv, r, k):
     """compute the transverse gaussian phase of a gaussian beam
 
@@ -102,12 +105,41 @@ def transversal_phase(Qpinv, r, k):
     numpy.ndarray
         phase of the gaussian profile
     """
+    # r: (n_px, n_gauss, 2:[x ,y])
+    # Qpinv: (n_gauss, 2, 2)
+    # transversal = (
+    #     (
+    #         r[..., 0]
+    #         * Qpinv[..., 0, 0]
+    #     )
+    #     + (
+    #         r[..., 1]
+    #         * Qpinv[..., 1, 0]
+    #     )
+    # ) * r[..., 0]
+    # transversal += (
+    #     (
+    #         r[..., 0]
+    #         * Qpinv[..., 0, 1]
+    #     )
+    #     + (
+    #         r[..., 1]
+    #         * Qpinv[..., 1, 1]
+    #     )
+    # ) * r[..., 1]
+    # transversal /= 2
 
-    transversal = (r[..., 0]*Qpinv[..., 0, 0] + r[..., 1]*Qpinv[..., 1, 0])*r[..., 0]
-    transversal += (r[..., 0]*Qpinv[..., 0, 1] + r[..., 1]*Qpinv[..., 1, 1])*r[..., 1]
-    transversal /= 2
-
-    return xp.exp(1j * k * transversal)
+    Qpinv_t = np.transpose(Qpinv, (0, 2, 1))
+    # The intermediate array here is quite large
+    # of shape (n_px, n_gauss, 2, 2), can be improved
+    # using some form of one-step sumproduct
+    transversal = (
+        r[..., np.newaxis, :]
+        * Qpinv_t[np.newaxis, ...] / 2
+    ).sum(axis=-1)
+    transversal *= r
+    return transversal.sum(axis=-1)
+    # return xp.exp(1j * k * transversal)
 
 
 def phase_correction(r1m, p1m, r2m, p2m, k):
@@ -117,11 +149,13 @@ def phase_correction(r1m, p1m, r2m, p2m, k):
     return xp.exp(-1j * k / 2 * (-z2_phase + z1_phase))
 
 
+@line_profiler.profile
 def gaussian_amplitude(Qinv, A, B):
     den = A + B @ Qinv
     return 1 / xp.sqrt(xp.linalg.det(den))
 
 
+@line_profiler.profile
 def guoy_phase(Qpinv):
     """compute the guoy phase of a complex curvature matrix
 
@@ -138,29 +172,71 @@ def guoy_phase(Qpinv):
 
     e1, e2 = eigenvalues_2x2(Qpinv)
     guoy = (xp.arctan(xp.real(e1) / xp.imag(e1)) + xp.arctan(xp.real(e2) / xp.imag(e2))) / 2
-    return xp.exp(-1j * guoy)
+    # return xp.exp(-1j * guoy)
+    return -1 * guoy
 
 
+@line_profiler.profile
 def misalign_phase_plane_wave(r2, p2m, k):
-    l0_x = r2[:, 0, 0] * p2m[0, 0]
-    l0_y = r2[:, 0, 1] * p2m[1, 0]
-    phi_x = k * l0_x * (1 + ((p2m[0, 0] ** 2) / 2))
-    phi_y = k * l0_y * (1 + ((p2m[1, 0] ** 2) / 2))
-    phi = phi_x + phi_y
-    return xp.exp(1j * phi)
+    # r2: (n_px, n_gauss, 2:[x ,y])
+    # p2m: (n_gauss, 2:[x ,y])
+    # l0_x = r2[:, :, 0] * p2m[:, 0]
+    # l0_y = r2[:, :, 1] * p2m[:, 1]
+    # phi_x = l0_x * (1 + ((p2m[:, 0] ** 2) / 2))
+    # phi_y = l0_y * (1 + ((p2m[:, 1] ** 2) / 2))
+    # phi = phi_x + phi_y
+    return (
+        r2
+        * p2m[np.newaxis, ...]
+        * (
+            1
+            + (p2m[np.newaxis, ...] ** 2) / 2
+        )
+    ).sum(axis=-1)
+    # return xp.exp(1j * k * phi)
 
 
-#@profile
-def propagate_misaligned_gaussian(Qinv, Qpinv, r, p2m, k, A, B, path_length):
+@line_profiler.profile
+def propagate_misaligned_gaussian(
+    Qinv,
+    Qpinv,
+    r,
+    p2m,
+    k,
+    A,
+    B,
+    path_length,
+):
+    # Qinv : (n_gauss, 2, 2), complex
+    # Qpinv : (n_gauss, 2, 2), complex
+    # r: (n_px, n_gauss, 2:[x ,y]), float => det coords relative to final, central pos
+    # p2m: (n_gauss, 2:[x, y]), float => slopes of arriving central ray
+    # k: scalar float
+    # A: (n_gauss, 2, 2), float
+    # B: (n_gauss, 2, 2), float
+    # path_length: (n_gauss,), float => path length of central ray
 
-    misaligned_phase = misalign_phase_plane_wave(r, p2m, k)[..., xp.newaxis]
+    misaligned_phase = misalign_phase_plane_wave(r, p2m, k)
+    # (n_px, n_gauss): complex
     aligned = transversal_phase(Qpinv, r, k)  # Phase and Amplitude at transversal plane to beam dir
+    # (n_px, n_gauss): complex
     opl = xp.exp(1j * k * path_length)  # Optical path length phase
+    # (n_gauss,): complex
     guoy = guoy_phase(Qpinv)  # Guoy phase
+    # (n_gauss,): complex
     amplitude = gaussian_amplitude(Qinv, A, B)  # Complex Gaussian amplitude
-    field = xp.sum(xp.abs(amplitude) * aligned * opl * misaligned_phase * guoy, axis=-1)
-    # field = cp.asnumpy(field)
-    
+    # (n_gauss,): complex
+    field = xp.sum(
+        xp.abs(amplitude)
+        * xp.exp(
+            1j
+            * (
+                k * (aligned + opl + misaligned_phase) + guoy
+            )
+        ),
+        axis=-1,
+    )
+    # (n_px,): complex
     return field
 
 
