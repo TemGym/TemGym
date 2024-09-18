@@ -5,9 +5,9 @@ from typing import (
 )
 
 import numpy as np
-import cupy as cp
 from numpy.typing import NDArray
 import warnings
+import line_profiler
 
 from . import (
     UsageError,
@@ -890,7 +890,8 @@ class Detector(Component):
             as_int=as_int,
         )
 
-    def get_det_coords_for_gauss_rays(self, n_rays, yEnd, xEnd):
+    def get_det_coords_for_gauss_rays(self, yEnd, xEnd):
+        n_rays = yEnd.size
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
@@ -903,6 +904,8 @@ class Detector(Component):
         r = np.swapaxes(r, 0, 1)
 
         r = r.copy()
+        # has form (n_px, n_gauss, 2:[x, y])]
+        # this entire section can be optimised !!!
         r[:, :,  0] -= xEnd
         r[:, :,  1] -= yEnd
 
@@ -972,7 +975,7 @@ class Detector(Component):
 
         return out
 
-    #@profile
+    @line_profiler.profile
     def get_gauss_image(
         self,
         rays: Rays,
@@ -990,36 +993,48 @@ class Detector(Component):
         dHx = div
         dHy = div
 
-        n_rays = rays.num // 5
+        # rays layout
+        # [5, n_rays] where n_rays = 5 * n_gauss
+        # so rays.reshape(5, 5, -1)
+        #  => [(x, dx, y, dy, 1), (*gauss_beams), n_gauss]
+
+        n_gauss = rays.num // 5
 
         end_rays = rays.data[0:4, :].T
         path_length = rays.path_length[0::5]
 
-        split_end_rays = np.split(end_rays, n_rays, axis=0)
+        split_end_rays = np.split(end_rays, n_gauss, axis=0)
 
         rayset1 = np.stack(split_end_rays, axis=-1)
 
-        xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
-
-        phi_x2m = rays.data[1, 0::5]
-        phi_y2m = rays.data[3, 0::5]
-
-        p2m = np.array([phi_y2m, phi_x2m]).T
-
-        det_coords = self.get_det_coords_for_gauss_rays(n_rays, xEnd, yEnd)
+        # rayset1 layout
+        # [5g, (x, dx, y, dy), n_gauss]
 
         # rayset1 = cp.array(rayset1)
         A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy)
-        Qinv = calculate_Qinv(z_r, n_rays)
+        # A, B, C, D all have shape (n_gauss, 2, 2)
+        Qinv = calculate_Qinv(z_r, n_gauss)
+        # matmul, addition and mat inverse inside
+        # on operands with form (n_gauss, 2, 2)
+        # matmul broadcasts in the last two indices
+        # inv can be broadcast with np.linalg.inv last 2 idcs
+        # if all inputs are stacked in the first dim
         Qpinv = calculate_Qpinv(A, B, C, D, Qinv)
-        
+
         # det_coords = cp.array(det_coords)
         # p2m = cp.array(p2m)
         # path_length = cp.array(path_length)
         # k = cp.array(k)
-        
+
+        phi_x2m = rays.data[1, 0::5]  # slope that central ray arrives at
+        phi_y2m = rays.data[3, 0::5]  # slope that central ray arrives at
+        p2m = np.array([phi_x2m, phi_y2m]).T
+
+        xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
+        # central beam final x , y coords
+        det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd)
         out += propagate_misaligned_gaussian(Qinv, Qpinv, det_coords,
-                                             p2m.T, k, A, B, path_length).reshape(self.shape)
+                                             p2m, k, A, B, path_length).reshape(self.shape)
 
     @staticmethod
     def gui_wrapper():
