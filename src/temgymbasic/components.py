@@ -1033,8 +1033,10 @@ class Detector(Component):
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
         # central beam final x , y coords
         det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd)
-        out += propagate_misaligned_gaussian(Qinv, Qpinv, det_coords,
-                                             p2m, k, A, B, path_length).reshape(self.shape)
+        propagate_misaligned_gaussian(
+            Qinv, Qpinv, det_coords,
+            p2m, k, A, B, path_length, out.ravel()
+        )
 
     @staticmethod
     def gui_wrapper():
