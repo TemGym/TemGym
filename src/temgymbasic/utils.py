@@ -246,6 +246,7 @@ def concentric_rings(
         all_radii * np.cos(all_angles),
     )
 
+
 def fibonacci_spiral(nb_samples: int,
                     radius: float,
                     alpha=2):
@@ -254,28 +255,30 @@ def fibonacci_spiral(nb_samples: int,
     # Alpha parameter determines smoothness of boundary - default of 2 means a smooth boundary
     # 0 for a rough boundary.
     # Returns a tuple of y, x coordinates of the samples
-    
-    nb_samples * np.random.random()
- 
+
+    # nb_samples * np.random.random()
+
     ga = np.pi * (3.0 - np.sqrt(5.0))
-    
+
     # Boundary points
     np_boundary = round(alpha * np.sqrt(nb_samples))
-    
-    ss = np.zeros((nb_samples,2))
+
+    ss = np.zeros((nb_samples, 2))
     j = 0
     for i in range(nb_samples):
-        if i > nb_samples - (np_boundary + 1):
+        if i == 0:
+            r = 0
+        elif i > nb_samples - (np_boundary + 1):
             r = radius
         else:
             r = radius * np.sqrt((i + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
-        phi   = ga * (i)
-        ss[j,:] = np.array([r * np.sin(phi), r * np.cos(phi)])
+        phi = ga * i
+        ss[j, :] = np.array([r * np.sin(phi), r * np.cos(phi)])
         j += 1
-        
+
     y = ss[:, 0]
     x = ss[:, 1]
-    
+
     return y, x
 
 

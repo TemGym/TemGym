@@ -6,7 +6,7 @@ import numpy as np
 from temgymbasic.utils import calculate_phi_0
 import matplotlib.pyplot as plt
 
-n_rays = 100
+n_rays = 1
 wavelength = 0.01
 k = 2 * np.pi / wavelength
 
@@ -72,3 +72,10 @@ for _ in range(1):
 
 print('amp at center is correct:', np.isclose(np.abs(image[size//2, size//2]), 5.1150331335422035, atol=1e-10))
 print('phase at center is correct:', np.isclose(np.angle(image[size//2, size//2]), -1.9623623422342213, atol=1e-10))
+
+
+import matplotlib.pyplot as plt
+plt.imshow(np.angle(image))
+plt.savefig("phase.png")
+plt.imshow(np.abs(image))
+plt.savefig("amp.png")
