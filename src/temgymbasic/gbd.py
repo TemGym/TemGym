@@ -190,11 +190,11 @@ def misalign_phase_plane_wave(r2, p2m, k):
     # r2: (n_px, n_gauss, 2:[x ,y])
     # p2m: (n_gauss, 2:[x ,y])
     # l0 = r2 * p2m
-    phi_x = r2[:, :, 0] * p2m[:, 0] * (1 + ((p2m[:, 0] ** 2) / 2))
+    phi = r2[:, :, 0] * p2m[:, 0] * (1 + ((p2m[:, 0] ** 2) / 2))
     # phi_y = l0_y * (1 + ((p2m[:, 1] ** 2) / 2))
     # phi = phi_x + phi_y
-    phi_x += r2[:, :, 1] * p2m[:, 1] * (1 + ((p2m[:, 1] ** 2) / 2))
-    return phi_x
+    phi += r2[:, :, 1] * p2m[:, 1] * (1 + ((p2m[:, 1] ** 2) / 2))
+    return phi
     return (
         r2
         * p2m[np.newaxis, ...]
@@ -242,7 +242,7 @@ def propagate_misaligned_gaussian(
     aligned += 1j * path_length[np.newaxis, :]
     aligned *= k
     aligned -= 1j * guoy[np.newaxis, :]
-    aligned = ne.evaluate('exp(aligned)')
+    xp.exp(aligned, out=aligned)
     # xp.exp(aligned, out=aligned)
     aligned *= xp.abs(amplitude)
     # It should be possible to avoid this intermediate .sum

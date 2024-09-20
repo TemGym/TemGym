@@ -651,6 +651,7 @@ class Source(Component):
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
+        self.centre_yx: tuple[float, float] = (0., 0.)
         self.phi_0 = voltage
 
     @property
@@ -661,12 +662,21 @@ class Source(Component):
     def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         raise NotImplementedError
 
+    def set_centre(self, centre_yx: tuple[float, float]):
+        self.centre_yx = centre_yx
+
     def _make_rays(self, r: NDArray, wo: Optional[float] = None) -> Rays:
         # Add beam tilt (if any)
         if self.tilt_yx[1] != 0:
             r[1, :] += self.tilt_yx[1]
         if self.tilt_yx[0] != 0:
             r[3, :] += self.tilt_yx[0]
+
+        # Add beam shift (if any)
+        if self.centre_yx[1] != 0:
+            r[0, :] += self.centre_yx[1]
+        if self.centre_yx[0] != 0:
+            r[2, :] += self.centre_yx[0]
 
         wavelength = None
         if self.phi_0 is not None:
@@ -797,6 +807,8 @@ class GaussBeam(Source):
         if beam_type == 'fibonacci':
             r = fibonacci_beam_gauss_rayset(num_rays, self.radius, self.wo,
                                            wavelength)
+        else:
+            raise NotImplementedError
         return self._make_rays(r, self.wo)
 
     @staticmethod
@@ -890,26 +902,21 @@ class Detector(Component):
             as_int=as_int,
         )
 
-    def get_det_coords_for_gauss_rays(self, yEnd, xEnd):
-        n_rays = yEnd.size
+    def get_det_coords_for_gauss_rays(self, xEnd, yEnd):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
         x_det = np.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
         y_det = np.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
-        y, x = np.meshgrid(y_det, x_det)
+        x, y = np.meshgrid(x_det, y_det)
 
-        r = np.array([x.ravel(), y.ravel()]).T
-        r = np.broadcast_to(r, [n_rays, *r.shape])
-        r = np.swapaxes(r, 0, 1)
-
-        r = r.copy()
+        r = np.stack((x, y), axis=-1).reshape(-1, 2)
+        endpoints = np.stack((xEnd, yEnd), axis=-1)
+        # r = np.broadcast_to(r, [n_rays, *r.shape])
+        # r = np.swapaxes(r, 0, 1)
         # has form (n_px, n_gauss, 2:[x, y])]
         # this entire section can be optimised !!!
-        r[:, :,  0] -= xEnd
-        r[:, :,  1] -= yEnd
-
-        return r
+        return r[:, np.newaxis, :] - endpoints[np.newaxis, ...]
 
     def get_image(
         self,
