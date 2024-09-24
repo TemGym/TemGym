@@ -428,7 +428,6 @@ def convert_slope_to_direction_cosines(dx, dy):
 
 
 def calculate_direction_cosines(x0, y0, z0, x1, y1, z1):
-    pass
     # Calculate the principal ray vector from ray coordinate on object to centre of lens
     vx = x1 - x0
     vy = y1 - y0
