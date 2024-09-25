@@ -4,7 +4,14 @@ from typing import (
     TYPE_CHECKING
 )
 
-from .backend import xp
+from .config import use_numpy
+
+if use_numpy:
+   import numpy as xp
+else:
+   import cupy as xp
+
+
 from numpy.typing import NDArray  # Assuming xp is an alias for numpy
 import warnings
 import line_profiler

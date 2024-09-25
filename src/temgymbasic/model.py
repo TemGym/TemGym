@@ -11,16 +11,21 @@ from . import (
 from . import components as comp, Degrees
 from .rays import Rays
 from .utils import pairwise
-from .backend import set_backend, xp  # Import set_backend and xp
+
+from .config import use_numpy
+
+if use_numpy:
+   import numpy as xp
+else:
+   import cupy as xp
+
 
 class Model:
-    def __init__(self, components: Iterable[comp.Component], use_backend: str = 'cpu'):
+    def __init__(self, components: Iterable[comp.Component]):
         self._components = components
         self._sort_components()
         self._validate_components()
         
-        # Set the backend
-        set_backend(use_backend)
 
     def _validate_components(self):
         if len(self._components) <= 1:
