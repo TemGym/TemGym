@@ -887,17 +887,20 @@ class Detector(Component):
                     valid_wavefronts,
                 )
             else:
-                
-                # Split the real and imaginary parts of the out array for cupy compatibility with add.at
-                real_out = out.real
-                imag_out = out.imag
+                if xp.iscomplexobj(out):
+                    # Separate the real and imaginary parts
+                    real_out = out.real
+                    imag_out = out.imag
 
-                # Perform the addition separately for real and imaginary parts
-                xp.add.at(real_out.ravel(), flat_icds, valid_wavefronts.real)
-                xp.add.at(imag_out.ravel(), flat_icds, valid_wavefronts.imag)
+                    # Perform the addition separately for real and imaginary parts
+                    xp.add.at(real_out.reshape(-1), flat_icds, valid_wavefronts.real)
+                    xp.add.at(imag_out.reshape(-1), flat_icds, valid_wavefronts.imag)
 
-                # Combine the real and imaginary parts back into the out array
-                out = real_out + 1j * imag_out
+                    # Combine the real and imaginary parts back into the out array
+                    out = real_out + 1j * imag_out
+                else:
+                    # Perform the addition directly for non-complex arrays
+                    xp.add.at(out.reshape(-1), flat_icds, valid_wavefronts)
 
         return out
 
