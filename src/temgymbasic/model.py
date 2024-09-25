@@ -2,7 +2,6 @@ from typing import (
     Generator, Iterable, Tuple, Optional
 )
 from typing_extensions import Self
-import numpy as np
 
 from . import (
     PositiveFloat,
@@ -12,13 +11,16 @@ from . import (
 from . import components as comp, Degrees
 from .rays import Rays
 from .utils import pairwise
-
+from .backend import set_backend, xp  # Import set_backend and xp
 
 class Model:
-    def __init__(self, components: Iterable[comp.Component]):
+    def __init__(self, components: Iterable[comp.Component], use_backend: str = 'cpu'):
         self._components = components
         self._sort_components()
         self._validate_components()
+        
+        # Set the backend
+        set_backend(use_backend)
 
     def _validate_components(self):
         if len(self._components) <= 1:
@@ -331,7 +333,7 @@ class STEMModel(Model):
                     self.descan_coils.second.defx,
                 )
             )
-        values = np.stack(values, axis=0)
+        values = xp.stack(values, axis=0)
         self.move_to(current_coord)
         return values.min(axis=0), values.max(axis=0)
 
@@ -339,7 +341,7 @@ class STEMModel(Model):
         self.source.radius = self._get_radius(self.sample.semiconv_angle)
 
     def _get_radius(self, semiconv: float):
-        return abs(self.objective.f) * np.tan(abs(semiconv))
+        return abs(self.objective.f) * xp.tan(abs(semiconv))
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx

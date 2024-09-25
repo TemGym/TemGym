@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
-import numpy as np
+from .backend import xp
 from numpy.typing import NDArray
 from numba import njit
 
@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .rays import Rays
     from . import Degrees, Radians
 
-RadiansNP: TypeAlias = np.float64
+RadiansNP: TypeAlias = xp.float64
 
 try:
     from itertools import pairwise
@@ -26,12 +26,12 @@ except ImportError:
         return zip(a, b)
 
 
-def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex128]:
-    return radii * np.exp(1j*angles)
+def P2R(radii: NDArray[xp.float64], angles: NDArray[RadiansNP]) -> NDArray[xp.complex128]:
+    return radii * xp.exp(1j*angles)
 
 
-def R2P(x: NDArray[np.complex128]) -> Tuple[NDArray[np.float64], NDArray[RadiansNP]]:
-    return np.abs(x), np.angle(x)
+def R2P(x: NDArray[xp.complex128]) -> Tuple[NDArray[xp.float64], NDArray[RadiansNP]]:
+    return xp.abs(x), xp.angle(x)
 
 
 def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
@@ -40,9 +40,9 @@ def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
         num_vertices += r.num
     num_vertices *= 2
 
-    vertices = np.empty(
+    vertices = xp.empty(
         (num_vertices, 3),
-        dtype=np.float32,
+        dtype=xp.float32,
     )
     idx = 0
 
@@ -83,12 +83,12 @@ def plot_rays(model: 'STEMModel'):
     all_rays = tuple(model.scan_point_iter(num_rays=num_rays, yx=yx))
 
     fig, ax = plt.subplots()
-    xvals = np.stack(tuple(r.x for r in all_rays), axis=0)
-    zvals = np.asarray(tuple(r.z for r in all_rays))
+    xvals = xp.stack(tuple(r.x for r in all_rays), axis=0)
+    zvals = xp.asarray(tuple(r.z for r in all_rays))
     ax.plot(xvals, zvals)
 
     # Optional: Mark the component positions
-    extent = 1.5 * np.abs(xvals).max()
+    extent = 1.5 * xp.abs(xvals).max()
     for component in model.components:
         if isinstance(component, DoubleDeflector):
             ax.hlines(
@@ -112,10 +112,10 @@ def plot_rays(model: 'STEMModel'):
     ax.plot([scan_pos_x], [model.sample.z], 'ko')
 
     # dx = model.detector.shape[1]
-    # detector_pixels = np.arange(- dx // 2., dx // 2.) * model.detector.pixel_size
+    # detector_pixels = xp.arange(- dx // 2., dx // 2.) * model.detector.pixel_size
     # ax.plot(
     #     detector_pixels,
-    #     model.detector.z * np.ones_like(detector_pixels),
+    #     model.detector.z * xp.ones_like(detector_pixels),
     #     'ro',
     # )
 
@@ -128,7 +128,7 @@ def plot_rays(model: 'STEMModel'):
 
 def _flip_y():
     # From libertem.corrections.coordinates v0.11.1
-    return np.array([
+    return xp.array([
         (-1, 0),
         (0, 1)
     ])
@@ -136,22 +136,22 @@ def _flip_y():
 
 def _identity():
     # From libertem.corrections.coordinates v0.11.1
-    return np.eye(2)
+    return xp.eye(2)
 
 
 def _rotate(radians: 'Radians'):
     # From libertem.corrections.coordinates v0.11.1
     # https://en.wikipedia.org/wiki/Rotation_matrix
     # y, x instead of x, y
-    return np.array([
-        (np.cos(radians), np.sin(radians)),
-        (-np.sin(radians), np.cos(radians))
+    return xp.array([
+        (xp.cos(radians), xp.sin(radians)),
+        (-xp.sin(radians), xp.cos(radians))
     ])
 
 
 def _rotate_deg(degrees: 'Degrees'):
     # From libertem.corrections.coordinates v0.11.1
-    return _rotate(np.pi / 180 * degrees)
+    return _rotate(xp.pi / 180 * degrees)
 
 
 def get_pixel_coords(
@@ -165,7 +165,7 @@ def get_pixel_coords(
     # Transformations are applied right to left
     transform = _rotate_deg(scan_rotation) @ transform
 
-    y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
+    y_transformed, x_transformed = (xp.array((rays_y, rays_x)).T @ transform).T
 
     sy, sx = shape
     pixel_coords_x = (x_transformed / pixel_size) + (sx // 2)
@@ -175,9 +175,9 @@ def get_pixel_coords(
 
 
 def initial_r(num_rays: int):
-    r = np.zeros(
+    r = xp.zeros(
         (5, num_rays),
-        dtype=np.float64,
+        dtype=xp.float64,
     )  # x, theta_x, y, theta_y, 1
 
     r[4, :] = 1.
@@ -185,9 +185,9 @@ def initial_r(num_rays: int):
 
 
 def initial_r_rayset(num_rays: int):
-    r = np.zeros(
+    r = xp.zeros(
         (5, num_rays * 5),
-        dtype=np.float64,
+        dtype=xp.float64,
     )  # x, theta_x, y, theta_y, 1
 
     r[4, :] = 1.
@@ -217,33 +217,33 @@ def concentric_rings(
 ):
     num_rings = max(
         1,
-        int(np.floor((-1 + np.sqrt(1 + 4 * num_points_approx / np.pi)) / 2))
+        int(xp.floor((-1 + xp.sqrt(1 + 4 * num_points_approx / xp.pi)) / 2))
     )
 
     # Calculate the circumference of each ring
-    num_points_kth_ring = np.round(
-        2 * np.pi * np.arange(1, num_rings + 1)
+    num_points_kth_ring = xp.round(
+        2 * xp.pi * xp.arange(1, num_rings + 1)
     ).astype(int)
     num_rings = num_points_kth_ring.size
     points_per_unit = num_points_approx / num_points_kth_ring.sum()
-    points_per_ring = np.round(num_points_kth_ring * points_per_unit).astype(int)
+    points_per_ring = xp.round(num_points_kth_ring * points_per_unit).astype(int)
 
     # Make get the radii for the number of circles of rays we need
-    radii = np.linspace(
+    radii = xp.linspace(
         0, radius, num_rings + 1, endpoint=True,
     )[1:]
-    div_angle = 2 * np.pi / points_per_ring
+    div_angle = 2 * xp.pi / points_per_ring
 
-    params = np.stack((radii, div_angle), axis=0)
-    all_params = np.repeat(params, points_per_ring, axis=-1)
+    params = xp.stack((radii, div_angle), axis=0)
+    all_params = xp.repeat(params, points_per_ring, axis=-1)
     multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
 
     all_radii = all_params[0, :]
     all_angles = all_params[1, :]
 
     return (
-        all_radii * np.sin(all_angles),
-        all_radii * np.cos(all_angles),
+        all_radii * xp.sin(all_angles),
+        all_radii * xp.cos(all_angles),
     )
 
 
@@ -256,14 +256,14 @@ def fibonacci_spiral(nb_samples: int,
     # 0 for a rough boundary.
     # Returns a tuple of y, x coordinates of the samples
 
-    # nb_samples * np.random.random()
+    # nb_samples * xp.random.random()
 
-    ga = np.pi * (3.0 - np.sqrt(5.0))
+    ga = xp.pi * (3.0 - xp.sqrt(5.0))
 
     # Boundary points
-    np_boundary = round(alpha * np.sqrt(nb_samples))
+    np_boundary = round(alpha * xp.sqrt(nb_samples))
 
-    ss = np.zeros((nb_samples, 2))
+    ss = xp.zeros((nb_samples, 2))
     j = 0
     for i in range(nb_samples):
         if i == 0:
@@ -271,9 +271,9 @@ def fibonacci_spiral(nb_samples: int,
         elif i > nb_samples - (np_boundary + 1):
             r = radius
         else:
-            r = radius * np.sqrt((i + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
+            r = radius * xp.sqrt((i + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
         phi = ga * i
-        ss[j, :] = np.array([r * np.sin(phi), r * np.cos(phi)])
+        ss[j, :] = xp.array([r * xp.sin(phi), r * xp.cos(phi)])
         j += 1
 
     y = ss[:, 0]
@@ -286,10 +286,10 @@ def random_coords(num: int, max_r: float, with_radii: bool = False):
     # generate random points uniformly sampled in x/y
     # within a centred circle of radius max_r
     # return (y, x)
-    yx = np.random.uniform(
-        -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / np.pi
+    yx = xp.random.uniform(
+        -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / xp.pi
     )
-    radii = np.sqrt((yx ** 2).sum(axis=1))
+    radii = xp.sqrt((yx ** 2).sum(axis=1))
     mask = radii < max_r
     yx = yx[mask, :]
     return (
@@ -351,7 +351,7 @@ def fibonacci_beam_gauss_rayset(
     r : ndarray
         Ray position & slope matrix
     '''
-    div = wavelength / (np.pi * wo)
+    div = wavelength / (xp.pi * wo)
     dPx = wo
     dPy = wo
     dHx = div
@@ -421,9 +421,9 @@ def calculate_phi_0(wavelength: float):
 
 
 def convert_slope_to_direction_cosines(dx, dy):
-    l_dir_cosine = dx / np.sqrt(1 + dx ** 2 + dy ** 2)
-    m_dir_cosine = dy / np.sqrt(1 + dx ** 2 + dy ** 2)
-    n_dir_cosine = 1 / np.sqrt(1 + dx ** 2 + dy ** 2)
+    l_dir_cosine = dx / xp.sqrt(1 + dx ** 2 + dy ** 2)
+    m_dir_cosine = dy / xp.sqrt(1 + dx ** 2 + dy ** 2)
+    n_dir_cosine = 1 / xp.sqrt(1 + dx ** 2 + dy ** 2)
     return l_dir_cosine, m_dir_cosine, n_dir_cosine
 
 
@@ -432,7 +432,7 @@ def calculate_direction_cosines(x0, y0, z0, x1, y1, z1):
     vx = x1 - x0
     vy = y1 - y0
     vz = z1 - z0
-    v_mag = np.sqrt(vx**2 + vy**2 + vz**2)
+    v_mag = xp.sqrt(vx**2 + vy**2 + vz**2)
 
     # And it's direction cosines
     M = vy / v_mag

@@ -4,7 +4,7 @@ from typing import (
     TYPE_CHECKING
 )
 
-import numpy as np
+from .backend import xp
 from numpy.typing import NDArray
 import warnings
 import line_profiler
@@ -30,10 +30,7 @@ from .utils import (
     circular_beam,
     fibonacci_beam_gauss_rayset,
     point_beam,
-    calculate_direction_cosines
-)
-
-from .utils import (
+    calculate_direction_cosines,
     calculate_wavelength
 )
 
@@ -128,7 +125,7 @@ class Lens(Component):
         ndarray
             Output Ray Transfer Matrix
         '''
-        return np.array(
+        return xp.array(
             [[1,      0, 0,      0, 0],
              [-1 / f, 1, 0,      0, 0],
              [0,      0, 1,      0, 0],
@@ -141,7 +138,7 @@ class Lens(Component):
     ) -> Generator[Rays, None, None]:
         # Just straightforward matrix multiplication
         yield rays.new_with(
-            data=np.matmul(self.lens_matrix(self.f), rays.data),
+            data=xp.matmul(self.lens_matrix(self.f), rays.data),
             location=self,
         )
 
@@ -192,17 +189,17 @@ class PerfectLens(Lens):
             assert ('Must have either m defined, or both z1 and z2')
 
         if ((z1 and z2) is None) and (m is not None):
-            if np.abs(m) <= 1e-10:
+            if xp.abs(m) <= 1e-10:
                 z1 = -1e10
                 z2 = f
-            elif np.abs(m) > 1e10:
+            elif xp.abs(m) > 1e10:
                 z1 = -f
                 z2 = 1e10
             else:
                 z1 = f * (1/m - 1)
                 z2 = f * (1 - m)
         elif (m is None) and ((z1 and z2) is not None):
-            if np.abs(z1) > 1e-10:
+            if xp.abs(z1) > 1e-10:
                 m = z2 / z1
             elif z1 <= 1e-10:
                 m = 1e10
@@ -217,12 +214,12 @@ class PerfectLens(Lens):
         # If finite long conjugate approximation,
         # we need to set the signal that the numerical aperture is
         # 0.0, which is neccessary for later
-        if np.abs(z1) >= 1e10:
-            z1 = 1e10 * (z1 / np.abs(z1))
+        if xp.abs(z1) >= 1e10:
+            z1 = 1e10 * (z1 / xp.abs(z1))
             self.NA1 = 0.0  # collimated input
 
-        if np.abs(z2) >= 1e10:
-            z2 = 1e10 * (z2 / np.abs(z2))
+        if xp.abs(z2) >= 1e10:
+            z2 = 1e10 * (z2 / xp.abs(z2))
             self.NA2 = 0.0  # collimated input
 
         m = z2 / z1
@@ -239,9 +236,9 @@ class PerfectLens(Lens):
         NA2 = self.NA2
 
         # Convert slope into direction cosines
-        L1 = rays.dx / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
-        M1 = rays.dy / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
-        N1 = np.sqrt(1 - L1 ** 2 - M1 ** 2)
+        L1 = rays.dx / xp.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+        M1 = rays.dy / xp.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+        N1 = xp.sqrt(1 - L1 ** 2 - M1 ** 2)
 
         u1 = rays.x
         v1 = rays.y
@@ -250,47 +247,47 @@ class PerfectLens(Lens):
         if (self.NA1 == 0.0):
             x1 = (L1 / N1) * z1
             y1 = (M1 / N1) * z1
-            r1_mag = np.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
+            r1_mag = xp.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
 
             L1_est = -(x1 - u1) / r1_mag
             M1_est = -(y1 - v1) / r1_mag
         else:
             x1 = (L1 / N1) * z1 + u1
             y1 = (M1 / N1) * z1 + v1
-            r1_mag = np.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
+            r1_mag = xp.sqrt((x1 - u1) ** 2 + (y1 - v1) ** 2 + z1 ** 2)
 
         # Principal Ray directions
         if (self.NA1 == 0.0):
-            L1_p = rays.dx / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
-            M1_p = rays.dy / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
-            N1_p = 1 / np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
-            p1_mag = np.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2)
+            L1_p = rays.dx / xp.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+            M1_p = rays.dy / xp.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+            N1_p = 1 / xp.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)
+            p1_mag = xp.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2)
         else:
-            p1_mag = np.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2)
+            p1_mag = xp.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2)
 
             # Obtain direction cosines of principal ray from second principal plane to image point
-            L1_p = (x1 / p1_mag) * z1 / np.abs(z1)
-            M1_p = (y1 / p1_mag) * z1 / np.abs(z1)
-            N1_p = np.sqrt(1 - L1_p ** 2 - M1_p ** 2)
+            L1_p = (x1 / p1_mag) * z1 / xp.abs(z1)
+            M1_p = (y1 / p1_mag) * z1 / xp.abs(z1)
+            N1_p = xp.sqrt(1 - L1_p ** 2 - M1_p ** 2)
 
         # Coordinates in image plane or focal plane
-        if np.abs(m) <= 1.0:
+        if xp.abs(m) <= 1.0:
             x2 = z2 * (L1_p / N1_p)
             y2 = z2 * (M1_p / N1_p)
 
-            p2_mag = np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
-            L2_p = (x2 / p2_mag) * (z2 / np.abs(z2))
-            M2_p = (y2 / p2_mag) * (z2 / np.abs(z2))
-            N2_p = np.sqrt(1 - L2_p ** 2 - M2_p ** 2)
+            p2_mag = xp.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+            L2_p = (x2 / p2_mag) * (z2 / xp.abs(z2))
+            M2_p = (y2 / p2_mag) * (z2 / xp.abs(z2))
+            N2_p = xp.sqrt(1 - L2_p ** 2 - M2_p ** 2)
         else:
             a = x1 / z1
             b = y1 / z1
-            N2_p = 1 / np.sqrt(1 + a ** 2 + b ** 2)
+            N2_p = 1 / xp.sqrt(1 + a ** 2 + b ** 2)
             L2_p = a * N2_p
             M2_p = b * N2_p
             x2 = (L2_p / N2_p) * z2
             y2 = (M2_p / N2_p) * z2
-            p2_mag = np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+            p2_mag = xp.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
 
         # Calculation to back propagate to right hand side principal plane
         Cx = m * L2_p - L1_p
@@ -299,25 +296,25 @@ class PerfectLens(Lens):
         if (NA1 == 0.0):
             L2 = (L1_est + Cx) / m
             M2 = (M1_est + Cy) / m
-            N2 = np.sqrt(1 - L2 ** 2 - M2 ** 2)
+            N2 = xp.sqrt(1 - L2 ** 2 - M2 ** 2)
         else:
             L2 = (L1 + Cx) / m
             M2 = (M1 + Cy) / m
-            N2 = np.sqrt(1 - L2 ** 2 - M2 ** 2)
+            N2 = xp.sqrt(1 - L2 ** 2 - M2 ** 2)
 
         # We use a mask to find rays that have gone to the centre,
         # because we are not inputting one ray at a time, but a vector of rays.
-        mask = np.sqrt(u1 ** 2 + v1 ** 2) < 1e-7
+        mask = xp.sqrt(u1 ** 2 + v1 ** 2) < 1e-7
 
         # Initialize the output arrays
-        u2 = np.zeros_like(u1)
-        v2 = np.zeros_like(v1)
+        u2 = xp.zeros_like(u1)
+        v2 = xp.zeros_like(v1)
 
         # Handle the case where the mask is true and NA2 = 0.0
         if NA2 == 0.0:
             a = -x1 / f
             b = -y1 / f
-            N2_p = 1 / np.sqrt(1 + a ** 2 + b ** 2)
+            N2_p = 1 / xp.sqrt(1 + a ** 2 + b ** 2)
             L2_p = a * N2_p
             M2_p = b * N2_p
 
@@ -335,7 +332,7 @@ class PerfectLens(Lens):
         if NA2 == 0:
             a = -x1 / f
             b = -y1 / f
-            N2_p = 1 / np.sqrt(1 + a ** 2 + b ** 2)
+            N2_p = 1 / xp.sqrt(1 + a ** 2 + b ** 2)
             L2_p = a * N2_p
             M2_p = b * N2_p
 
@@ -345,7 +342,7 @@ class PerfectLens(Lens):
 
         # Calculate final distance from image/focal plane to point
         # ray leaves lens for optical path length
-        r2_mag = np.sqrt((x2 - u2) ** 2 + (y2 - v2) ** 2 + z2 ** 2)
+        r2_mag = xp.sqrt((x2 - u2) ** 2 + (y2 - v2) ** 2 + z2 ** 2)
 
         opl1 = r1_mag + r2_mag  # Ray opl
         opl0 = p1_mag + p2_mag  # Principal ray opl
@@ -415,7 +412,7 @@ class AberratedLens(PerfectLens):
         coeffs = self.coeffs
 
         # Reference sphere radius
-        R = np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+        R = xp.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
 
         # Coordinates of reference sphere
         u2_circle = x2 - L2 * R
@@ -423,7 +420,7 @@ class AberratedLens(PerfectLens):
         z2_circle = z2 - N2 * R
 
         # Height of object point from the optical axis
-        h = np.sqrt(x1 ** 2 + y1 ** 2)
+        h = xp.sqrt(x1 ** 2 + y1 ** 2)
 
         # Calculate the aberration in x and y (Approximate)
         eps_x = -dopd_dx(u1, v1, h, coeffs) * z2
@@ -502,11 +499,11 @@ class STEMSample(Sample):
 
     @property
     def scan_rotation(self) -> Degrees:
-        return np.rad2deg(self.scan_rotation_rad)
+        return xp.rad2deg(self.scan_rotation_rad)
 
     @scan_rotation.setter
     def scan_rotation(self, val: Degrees):
-        self.scan_rotation_rad: Radians = np.deg2rad(val)
+        self.scan_rotation_rad: Radians = xp.deg2rad(val)
 
     @property
     def scan_rotation_rad(self) -> Radians:
@@ -624,8 +621,8 @@ class ParallelBeam(Source):
 
 class XAxialBeam(ParallelBeam):
     def get_rays(self, num_rays: int, random: bool = False) -> Rays:
-        r = np.zeros((5, num_rays))
-        r[0, :] = np.random.uniform(
+        r = xp.zeros((5, num_rays))
+        r[0, :] = xp.random.uniform(
             -self.radius, self.radius, size=num_rays
         )
         return self._make_rays(r)
@@ -633,19 +630,19 @@ class XAxialBeam(ParallelBeam):
 
 class RadialSpikesBeam(ParallelBeam):
     def get_rays(self, num_rays: int, random: bool = False) -> Rays:
-        xvals = np.linspace(
+        xvals = xp.linspace(
             0., self.radius, num=num_rays // 4, endpoint=True
         )
-        yvals = np.zeros_like(xvals)
+        yvals = xp.zeros_like(xvals)
         origin_c = xvals + yvals * 1j
 
         orad, oang = R2P(origin_c)
-        radius1 = P2R(orad * 0.75, oang + np.pi * 0.4)
-        radius2 = P2R(orad * 0.5, oang + np.pi * 0.8)
-        radius3 = P2R(orad * 0.25, oang + np.pi * 1.2)
-        r_c = np.concatenate((origin_c, radius1, radius2, radius3))
+        radius1 = P2R(orad * 0.75, oang + xp.pi * 0.4)
+        radius2 = P2R(orad * 0.5, oang + xp.pi * 0.8)
+        radius3 = P2R(orad * 0.25, oang + xp.pi * 1.2)
+        r_c = xp.concatenate((origin_c, radius1, radius2, radius3))
 
-        r = np.zeros((5, r_c.size))
+        r = xp.zeros((5, r_c.size))
         r[0, :] = r_c.real
         r[2, :] = r_c.imag
         return self._make_rays(r)
@@ -676,8 +673,8 @@ class PointBeam(Source):
 
 class XPointBeam(PointBeam):
     def get_rays(self, num_rays: int, random: bool = False) -> Rays:
-        r = np.zeros((5, num_rays))
-        r[1, :] = np.linspace(
+        r = xp.zeros((5, num_rays))
+        r[1, :] = xp.linspace(
             -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
             )
         return self._make_rays(r)
@@ -756,11 +753,11 @@ class Detector(Component):
 
     @property
     def rotation(self) -> Degrees:
-        return np.rad2deg(self.rotation_rad)
+        return xp.rad2deg(self.rotation_rad)
 
     @rotation.setter
     def rotation(self, val: Degrees):
-        self.rotation_rad: Radians = np.deg2rad(val)
+        self.rotation_rad: Radians = xp.deg2rad(val)
 
     @property
     def rotation_rad(self) -> Radians:
@@ -808,17 +805,17 @@ class Detector(Component):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
-        x_det = np.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
-        y_det = np.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
-        x, y = np.meshgrid(x_det, y_det)
+        x_det = xp.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
+        y_det = xp.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
+        x, y = xp.meshgrid(x_det, y_det)
 
-        r = np.stack((x, y), axis=-1).reshape(-1, 2)
-        endpoints = np.stack((xEnd, yEnd), axis=-1)
-        # r = np.broadcast_to(r, [n_rays, *r.shape])
-        # r = np.swapaxes(r, 0, 1)
+        r = xp.stack((x, y), axis=-1).reshape(-1, 2)
+        endpoints = xp.stack((xEnd, yEnd), axis=-1)
+        # r = xp.broadcast_to(r, [n_rays, *r.shape])
+        # r = xp.swapaxes(r, 0, 1)
         # has form (n_px, n_gauss, 2:[x, y])]
         # this entire section can be optimised !!!
-        return r[:, np.newaxis, :] - endpoints[np.newaxis, ...]
+        return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
 
     def get_image(
         self,
@@ -830,12 +827,12 @@ class Detector(Component):
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
-        mask = np.logical_and(
-            np.logical_and(
+        mask = xp.logical_and(
+            xp.logical_and(
                 0 <= pixel_coords_y,
                 pixel_coords_y < sy
             ),
-            np.logical_and(
+            xp.logical_and(
                 0 <= pixel_coords_x,
                 pixel_coords_x < sx
             )
@@ -845,18 +842,18 @@ class Detector(Component):
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
-            wavefronts = 1.0 * np.exp(-1j * (2 * np.pi / rays.wavelength) * rays.path_length)
+            wavefronts = 1.0 * xp.exp(-1j * (2 * xp.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
             image_dtype = valid_wavefronts.dtype
         elif interference == 'gauss':
-            image_dtype = np.complex128
+            image_dtype = xp.complex128
         elif interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
             image_dtype = type(valid_wavefronts)
 
         if out is None:
-            out = np.zeros(
+            out = xp.zeros(
                 self.shape,
                 dtype=image_dtype,
             )
@@ -867,7 +864,7 @@ class Detector(Component):
         if interference == 'gauss':
             self.get_gauss_image(rays, out)
         else:
-            flat_icds = np.ravel_multi_index(
+            flat_icds = xp.ravel_multi_index(
                     [
                         pixel_coords_y[mask],
                         pixel_coords_x[mask],
@@ -876,7 +873,7 @@ class Detector(Component):
                 )
 
             # Increment at each pixel for each ray that hits
-            np.add.at(
+            xp.add.at(
                 out.ravel(),
                 flat_icds,
                 valid_wavefronts,
@@ -893,9 +890,9 @@ class Detector(Component):
 
         wo = rays.wo
         wavelength = rays.wavelength
-        div = rays.wavelength / (np.pi * wo)
-        k = 2 * np.pi / wavelength
-        z_r = np.pi * wo ** 2 / wavelength
+        div = rays.wavelength / (xp.pi * wo)
+        k = 2 * xp.pi / wavelength
+        z_r = xp.pi * wo ** 2 / wavelength
 
         dPx = wo
         dPy = wo
@@ -912,9 +909,9 @@ class Detector(Component):
         end_rays = rays.data[0:4, :].T
         path_length = rays.path_length[0::5]
 
-        split_end_rays = np.split(end_rays, n_gauss, axis=0)
+        split_end_rays = xp.split(end_rays, n_gauss, axis=0)
 
-        rayset1 = np.stack(split_end_rays, axis=-1)
+        rayset1 = xp.stack(split_end_rays, axis=-1)
 
         # rayset1 layout
         # [5g, (x, dx, y, dy), n_gauss]
@@ -926,7 +923,7 @@ class Detector(Component):
         # matmul, addition and mat inverse inside
         # on operands with form (n_gauss, 2, 2)
         # matmul broadcasts in the last two indices
-        # inv can be broadcast with np.linalg.inv last 2 idcs
+        # inv can be broadcast with xp.linalg.inv last 2 idcs
         # if all inputs are stacked in the first dim
         Qpinv = calculate_Qpinv(A, B, C, D, Qinv)
 
@@ -937,7 +934,7 @@ class Detector(Component):
 
         phi_x2m = rays.data[1, 0::5]  # slope that central ray arrives at
         phi_y2m = rays.data[3, 0::5]  # slope that central ray arrives at
-        p2m = np.array([phi_x2m, phi_y2m]).T
+        p2m = xp.array([phi_x2m, phi_y2m]).T
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
         # central beam final x , y coords
@@ -986,9 +983,9 @@ class AccumulatingDetector(Detector):
         return self.buffer.shape[1:]
 
     def reset_buffer(self, rays: Rays):
-        self.buffer = np.zeros(
+        self.buffer = xp.zeros(
             (self.buffer_length, *self.shape),
-            dtype=np.complex128,
+            dtype=xp.complex128,
         )
         # the next index to write into
         self.buffer_idx = 0
@@ -1054,7 +1051,7 @@ class Deflector(Component):
             Output ray transfer matrix
         '''
 
-        return np.array(
+        return xp.array(
             [[1, 0, 0, 0,     0],
              [0, 1, 0, 0, def_x],
              [0, 0, 1, 0,     0],
@@ -1066,7 +1063,7 @@ class Deflector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         yield rays.new_with(
-            data=np.matmul(
+            data=xp.matmul(
                 self.deflector_matrix(self.defx, self.defy),
                 rays.data,
             ),
@@ -1167,11 +1164,11 @@ class DoubleDeflector(Component):
         at (in_zp) with slope (in_slope), will leave at (z_out, ...) and
         pass through (pt1_zp) then (pt2_zp)
         """
-        in_zp = np.asarray(in_zp)
-        pt1_zp = np.asarray(pt1_zp)
-        pt2_zp = np.asarray(pt2_zp)
+        in_zp = xp.asarray(in_zp)
+        pt1_zp = xp.asarray(pt1_zp)
+        pt2_zp = xp.asarray(pt2_zp)
         dp = pt1_zp - pt2_zp
-        out_zp = np.asarray(
+        out_zp = xp.asarray(
             (
                 z_out,
                 pt2_zp[1] + dp[1] * (z_out - pt2_zp[0]) / dp[0],
@@ -1248,11 +1245,11 @@ class Biprism(Component):
 
     @property
     def rotation(self) -> Degrees:
-        return np.rad2deg(self.rotation_rad)
+        return xp.rad2deg(self.rotation_rad)
 
     @rotation.setter
     def rotation(self, val: Degrees):
-        self.rotation_rad: Radians = np.deg2rad(val)
+        self.rotation_rad: Radians = xp.deg2rad(val)
 
     @property
     def rotation_rad(self) -> Radians:
@@ -1270,24 +1267,24 @@ class Biprism(Component):
         rot = self.rotation_rad
         pos_x = rays.x
         pos_y = rays.y
-        rays_v = np.array([pos_x, pos_y]).T
+        rays_v = xp.array([pos_x, pos_y]).T
 
-        biprism_loc_v = np.array([offset*np.cos(rot), offset*np.sin(rot)])
+        biprism_loc_v = xp.array([offset*xp.cos(rot), offset*xp.sin(rot)])
 
-        biprism_v = np.array([-np.sin(rot), np.cos(rot)])
-        biprism_v /= np.linalg.norm(biprism_v)
+        biprism_v = xp.array([-xp.sin(rot), xp.cos(rot)])
+        biprism_v /= xp.linalg.norm(biprism_v)
 
         rays_v_centred = rays_v - biprism_loc_v
 
-        dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
-        projection = np.outer(dot_product, biprism_v)
+        dot_product = xp.dot(rays_v_centred, biprism_v) / xp.dot(biprism_v, biprism_v)
+        projection = xp.outer(dot_product, biprism_v)
 
         rejection = rays_v_centred - projection
-        rejection = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
+        rejection = rejection/xp.linalg.norm(rejection, axis=1, keepdims=True)
 
         # If the ray position is located at [zero, zero], rejection_norm returns a nan,
         # so we convert it to a zero, zero.
-        rejection = np.nan_to_num(rejection)
+        rejection = xp.nan_to_num(rejection)
 
         xdeflection_mag = rejection[:, 0]
         ydeflection_mag = rejection[:, 1]
@@ -1344,7 +1341,7 @@ class Aperture(Component):
         self, rays: Rays,
     ) -> Generator[Rays, None, None]:
         pos_x, pos_y = rays.x, rays.y
-        distance = np.sqrt(
+        distance = xp.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
         yield rays.with_mask(
