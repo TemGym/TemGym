@@ -4,6 +4,7 @@ from typing import (
 from typing_extensions import Self
 from dataclasses import dataclass, asdict
 
+from numpy.typing import NDArray
 
 from . import (
     PositiveFloat,
@@ -15,8 +16,6 @@ from .utils import (
 )
 
 from .backend import xp
-from xp.typing import NDArray
-
 
 if TYPE_CHECKING:
     from .components import Component
