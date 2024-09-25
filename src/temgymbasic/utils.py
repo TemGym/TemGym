@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
 from .backend import xp
-from numpy.typing import NDArray
+from xp.typing import NDArray
 from numba import njit
 
 from scipy.constants import e, m_e, h
