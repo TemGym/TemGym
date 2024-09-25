@@ -14,8 +14,13 @@ from .utils import (
     get_pixel_coords,
     calculate_phi_0
 )
+from .config import use_numpy
 
-from .backend import xp
+if use_numpy:
+   import numpy as xp
+else:
+   import cupy as xp
+
 
 if TYPE_CHECKING:
     from .components import Component

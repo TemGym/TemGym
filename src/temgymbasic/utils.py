@@ -1,7 +1,14 @@
 from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
-from .backend import xp
-from xp.typing import NDArray
+
+from .config import use_numpy
+
+if use_numpy:
+   import numpy as xp
+else:
+   import cupy as xp
+
+from numpy.typing import NDArray
 from numba import njit
 
 from scipy.constants import e, m_e, h
@@ -235,7 +242,11 @@ def concentric_rings(
     div_angle = 2 * xp.pi / points_per_ring
 
     params = xp.stack((radii, div_angle), axis=0)
-    all_params = xp.repeat(params, points_per_ring, axis=-1)
+    
+    #Cupy gave an error here saying that points_per_ring must not be an array
+    repeats = points_per_ring.to_list()
+    
+    all_params = xp.repeat(params, repeats, axis=-1)
     multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
 
     all_radii = all_params[0, :]
