@@ -878,13 +878,26 @@ class Detector(Component):
                     ],
                     out.shape
                 )
-
+            
             # Increment at each pixel for each ray that hits
-            xp.add.at(
-                out.ravel(),
-                flat_icds,
-                valid_wavefronts,
-            )
+            if use_numpy:
+                xp.add.at(
+                    out.ravel(),
+                    flat_icds,
+                    valid_wavefronts,
+                )
+            else:
+                
+                # Split the real and imaginary parts of the out array for cupy compatibility with add.at
+                real_out = out.real
+                imag_out = out.imag
+
+                # Perform the addition separately for real and imaginary parts
+                xp.add.at(real_out.ravel(), flat_icds, valid_wavefronts.real)
+                xp.add.at(imag_out.ravel(), flat_icds, valid_wavefronts.imag)
+
+                # Combine the real and imaginary parts back into the out array
+                out = real_out + 1j * imag_out
 
         return out
 
