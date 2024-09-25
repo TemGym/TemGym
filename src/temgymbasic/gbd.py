@@ -1,7 +1,6 @@
-import numpy as np
 import numexpr as ne
 import line_profiler
-xp = np
+from .backend import xp
 
 
 @line_profiler.profile
@@ -134,19 +133,19 @@ def transversal_phase(Qpinv, r, k):
     # of shape (n_px, n_gauss, 2, 2), can be improved
     # using some form of one-step sumproduct
     # transversal = (
-    #     r[..., np.newaxis]
-    #     * Qpinv[np.newaxis, ...] / 2
+    #     r[..., xp.newaxis]
+    #     * Qpinv[xp.newaxis, ...] / 2
     # ).sum(axis=-1)
     # transversal *= r
     # transversal = transversal.sum(axis=-1)
 
-    # transversal = (r * Qpinv[np.newaxis, ..., 0] / 2)
-    # transversal += (r * Qpinv[np.newaxis, ..., 1] / 2)
+    # transversal = (r * Qpinv[xp.newaxis, ..., 0] / 2)
+    # transversal += (r * Qpinv[xp.newaxis, ..., 1] / 2)
     # transversal *= r
     # transversal = transversal.sum(axis=-1)
 
-    transversal = (r[..., 0] ** 2 * Qpinv[np.newaxis, ..., 0, 0] / 2)
-    transversal += (r[..., 1] ** 2 * Qpinv[np.newaxis, ..., 1, 1] / 2)
+    transversal = (r[..., 0] ** 2 * Qpinv[xp.newaxis, ..., 0, 0] / 2)
+    transversal += (r[..., 1] ** 2 * Qpinv[xp.newaxis, ..., 1, 1] / 2)
     return transversal
     # return xp.exp(1j * k * transversal)
 
@@ -197,10 +196,10 @@ def misalign_phase_plane_wave(r2, p2m, k):
     return phi
     return (
         r2
-        * p2m[np.newaxis, ...]
+        * p2m[xp.newaxis, ...]
         * (
             1
-            + (p2m[np.newaxis, ...] ** 2) / 2
+            + (p2m[xp.newaxis, ...] ** 2) / 2
         )
     ).sum(axis=-1)
     # return xp.exp(1j * k * phi)
@@ -239,9 +238,9 @@ def propagate_misaligned_gaussian(
     # (n_gauss,): complex
     aligned *= 1j
     aligned += 1j * misaligned_phase
-    aligned += 1j * path_length[np.newaxis, :]
+    aligned += 1j * path_length[xp.newaxis, :]
     aligned *= k
-    aligned -= 1j * guoy[np.newaxis, :]
+    aligned -= 1j * guoy[xp.newaxis, :]
     xp.exp(aligned, out=aligned)
     # xp.exp(aligned, out=aligned)
     aligned *= xp.abs(amplitude)

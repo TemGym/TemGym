@@ -3,7 +3,7 @@ from typing import (
 )
 from typing_extensions import Self
 from dataclasses import dataclass, asdict
-import numpy as np
+
 from numpy.typing import NDArray
 
 from . import (
@@ -14,6 +14,8 @@ from .utils import (
     get_pixel_coords,
     calculate_phi_0
 )
+
+from .backend import xp
 
 if TYPE_CHECKING:
     from .components import Component
@@ -45,8 +47,8 @@ class Rays:
         wo: Optional[NDArray] = None,
     ):
         num_rays = data.shape[1]
-        if np.isscalar(path_length):
-            path_length = np.full((num_rays,), path_length)
+        if xp.isscalar(path_length):
+            path_length = xp.full((num_rays,), path_length)
         return cls(
             data=data,
             location=location,
@@ -136,7 +138,7 @@ class Rays:
         ndarray
             Propagation matrix
         '''
-        return np.array(
+        return xp.array(
             [[1, z, 0, 0, 0],
              [0, 1, 0, 0, 0],
              [0, 0, 1, z, 0],
@@ -145,16 +147,16 @@ class Rays:
         )
 
     def propagate(self, distance: float) -> Self:
-        degree_x = np.rad2deg(np.arctan(self.dx))
-        degree_y = np.rad2deg(np.arctan(self.dy))
+        degree_x = xp.rad2deg(xp.arctan(self.dx))
+        degree_y = xp.rad2deg(xp.arctan(self.dy))
 
-        if np.any(degree_x > 20):
-            raise ValueError(f"dx is too large for parabasal representation: {np.max(degree_x)}")
-        elif np.any(degree_y > 20):
-            raise ValueError(f"dy is too large for parabasal representation: {np.max(degree_y)}")
+        if xp.any(degree_x > 20):
+            raise ValueError(f"dx is too large for parabasal representation: {xp.max(degree_x)}")
+        elif xp.any(degree_y > 20):
+            raise ValueError(f"dy is too large for parabasal representation: {xp.max(degree_y)}")
 
         return self.new_with(
-            data=np.matmul(
+            data=xp.matmul(
                 self.propagation_matrix(distance),
                 self.data,
             ),
@@ -186,7 +188,7 @@ class Rays:
             scan_rotation=rotation,
         )
         if as_int:
-            return np.round((yy, xx)).astype(int)
+            return xp.round((yy, xx)).astype(int)
         return yy, xx
 
     def get_image(
