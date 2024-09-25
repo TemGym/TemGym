@@ -201,7 +201,6 @@ def initial_r_rayset(num_rays: int):
     return r
 
 
-@njit
 def multi_cumsum_inplace(values, partitions, start):
     part_idx = 0
     current_part_len = partitions[part_idx]
@@ -244,7 +243,7 @@ def concentric_rings(
     params = xp.stack((radii, div_angle), axis=0)
     
     #Cupy gave an error here saying that points_per_ring must not be an array
-    repeats = points_per_ring.to_list()
+    repeats = points_per_ring.tolist()
     
     all_params = xp.repeat(params, repeats, axis=-1)
     multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
