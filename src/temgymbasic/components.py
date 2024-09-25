@@ -5,7 +5,7 @@ from typing import (
 )
 
 from .backend import xp
-from xp.typing import NDArray
+from numpy.typing import NDArray  # Assuming xp is an alias for numpy
 import warnings
 import line_profiler
 
