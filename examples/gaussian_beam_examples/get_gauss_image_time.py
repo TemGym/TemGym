@@ -6,13 +6,13 @@ import numpy as np
 from temgymbasic.utils import calculate_phi_0
 import matplotlib.pyplot as plt
 
-n_rays = 1
+n_rays = 1000
 wavelength = 0.01
 k = 2 * np.pi / wavelength
 
 wavelengths = np.full(n_rays, wavelength)
 
-size = 512
+size = 256
 det_shape = (size, size)
 pixel_size = 0.005
 dsize = det_shape[0] * pixel_size
@@ -58,12 +58,8 @@ components = (
 model = Model(components)
 
 for _ in range(1):
-    rays = tuple(model.run_iter(num_rays=n_rays, random = False))
+    rays = tuple(model.run_iter(num_rays=n_rays, random = False, backend = 'gpu'))
     image = model.detector.get_image(rays[-1])
-
-print('amp at center is correct:', np.isclose(np.abs(image[size//2, size//2]), 5.1150331335422035, atol=1e-10))
-print('phase at center is correct:', np.isclose(np.angle(image[size//2, size//2]), -1.9623623422342213, atol=1e-10))
-
 
 import matplotlib.pyplot as plt
 plt.imshow(np.angle(image))

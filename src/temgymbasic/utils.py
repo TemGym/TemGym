@@ -31,7 +31,7 @@ except ImportError:
 
 
 def get_xp(data):
-    if data.device == "cpu":
+    if isinstance(data, np.ndarray):
         return np
     else:
         cp = get_cupy()
@@ -39,7 +39,13 @@ def get_xp(data):
             raise ImportError("Cupy is not installed")
         return cp
 
-        
+def get_array_from_device(data):
+    if isinstance(data, np.ndarray):
+        return data
+    else:
+        return np.asarray(data.get())
+
+
 def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex128]:
     return radii * np.exp(1j*angles)
 
