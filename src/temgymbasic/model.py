@@ -8,25 +8,21 @@ from . import (
     UsageError,
     InvalidModelError,
 )
-from . import components as comp, Degrees
+from . import components as comp, Degrees, get_cupy
 from .rays import Rays
 from .utils import pairwise
+import numpy as np
 
-from .config import use_numpy
-
-if use_numpy:
-   import numpy as xp
-else:
-   import cupy as xp
-
+cp = get_cupy()
 
 class Model:
-    def __init__(self, components: Iterable[comp.Component]):
+    def __init__(self, components: Iterable[comp.Component], backend: str = 'cpu'):
+        self.backend = backend
         self._components = components
+        # self.set_backend_for_components(self.xp)
         self._sort_components()
         self._validate_components()
-        
-
+         
     def _validate_components(self):
         if len(self._components) <= 1:
             raise InvalidModelError("Must have at least one component")
@@ -66,6 +62,10 @@ class Model:
     @property
     def last(self) -> comp.Detector:
         return self.components[-1]
+    
+    def set_backend_for_components(self, backend):
+        for component in self.components:
+            component.set_backend(backend)
 
     def move_component(
         self,
@@ -114,17 +114,18 @@ class Model:
         )
 
     def run_iter(
-        self, num_rays: int, random: bool = False,
+        self, num_rays: int, random: bool = False, backend: Optional[str] = 'cpu',
     ) -> Generator[Rays, None, None]:
         source: comp.Source = self.components[0]
-        rays = source.get_rays(num_rays, random=random)
+        rays = source.get_rays(num_rays, random=random, backend=backend)
+            
         for component in self.components:
             rays = rays.propagate_to(component.entrance_z)
             for rays in component.step(rays):
                 # Could use generator with return value here...
                 yield rays
 
-    def run_to_z(self, num_rays: int, z: float) -> Optional[Rays]:
+    def run_to_z(self, num_rays: int, z: float, backend: Optional[str] = 'cpu') -> Optional[Rays]:
         """
         Get the rays at a point z
 
@@ -133,14 +134,14 @@ class Model:
         use 'run_to_component' instead.
         """
         last_rays = None
-        for rays in self.run_iter(num_rays):
+        for rays in self.run_iter(num_rays, backend=backend):
             if last_rays is not None and (last_rays.z < z <= rays.z):
                 return last_rays.propagate_to(z)
             last_rays = rays
         return None
 
-    def run_to_end(self, num_rays: int) -> Rays:
-        for rays in self.run_iter(num_rays):
+    def run_to_end(self, num_rays: int, backend: Optional[str] = 'cpu') -> Rays:
+        for rays in self.run_iter(num_rays, backend=backend):
             pass
         return rays
 
@@ -148,8 +149,9 @@ class Model:
         self,
         component: comp.Component,
         num_rays: int,
+        backend: Optional[str] = 'cpu'
     ) -> Optional[Rays]:
-        for rays in self.run_iter(num_rays):
+        for rays in self.run_iter(num_rays, backend=backend):
             if rays.component is component:
                 return rays
         return None
@@ -338,7 +340,7 @@ class STEMModel(Model):
                     self.descan_coils.second.defx,
                 )
             )
-        values = xp.stack(values, axis=0)
+        values = self.xp.stack(values, axis=0)
         self.move_to(current_coord)
         return values.min(axis=0), values.max(axis=0)
 
@@ -346,7 +348,7 @@ class STEMModel(Model):
         self.source.radius = self._get_radius(self.sample.semiconv_angle)
 
     def _get_radius(self, semiconv: float):
-        return abs(self.objective.f) * xp.tan(abs(semiconv))
+        return abs(self.objective.f) * self.xp.tan(abs(semiconv))
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx

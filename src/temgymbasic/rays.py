@@ -6,6 +6,9 @@ from dataclasses import dataclass, asdict
 
 from numpy.typing import NDArray
 
+from .utils import get_xp
+from . import get_cupy
+
 from . import (
     PositiveFloat,
     Degrees,
@@ -14,20 +17,12 @@ from .utils import (
     get_pixel_coords,
     calculate_phi_0
 )
-from .config import use_numpy
-
-if use_numpy:
-   import numpy as xp
-else:
-   import cupy as xp
-
 
 if TYPE_CHECKING:
     from .components import Component
 
 
 LocationT = Union[float, 'Component', Tuple['Component', ...]]
-
 
 @dataclass
 class Rays:
@@ -41,7 +36,7 @@ class Rays:
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
-
+    
     @classmethod
     def new(
         cls,
@@ -50,17 +45,27 @@ class Rays:
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
         wo: Optional[NDArray] = None,
-    ):
+    ):  
+        
+        xp = get_xp(data)
         num_rays = data.shape[1]
+            
         if xp.isscalar(path_length):
             path_length = xp.full((num_rays,), path_length)
+        else:
+            AssertionError("path_length must be a scalar or an array of the same length as the number of rays")
+        
         return cls(
             data=data,
             location=location,
             path_length=path_length,
             wavelength=wavelength,
-            wo=wo
+            wo=wo,
         )
+    
+    @property
+    def xp(self):
+        return get_xp(self.data)
 
     @property
     def z(self) -> float:
@@ -81,7 +86,7 @@ class Rays:
         except AttributeError:
             pass
         return None
-
+   
     @property
     def num(self):
         return self.data.shape[1]
@@ -128,8 +133,7 @@ class Rays:
             return calculate_phi_0(self.wavelength)
         return self.wavelength
 
-    @staticmethod
-    def propagation_matrix(z):
+    def propagation_matrix(self, z):
         '''
         Propagation matrix
 
@@ -143,7 +147,8 @@ class Rays:
         ndarray
             Propagation matrix
         '''
-        return xp.array(
+
+        return self.xp.array(
             [[1, z, 0, 0, 0],
              [0, 1, 0, 0, 0],
              [0, 0, 1, z, 0],
@@ -152,16 +157,17 @@ class Rays:
         )
 
     def propagate(self, distance: float) -> Self:
-        degree_x = xp.rad2deg(xp.arctan(self.dx))
-        degree_y = xp.rad2deg(xp.arctan(self.dy))
 
-        if xp.any(degree_x > 20):
-            raise ValueError(f"dx is too large for parabasal representation: {xp.max(degree_x)}")
-        elif xp.any(degree_y > 20):
-            raise ValueError(f"dy is too large for parabasal representation: {xp.max(degree_y)}")
+        degree_x = self.xp.rad2deg(self.xp.arctan(self.dx))
+        degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
+
+        if self.xp.any(degree_x > 20):
+            raise ValueError(f"dx is too large for parabasal representation: {self.xp.max(degree_x)}")
+        elif self.xp.any(degree_y > 20):
+            raise ValueError(f"dy is too large for parabasal representation: {self.xp.max(degree_y)}")
 
         return self.new_with(
-            data=xp.matmul(
+            data=self.xp.matmul(
                 self.propagation_matrix(distance),
                 self.data,
             ),
@@ -191,9 +197,11 @@ class Rays:
             pixel_size=pixel_size,
             flip_y=flip_y,
             scan_rotation=rotation,
+            xp=self.xp
         )
+        
         if as_int:
-            return xp.round((yy, xx)).astype(int)
+            return self.xp.round((yy, xx)).astype(int)
         return yy, xx
 
     def get_image(

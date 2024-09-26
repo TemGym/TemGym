@@ -4,15 +4,8 @@ from typing import (
     TYPE_CHECKING
 )
 
-from .config import use_numpy
 
-if use_numpy:
-   import numpy as xp
-else:
-   import cupy as xp
-
-
-from numpy.typing import NDArray  # Assuming xp is an alias for numpy
+from numpy.typing import NDArray  # Assuming np is an alias for numpy
 import warnings
 import line_profiler
 
@@ -23,6 +16,7 @@ from . import (
     NonNegativeFloat,
     Radians,
     Degrees,
+    get_cupy
 )
 from .aber import dopd_dx, dopd_dy, opd
 from .gbd import (
@@ -43,6 +37,9 @@ from .utils import (
 
 from scipy.constants import c, e, m_e
 
+import numpy as np
+cp = get_cupy()
+
 # Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
 EPSILON = abs(e)/(2*m_e*c**2)
 
@@ -57,7 +54,7 @@ class Component(abc.ABC):
 
         self._name = name
         self._z = z
-
+        
     def _validate_component(self):
         pass
 
@@ -102,7 +99,7 @@ class Lens(Component):
     def __init__(self, z: float,
                  f: float,
                  name: Optional[str] = None):
-        super().__init__(name=name, z=z)
+        super().__init__(z=z, name=name)
         self._f = f
 
     @property
@@ -117,8 +114,7 @@ class Lens(Component):
     def ffp(self) -> float:
         return self.z - abs(self.f)
 
-    @staticmethod
-    def lens_matrix(f):
+    def lens_matrix(self, f, xp = np):
         '''
         Lens ray transfer matrix
 
@@ -143,9 +139,12 @@ class Lens(Component):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
+        
+        xp = rays.xp
+        
         # Just straightforward matrix multiplication
         yield rays.new_with(
-            data=xp.matmul(self.lens_matrix(self.f), rays.data),
+            data=xp.matmul(self.lens_matrix(self.f, xp=xp), rays.data),
             location=self,
         )
 
@@ -187,7 +186,7 @@ class PerfectLens(Lens):
         f = self._f
         self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
 
-    def initalise_m_and_principal_planes(self, z1, z2, m, f):
+    def initalise_m_and_principal_planes(self, z1, z2, m, f, xp = np):
 
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
@@ -233,7 +232,7 @@ class PerfectLens(Lens):
 
         return z1, z2, m
 
-    def get_exit_pupil_coords(self, rays):
+    def get_exit_pupil_coords(self, rays, xp):
 
         f = self._f
         m = self._m
@@ -371,7 +370,9 @@ class PerfectLens(Lens):
         # L2, M2, N2 - direction cosines of the ray at the exit pupil
         # R - reference sphere radius
         # dopl - optical path length change
-        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays)
+        
+        xp = rays.xp
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp = xp)
 
         rays.x = u2
         rays.y = v2
@@ -412,9 +413,10 @@ class AberratedLens(PerfectLens):
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class
         # yield from super().step(rays)
-
+        xp = rays.xp
+        
         z2 = self._z2
-        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays)
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp = xp)
 
         coeffs = self.coeffs
 
@@ -506,11 +508,11 @@ class STEMSample(Sample):
 
     @property
     def scan_rotation(self) -> Degrees:
-        return xp.rad2deg(self.scan_rotation_rad)
+        return np.rad2deg(self.scan_rotation_rad)
 
     @scan_rotation.setter
     def scan_rotation(self, val: Degrees):
-        self.scan_rotation_rad: Radians = xp.deg2rad(val)
+        self.scan_rotation_rad: Radians = np.deg2rad(val)
 
     @property
     def scan_rotation_rad(self) -> Radians:
@@ -550,7 +552,8 @@ class STEMSample(Sample):
 
 class Source(Component):
     def __init__(
-        self, z: float,
+        self, 
+        z: float,
         tilt_yx: Tuple[float, float] = (0., 0.),
         voltage: Optional[float] = None,
         name: Optional[str] = None,
@@ -565,13 +568,14 @@ class Source(Component):
         return self.phi_0
 
     @abc.abstractmethod
-    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
         raise NotImplementedError
 
     def set_centre(self, centre_yx: tuple[float, float]):
         self.centre_yx = centre_yx
 
     def _make_rays(self, r: NDArray, wo: Optional[float] = None) -> Rays:
+        
         # Add beam tilt (if any)
         if self.tilt_yx[1] != 0:
             r[1, :] += self.tilt_yx[1]
@@ -612,12 +616,19 @@ class ParallelBeam(Source):
         voltage: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
+        np: Optional[str] = 'ModuleType',
     ):
-        super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage)
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage, np=np)
         self.radius = radius
 
-    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
         r = circular_beam(num_rays, self.radius, random=random)
+        
+        if backend == 'gpu':
+            r = cp.asarray(r)
+        elif backend == 'cpu':
+            r = np.asarray(r)
+            
         return self._make_rays(r)
 
     @staticmethod
@@ -627,29 +638,29 @@ class ParallelBeam(Source):
 
 
 class XAxialBeam(ParallelBeam):
-    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
-        r = xp.zeros((5, num_rays))
-        r[0, :] = xp.random.uniform(
+    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+        r = np.zeros((5, num_rays))
+        r[0, :] = np.random.uniform(
             -self.radius, self.radius, size=num_rays
         )
         return self._make_rays(r)
 
 
 class RadialSpikesBeam(ParallelBeam):
-    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
-        xvals = xp.linspace(
+    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+        xvals = np.linspace(
             0., self.radius, num=num_rays // 4, endpoint=True
         )
-        yvals = xp.zeros_like(xvals)
+        yvals = np.zeros_like(xvals)
         origin_c = xvals + yvals * 1j
 
         orad, oang = R2P(origin_c)
-        radius1 = P2R(orad * 0.75, oang + xp.pi * 0.4)
-        radius2 = P2R(orad * 0.5, oang + xp.pi * 0.8)
-        radius3 = P2R(orad * 0.25, oang + xp.pi * 1.2)
-        r_c = xp.concatenate((origin_c, radius1, radius2, radius3))
+        radius1 = P2R(orad * 0.75, oang + np.pi * 0.4)
+        radius2 = P2R(orad * 0.5, oang + np.pi * 0.8)
+        radius3 = P2R(orad * 0.25, oang + np.pi * 1.2)
+        r_c = np.concatenate((origin_c, radius1, radius2, radius3))
 
-        r = xp.zeros((5, r_c.size))
+        r = np.zeros((5, r_c.size))
         r[0, :] = r_c.real
         r[2, :] = r_c.imag
         return self._make_rays(r)
@@ -668,8 +679,14 @@ class PointBeam(Source):
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
         r = point_beam(num_rays, self.semi_angle, random=random)
+        
+        if backend == 'gpu':
+            r = cp.asarray(r)
+        elif backend == 'cpu':
+            r = np.asarray(r)
+            
         return self._make_rays(r)
 
     @staticmethod
@@ -678,12 +695,18 @@ class PointBeam(Source):
         return PointBeamGUI
 
 
-class XPointBeam(PointBeam):
-    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
-        r = xp.zeros((5, num_rays))
-        r[1, :] = xp.linspace(
+class npointBeam(PointBeam):
+    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+        r = np.zeros((5, num_rays))
+        r[1, :] = np.linspace(
             -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
             )
+        
+        if backend == 'gpu':
+            r = cp.asarray(r)
+        elif backend == 'cpu':
+            r = np.asarray(r)
+            
         return self._make_rays(r)
 
     @staticmethod
@@ -707,7 +730,7 @@ class GaussBeam(Source):
         self.radius = radius
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int, beam_type: str = 'fibonacci', random: str = 'False') -> Rays:
+    def get_rays(self, num_rays: int, beam_type: str = 'fibonacci', random: str = 'False', backend = 'cpu') -> Rays:
         wavelength = calculate_wavelength(self.voltage)
 
         if beam_type == 'fibonacci':
@@ -715,6 +738,12 @@ class GaussBeam(Source):
                                            wavelength)
         else:
             raise NotImplementedError
+        
+        if backend == 'gpu':
+            r = cp.asarray(r)
+        elif backend == 'cpu':
+            r = np.asarray(r)
+        
         return self._make_rays(r, self.wo)
 
     @staticmethod
@@ -760,11 +789,11 @@ class Detector(Component):
 
     @property
     def rotation(self) -> Degrees:
-        return xp.rad2deg(self.rotation_rad)
+        return np.rad2deg(self.rotation_rad)
 
     @rotation.setter
     def rotation(self, val: Degrees):
-        self.rotation_rad: Radians = xp.deg2rad(val)
+        self.rotation_rad: Radians = np.deg2rad(val)
 
     @property
     def rotation_rad(self) -> Radians:
@@ -812,25 +841,27 @@ class Detector(Component):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
-        x_det = xp.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
-        y_det = xp.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
-        x, y = xp.meshgrid(x_det, y_det)
+        x_det = np.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
+        y_det = np.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
+        x, y = np.meshgrid(x_det, y_det)
 
-        r = xp.stack((x, y), axis=-1).reshape(-1, 2)
-        endpoints = xp.stack((xEnd, yEnd), axis=-1)
-        # r = xp.broadcast_to(r, [n_rays, *r.shape])
-        # r = xp.swapaxes(r, 0, 1)
+        r = np.stack((x, y), axis=-1).reshape(-1, 2)
+        endpoints = np.stack((xEnd, yEnd), axis=-1)
+        # r = np.broadcast_to(r, [n_rays, *r.shape])
+        # r = np.swapaxes(r, 0, 1)
         # has form (n_px, n_gauss, 2:[x, y])]
         # this entire section can be optimised !!!
-        return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
+        return r[:, np.newaxis, :] - endpoints[np.newaxis, ...]
 
     def get_image(
         self,
         rays: Rays,
         interference: str = None,
-        out: Optional[NDArray] = None
+        out: Optional[NDArray] = None,
     ) -> NDArray:
-
+        
+        xp = rays.xp
+        
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
@@ -880,8 +911,9 @@ class Detector(Component):
                 )
             
             # Increment at each pixel for each ray that hits
-            if use_numpy:
-                xp.add.at(
+            
+            if xp == np:
+                np.add.at(
                     out.ravel(),
                     flat_icds,
                     valid_wavefronts,
@@ -913,9 +945,9 @@ class Detector(Component):
 
         wo = rays.wo
         wavelength = rays.wavelength
-        div = rays.wavelength / (xp.pi * wo)
-        k = 2 * xp.pi / wavelength
-        z_r = xp.pi * wo ** 2 / wavelength
+        div = rays.wavelength / (np.pi * wo)
+        k = 2 * np.pi / wavelength
+        z_r = np.pi * wo ** 2 / wavelength
 
         dPx = wo
         dPy = wo
@@ -932,9 +964,9 @@ class Detector(Component):
         end_rays = rays.data[0:4, :].T
         path_length = rays.path_length[0::5]
 
-        split_end_rays = xp.split(end_rays, n_gauss, axis=0)
+        split_end_rays = np.split(end_rays, n_gauss, axis=0)
 
-        rayset1 = xp.stack(split_end_rays, axis=-1)
+        rayset1 = np.stack(split_end_rays, axis=-1)
 
         # rayset1 layout
         # [5g, (x, dx, y, dy), n_gauss]
@@ -946,7 +978,7 @@ class Detector(Component):
         # matmul, addition and mat inverse inside
         # on operands with form (n_gauss, 2, 2)
         # matmul broadcasts in the last two indices
-        # inv can be broadcast with xp.linalg.inv last 2 idcs
+        # inv can be broadcast with np.linalg.inv last 2 idcs
         # if all inputs are stacked in the first dim
         Qpinv = calculate_Qpinv(A, B, C, D, Qinv)
 
@@ -957,7 +989,7 @@ class Detector(Component):
 
         phi_x2m = rays.data[1, 0::5]  # slope that central ray arrives at
         phi_y2m = rays.data[3, 0::5]  # slope that central ray arrives at
-        p2m = xp.array([phi_x2m, phi_y2m]).T
+        p2m = np.array([phi_x2m, phi_y2m]).T
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
         # central beam final x , y coords
@@ -1006,6 +1038,7 @@ class AccumulatingDetector(Detector):
         return self.buffer.shape[1:]
 
     def reset_buffer(self, rays: Rays):
+        xp = rays.xp
         self.buffer = xp.zeros(
             (self.buffer_length, *self.shape),
             dtype=xp.complex128,
@@ -1074,7 +1107,7 @@ class Deflector(Component):
             Output ray transfer matrix
         '''
 
-        return xp.array(
+        return np.array(
             [[1, 0, 0, 0,     0],
              [0, 1, 0, 0, def_x],
              [0, 0, 1, 0,     0],
@@ -1086,7 +1119,7 @@ class Deflector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         yield rays.new_with(
-            data=xp.matmul(
+            data=np.matmul(
                 self.deflector_matrix(self.defx, self.defy),
                 rays.data,
             ),
@@ -1187,11 +1220,11 @@ class DoubleDeflector(Component):
         at (in_zp) with slope (in_slope), will leave at (z_out, ...) and
         pass through (pt1_zp) then (pt2_zp)
         """
-        in_zp = xp.asarray(in_zp)
-        pt1_zp = xp.asarray(pt1_zp)
-        pt2_zp = xp.asarray(pt2_zp)
+        in_zp = np.asarray(in_zp)
+        pt1_zp = np.asarray(pt1_zp)
+        pt2_zp = np.asarray(pt2_zp)
         dp = pt1_zp - pt2_zp
-        out_zp = xp.asarray(
+        out_zp = np.asarray(
             (
                 z_out,
                 pt2_zp[1] + dp[1] * (z_out - pt2_zp[0]) / dp[0],
@@ -1268,11 +1301,11 @@ class Biprism(Component):
 
     @property
     def rotation(self) -> Degrees:
-        return xp.rad2deg(self.rotation_rad)
+        return np.rad2deg(self.rotation_rad)
 
     @rotation.setter
     def rotation(self, val: Degrees):
-        self.rotation_rad: Radians = xp.deg2rad(val)
+        self.rotation_rad: Radians = np.deg2rad(val)
 
     @property
     def rotation_rad(self) -> Radians:
@@ -1290,24 +1323,24 @@ class Biprism(Component):
         rot = self.rotation_rad
         pos_x = rays.x
         pos_y = rays.y
-        rays_v = xp.array([pos_x, pos_y]).T
+        rays_v = np.array([pos_x, pos_y]).T
 
-        biprism_loc_v = xp.array([offset*xp.cos(rot), offset*xp.sin(rot)])
+        biprism_loc_v = np.array([offset*np.cos(rot), offset*np.sin(rot)])
 
-        biprism_v = xp.array([-xp.sin(rot), xp.cos(rot)])
-        biprism_v /= xp.linalg.norm(biprism_v)
+        biprism_v = np.array([-np.sin(rot), np.cos(rot)])
+        biprism_v /= np.linalg.norm(biprism_v)
 
         rays_v_centred = rays_v - biprism_loc_v
 
-        dot_product = xp.dot(rays_v_centred, biprism_v) / xp.dot(biprism_v, biprism_v)
-        projection = xp.outer(dot_product, biprism_v)
+        dot_product = np.dot(rays_v_centred, biprism_v) / np.dot(biprism_v, biprism_v)
+        projection = np.outer(dot_product, biprism_v)
 
         rejection = rays_v_centred - projection
-        rejection = rejection/xp.linalg.norm(rejection, axis=1, keepdims=True)
+        rejection = rejection/np.linalg.norm(rejection, axis=1, keepdims=True)
 
         # If the ray position is located at [zero, zero], rejection_norm returns a nan,
         # so we convert it to a zero, zero.
-        rejection = xp.nan_to_num(rejection)
+        rejection = np.nan_to_num(rejection)
 
         xdeflection_mag = rejection[:, 0]
         ydeflection_mag = rejection[:, 1]
@@ -1364,7 +1397,7 @@ class Aperture(Component):
         self, rays: Rays,
     ) -> Generator[Rays, None, None]:
         pos_x, pos_y = rays.x, rays.y
-        distance = xp.sqrt(
+        distance = np.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
         yield rays.with_mask(
