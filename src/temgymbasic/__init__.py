@@ -13,3 +13,12 @@ class UsageError(Exception):
 
 class InvalidModelError(Exception):
     ...
+
+
+def get_cupy():
+    try:
+        import cupy as cp
+    except ImportError:
+        cp = None
+    
+    return cp

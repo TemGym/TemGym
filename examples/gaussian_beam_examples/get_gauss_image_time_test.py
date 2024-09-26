@@ -22,15 +22,6 @@ x_det = np.linspace(-dsize / 2, dsize / 2, size)
 wo = 0.1
 wos = np.full(n_rays, wo)
 
-div = wavelength / (np.pi * wo)
-
-dPx = wo
-dPy = wo
-dHx = div
-dHy = div
-
-z_r = (np.pi * wo ** 2) / wavelengths 
-
 theta_x = 5
 theta_y = 0
 
