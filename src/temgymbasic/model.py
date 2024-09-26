@@ -19,7 +19,7 @@ class Model:
     def __init__(self, components: Iterable[comp.Component], backend: str = 'cpu'):
         self.backend = backend
         self._components = components
-        # self.set_backend_for_components(self.xp)
+
         self._sort_components()
         self._validate_components()
          
@@ -163,11 +163,11 @@ class Model:
 
 
 class STEMModel(Model):
-    def __init__(self):
+    def __init__(self, backend: str = 'cpu'):
         # Note a flip_y or flip_x can be achieved by setting
         # either of scan_step_yx to negative values
         self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
-        super().__init__(self.default_components())
+        super().__init__(self.default_components(), backend=backend)
         self.set_stem_params()
 
     def _validate_components(self):
@@ -340,7 +340,7 @@ class STEMModel(Model):
                     self.descan_coils.second.defx,
                 )
             )
-        values = self.xp.stack(values, axis=0)
+        values = np.stack(values, axis=0)
         self.move_to(current_coord)
         return values.min(axis=0), values.max(axis=0)
 
@@ -348,7 +348,7 @@ class STEMModel(Model):
         self.source.radius = self._get_radius(self.sample.semiconv_angle)
 
     def _get_radius(self, semiconv: float):
-        return abs(self.objective.f) * self.xp.tan(abs(semiconv))
+        return abs(self.objective.f) * np.tan(abs(semiconv))
 
     def move_to(self, scan_pixel_yx: Tuple[int, int]):
         self._scan_pixel_yx = scan_pixel_yx

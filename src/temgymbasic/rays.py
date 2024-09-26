@@ -18,6 +18,8 @@ from .utils import (
     calculate_phi_0
 )
 
+import warnings
+
 if TYPE_CHECKING:
     from .components import Component
 
@@ -162,9 +164,9 @@ class Rays:
         degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
 
         if self.xp.any(degree_x > 20):
-            raise ValueError(f"dx is too large for parabasal representation: {self.xp.max(degree_x)}")
+            warnings.warn(f"dx is too large for parabasal representation: {self.xp.max(degree_x)}", UserWarning)
         elif self.xp.any(degree_y > 20):
-            raise ValueError(f"dy is too large for parabasal representation: {self.xp.max(degree_y)}")
+            warnings.warn(f"dy is too large for parabasal representation: {self.xp.max(degree_y)}", UserWarning)
 
         return self.new_with(
             data=self.xp.matmul(
@@ -212,6 +214,7 @@ class Rays:
         rotation: Degrees = 0.
     ):
         from .components import Detector
+
         det = Detector(
             z=self.z,
             pixel_size=pixel_size,
