@@ -1,10 +1,4 @@
-from .config import use_numpy
-
-if use_numpy:
-   import numpy as xp
-else:
-   import cupy as xp
-
+import numpy as np
 
 
 def ref_sphere(X, Y, r, xs, ys, zs):

@@ -6,6 +6,10 @@ import numpy as np
 from temgymbasic.utils import calculate_phi_0
 import matplotlib.pyplot as plt
 
+from PySide6.QtWidgets import QApplication
+from temgymbasic.gui import TemGymWindow
+import sys
+
 n_rays = 1000
 wavelength = 0.01
 k = 2 * np.pi / wavelength
@@ -57,12 +61,17 @@ components = (
 
 model = Model(components)
 
-for _ in range(1):
-    rays = tuple(model.run_iter(num_rays=n_rays, random = False, backend = 'gpu'))
-    image = model.detector.get_image(rays[-1])
+AppWindow = QApplication(sys.argv)
+viewer = TemGymWindow(model)
+viewer.show()
+AppWindow.exec()
 
-import matplotlib.pyplot as plt
-plt.imshow(np.angle(image))
-plt.savefig("phase.png")
-plt.imshow(np.abs(image))
-plt.savefig("amp.png")
+# for _ in range(1):
+#     rays = tuple(model.run_iter(num_rays=n_rays, random = False, backend = 'gpu'))
+#     image = model.detector.get_image(rays[-1])
+
+# import matplotlib.pyplot as plt
+# plt.imshow(np.angle(image))
+# plt.savefig("phase.png")
+# plt.imshow(np.abs(image))
+# plt.savefig("amp.png")
