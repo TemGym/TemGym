@@ -629,7 +629,7 @@ class ParallelBeam(Source):
         r = circular_beam(num_rays, self.radius, random=random)
         
         if backend == 'gpu':
-            r = cp.asarray(r)
+            r = cp.array(r)
         elif backend == 'cpu':
             r = np.asarray(r)
             
@@ -687,7 +687,7 @@ class PointBeam(Source):
         r = point_beam(num_rays, self.semi_angle, random=random)
         
         if backend == 'gpu':
-            r = cp.asarray(r)
+            r = cp.array(r)
         elif backend == 'cpu':
             r = np.asarray(r)
             
@@ -707,7 +707,7 @@ class XPointBeam(PointBeam):
             )
         
         if backend == 'gpu':
-            r = cp.asarray(r)
+            r = cp.array(r)
         elif backend == 'cpu':
             r = np.asarray(r)
             
@@ -744,7 +744,7 @@ class GaussBeam(Source):
             raise NotImplementedError
         
         if backend == 'gpu':
-            r = cp.asarray(r)
+            r = cp.array(r)
         elif backend == 'cpu':
             r = np.asarray(r)
         

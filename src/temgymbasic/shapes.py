@@ -1,8 +1,7 @@
-from .config import xp
 import triangle as tr
 from .utils import P2R, R2P
 from . import Radians
-
+import numpy as xp
 
 
 def rectangle(w, h, x, y, z, rotation: Radians = 0.):
