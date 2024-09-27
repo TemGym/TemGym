@@ -237,7 +237,7 @@ class PerfectLens(Lens):
 
         return z1, z2, m
 
-    def get_exit_pupil_coords(self, rays, xp):
+    def get_exit_pupil_coords(self, rays, xp=np):
 
         f = self._f
         m = self._m
@@ -437,16 +437,16 @@ class AberratedLens(PerfectLens):
         h = xp.sqrt(x1 ** 2 + y1 ** 2)
 
         # Calculate the aberration in x and y (Approximate)
-        eps_x = -dopd_dx(u1, v1, h, coeffs) * z2
-        eps_y = -dopd_dy(u1, v1, h, coeffs) * z2
+        eps_x = -dopd_dx(u1, v1, h, coeffs, xp = xp) * z2
+        eps_y = -dopd_dy(u1, v1, h, coeffs, xp = xp) * z2
 
-        W = opd(u1, v1, h, coeffs)
+        W = opd(u1, v1, h, coeffs, xp = xp)
 
         # Get aberration direction cosines - remember the aberrated rays must
         # go through the same point on the reference sphere
         # as the perfect rays
         nx, ny, nz = calculate_direction_cosines(x2 + eps_x, y2 + eps_y, z2,
-                                                 u2_circle, v2_circle, z2_circle)
+                                                 u2_circle, v2_circle, z2_circle, xp = xp)
 
         # Calculate the new aberrated ray coordinates in the image plane
         x2_aber = x2 + eps_x

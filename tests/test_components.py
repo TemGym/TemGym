@@ -40,7 +40,7 @@ def empty_rays():
         path_length=xp.empty([]),
     )
 
-
+@pytest.fixture()
 def single_random_uniform_ray(x, y, phi_0=1.0):
     data = xp.zeros(shape=(5, 1))
 
