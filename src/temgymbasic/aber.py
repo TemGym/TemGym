@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def ref_sphere(X, Y, r, xs, ys, zs):
+def ref_sphere(X, Y, r, xs, ys, zs, xp=np):
     """
     Evaluate the reference sphere.
 
@@ -16,7 +16,7 @@ def ref_sphere(X, Y, r, xs, ys, zs):
     return zs - xp.sqrt(r**2 - (X - xs)**2 - (Y - ys)**2)
 
 
-def aber(r_aperture, theta_aperture, r_object, coeffs):
+def aber(r_aperture, theta_aperture, r_object, coeffs, xp=np):
     C, K, A, F, D = coeffs
 
     Spherical = 1/4 * C * r_aperture ** 4
@@ -30,7 +30,7 @@ def aber(r_aperture, theta_aperture, r_object, coeffs):
     return W
 
 
-def daber_drho(r_aperture, theta_aperture, r_object, coeffs):
+def daber_drho(r_aperture, theta_aperture, r_object, coeffs, xp=np):
     C, K, A, F, D = coeffs
 
     dSpherical = C * r_aperture ** 3
@@ -44,7 +44,7 @@ def daber_drho(r_aperture, theta_aperture, r_object, coeffs):
     return dWdrho
 
 
-def daber_dtheta(r_aperture, theta_aperture, r_object, coeffs):
+def daber_dtheta(r_aperture, theta_aperture, r_object, coeffs, xp=np):
     _, K, A, _, D = coeffs
 
     dComa = - K*r_aperture**3*r_object*xp.sin(theta_aperture)
@@ -56,7 +56,7 @@ def daber_dtheta(r_aperture, theta_aperture, r_object, coeffs):
     return dWdtheta
 
 
-def grad_Rho(X, Y):
+def grad_Rho(X, Y, xp=np):
     """
     Calculate the gradient of RHO with respect to X and Y.
 
@@ -73,7 +73,7 @@ def grad_Rho(X, Y):
     return dRhodx, dRhody
 
 
-def grad_Theta(X, Y):
+def grad_Theta(X, Y, xp=np):
     """
     Calculate the gradient of THETA with respect to X and Y.
 
@@ -90,7 +90,7 @@ def grad_Theta(X, Y):
     return dThetadx, dThetady
 
 
-def opd(X, Y, h, coeffs):
+def opd(X, Y, h, coeffs, xp=np):
     """
     Evaluate the optical path difference (OPD).
 
@@ -108,10 +108,10 @@ def opd(X, Y, h, coeffs):
     RHO = xp.sqrt(X**2 + Y**2)
     THETA = xp.arctan2(Y, X)
 
-    return aber(RHO, THETA, h, coeffs)
+    return aber(RHO, THETA, h, coeffs, xp=xp)
 
 
-def dopd_dx(X, Y, h, coeffs):
+def dopd_dx(X, Y, h, coeffs, xp=np):
     """
     Evaluate the derivative of the optical path difference (OPD) with respect to x.
 
@@ -130,16 +130,16 @@ def dopd_dx(X, Y, h, coeffs):
     RHO = xp.sqrt(X**2 + Y**2)
     THETA = xp.arctan2(Y, X)
 
-    dWdrho = daber_drho(RHO, THETA, h, coeffs)
-    dWdtheta = daber_dtheta(RHO, THETA, h, coeffs)
-    dRhodx, _ = grad_Rho(X, Y)
-    dThetadx, _ = grad_Theta(X, Y)
+    dWdrho = daber_drho(RHO, THETA, h, coeffs, xp=xp)
+    dWdtheta = daber_dtheta(RHO, THETA, h, coeffs, xp=xp)
+    dRhodx, _ = grad_Rho(X, Y, xp=xp)
+    dThetadx, _ = grad_Theta(X, Y, xp=xp)
     dWdx = (dWdrho * dRhodx + dWdtheta * dThetadx)
 
     return dWdx
 
 
-def dopd_dy(X, Y, h, coeffs):
+def dopd_dy(X, Y, h, coeffs, xp=np):
     """
     Evaluate the derivative of the optical path difference (OPD) with respect to y.
 
@@ -158,15 +158,15 @@ def dopd_dy(X, Y, h, coeffs):
     RHO = xp.sqrt(X**2 + Y**2)
     THETA = xp.arctan2(Y, X)
 
-    dWdrho = daber_drho(RHO, THETA, h, coeffs)
-    dWdtheta = daber_dtheta(RHO, THETA, h, coeffs)
-    _, dRhody = grad_Rho(X, Y)
-    _, dThetady = grad_Theta(X, Y)
+    dWdrho = daber_drho(RHO, THETA, h, coeffs, xp=xp)
+    dWdtheta = daber_dtheta(RHO, THETA, h, coeffs, xp=xp)
+    _, dRhody = grad_Rho(X, Y, xp=xp)
+    _, dThetady = grad_Theta(X, Y, xp=xp)
     dWdy = (dWdrho * dRhody + dWdtheta * dThetady)
     return dWdy
 
 
-def compute_Tpinv(X, Y, IMAGE_POINT, REF_SPHERE_RADIUS):
+def compute_Tpinv(X, Y, IMAGE_POINT, REF_SPHERE_RADIUS, xp=np):
     n = len(X)
 
     DX = X - IMAGE_POINT[0]
@@ -209,7 +209,7 @@ def compute_Tpinv(X, Y, IMAGE_POINT, REF_SPHERE_RADIUS):
     return Tpinv, Tbar
 
 
-def transform_to_global(Tbar, gradW, W, Tpinv):
+def transform_to_global(Tbar, gradW, W, Tpinv, xp=np):
     # Initialize arrays for nhat0, phihat0, n, and phi
 
     nhat0 = xp.zeros_like(Tpinv[..., 0])
@@ -237,14 +237,14 @@ def transform_to_global(Tbar, gradW, W, Tpinv):
     return n, phi
 
 
-def aberrated_sphere(x, y, xs, ys, h, R, coeffs):
+def aberrated_sphere(x, y, xs, ys, h, R, coeffs, xp=np):
 
-    W = opd(x, y, h, coeffs)
-    dWdx = dopd_dx(x, y, h, coeffs)
-    dWdy = dopd_dy(x, y, h, coeffs)
+    W = opd(x, y, h, coeffs, xp=xp)
+    dWdx = dopd_dx(x, y, h, coeffs, xp=xp)
+    dWdy = dopd_dy(x, y, h, coeffs, xp=xp)
 
-    Tpinv, Tbar = compute_Tpinv(x, y, [xs, ys], R)
+    Tpinv, Tbar = compute_Tpinv(x, y, [xs, ys], R, xp=xp)
     aber_ray_dir_cosine, aber_ray_coord = transform_to_global(Tbar, xp.array([dWdx, dWdy]).T, W,
-                                                              Tpinv)
+                                                              Tpinv, xp=xp)
 
     return aber_ray_dir_cosine, aber_ray_coord, W
