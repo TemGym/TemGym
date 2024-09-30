@@ -35,3 +35,4 @@ dist/
 *.lprof
 *.txt
 *.png
+*nsys-rep
