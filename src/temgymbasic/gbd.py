@@ -3,7 +3,7 @@ import line_profiler
 import numpy as np
 
 @line_profiler.profile
-def differential_matrix(rayset, dPx, dPy, dHx, dHy, xp = np):
+def differential_matrix(rayset, dPx, dPy, dHx, dHy, xp=np):
 
     x_cen_T = rayset[0, 0, :]
     x_px_T = rayset[1, 0, :]
@@ -50,7 +50,7 @@ def differential_matrix(rayset, dPx, dPy, dHx, dHy, xp = np):
     return A, B, C, D
 
 
-def propagate_qpinv_abcd(Qinv, A, B, C, D, xp = np):
+def propagate_qpinv_abcd(Qinv, A, B, C, D, xp=np):
     num = C + D @ Qinv
     den = A + B @ Qinv
     return num @ xp.linalg.inv(den)
@@ -62,7 +62,7 @@ def Matmulvec(r0, Mat, r1):
     return out
 
 
-def misalign_phase(B, A, r1m, r2, k, xp = np):
+def misalign_phase(B, A, r1m, r2, k, xp=np):
     """
     Parameters
     ----------
@@ -89,7 +89,7 @@ def misalign_phase(B, A, r1m, r2, k, xp = np):
 
 
 @line_profiler.profile
-def transversal_phase(Qpinv, r, k, xp = np):
+def transversal_phase(Qpinv, r, k, xp=np):
     """compute the transverse gaussian phase of a gaussian beam
 
     Parameters
@@ -148,7 +148,7 @@ def transversal_phase(Qpinv, r, k, xp = np):
     return transversal
     # return xp.exp(1j * k * transversal)
     
-def eigenvalues_2x2(array, xp = np):
+def eigenvalues_2x2(array, xp=np):
     """ Computes the eigenvalues of a 2x2 matrix using a trick
 
     Parameters
@@ -173,7 +173,7 @@ def eigenvalues_2x2(array, xp = np):
 
     return e1, e2
 
-def calculate_Qinv(z_r, num_rays, xp = np):
+def calculate_Qinv(z_r, num_rays, xp=np):
 
     qinv = 1/(-1j*z_r)
     Qinv = xp.zeros((num_rays, 2, 2), dtype=xp.complex128)
@@ -185,7 +185,7 @@ def calculate_Qinv(z_r, num_rays, xp = np):
     return Qinv
 
 
-def calculate_Qpinv(A, B, C, D, Qinv, xp = np):
+def calculate_Qpinv(A, B, C, D, Qinv, xp=np):
 
     NUM = C + (D @ Qinv)
 
@@ -195,7 +195,7 @@ def calculate_Qpinv(A, B, C, D, Qinv, xp = np):
 
 
 
-def phase_correction(r1m, p1m, r2m, p2m, k, xp = np):
+def phase_correction(r1m, p1m, r2m, p2m, k, xp=np):
     # See https://www.tandfonline.com/doi/abs/10.1080/09500340600842237
     z1_phase = xp.sum(r1m * p1m, axis=1)
     z2_phase = xp.sum(r2m * p2m, axis=1)
@@ -203,13 +203,13 @@ def phase_correction(r1m, p1m, r2m, p2m, k, xp = np):
 
 
 @line_profiler.profile
-def gaussian_amplitude(Qinv, A, B, xp = np):
+def gaussian_amplitude(Qinv, A, B, xp=np):
     den = A + B @ Qinv
     return 1 / xp.sqrt(xp.linalg.det(den))
 
 
 @line_profiler.profile
-def guoy_phase(Qpinv, xp = np):
+def guoy_phase(Qpinv, xp=np):
     """compute the guoy phase of a complex curvature matrix
 
     Parameters
@@ -223,14 +223,14 @@ def guoy_phase(Qpinv, xp = np):
         guoy phase of the complex curvature matrix
     """
 
-    e1, e2 = eigenvalues_2x2(Qpinv, xp = np)
+    e1, e2 = eigenvalues_2x2(Qpinv, xp=np)
     guoy = (xp.arctan(xp.real(e1) / xp.imag(e1)) + xp.arctan(xp.real(e2) / xp.imag(e2))) / 2
 
     return guoy
 
 
 @line_profiler.profile
-def misalign_phase_plane_wave(r2, p2m, k, xp = np):
+def misalign_phase_plane_wave(r2, p2m, k, xp=np):
     # r2: (n_px, n_gauss, 2:[x ,y])
     # p2m: (n_gauss, 2:[x ,y])
     # l0 = r2 * p2m
@@ -261,7 +261,7 @@ def propagate_misaligned_gaussian(
     B,
     path_length,
     out,
-    xp = np
+    xp=np
 ):
     # Qinv : (n_gauss, 2, 2), complex
     # Qpinv : (n_gauss, 2, 2), complex
@@ -272,15 +272,15 @@ def propagate_misaligned_gaussian(
     # B: (n_gauss, 2, 2), float
     # path_length: (n_gauss,), float => path length of central ray
 
-    misaligned_phase = misalign_phase_plane_wave(r, p2m, k, xp = xp)
+    misaligned_phase = misalign_phase_plane_wave(r, p2m, k, xp=xp)
     # (n_px, n_gauss): complex
-    aligned = transversal_phase(Qpinv, r, k, xp = xp)  # Phase and Amplitude at transversal plane to beam dir
+    aligned = transversal_phase(Qpinv, r, k, xp=xp)  # Phase and Amplitude at transversal plane to beam dir
     # (n_px, n_gauss): complex
     # opl = xp.exp(1j * k * path_length)  # Optical path length phase
     # (n_gauss,): complex
-    guoy = guoy_phase(Qpinv, xp = xp)  # Guoy phase
+    guoy = guoy_phase(Qpinv, xp=xp)  # Guoy phase
     # (n_gauss,): complex
-    amplitude = gaussian_amplitude(Qinv, A, B, xp = xp)  # Complex Gaussian amplitude
+    amplitude = gaussian_amplitude(Qinv, A, B, xp=xp)  # Complex Gaussian amplitude
     # (n_gauss,): complex
     aligned *= 1j
     aligned += 1j * misaligned_phase

@@ -33,7 +33,6 @@ class Rays:
     wavelength: Optional[float] = None
     mask: Optional[NDArray] = None
     blocked: Optional[NDArray] = None
-    wo: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -45,25 +44,22 @@ class Rays:
         location: LocationT,
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
-        wo: Optional[NDArray] = None,
+        **kwargs,
     ):
-
         xp = get_xp(data)
         num_rays = data.shape[1]
-
         if xp.isscalar(path_length):
             path_length = xp.full((num_rays,), path_length)
-        else:
-            AssertionError(
-                "path_length must be a scalar or an array of the same length as the number of rays"
-            )
+        assert len(path_length) == num_rays, (
+            "path_length must be a scalar or an array of the same length as the number of rays"
+        )
 
         return cls(
             data=data,
             location=location,
             path_length=path_length,
             wavelength=wavelength,
-            wo=wo,
+            **kwargs,
         )
 
     @property
@@ -129,6 +125,22 @@ class Rays:
     @dy.setter
     def dy(self, yslope):
         self.data[3, :] = yslope
+
+    @property
+    def num_display(self):
+        return self.num
+
+    @property
+    def x_display(self):
+        return self.x
+
+    @property
+    def y_display(self):
+        return self.y
+
+    @property
+    def mask_display(self):
+        return self.mask
 
     @property
     def phi_0(self):
@@ -255,3 +267,26 @@ class Rays:
             wavelength=self.wavelength,
             mask=~self.mask,
         )
+
+
+@dataclass
+class GaussianRays(Rays):
+    wo: Optional[NDArray] = None
+
+    @property
+    def x_display(self):
+        return self.x[0::5]
+
+    @property
+    def y_display(self):
+        return self.y[2::5]
+
+    @property
+    def mask_display(self):
+        if self.mask is not None:
+            raise NotImplementedError
+        return self.mask
+
+    @property
+    def num_display(self):
+        return self.x_display.size
