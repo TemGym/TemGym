@@ -7,7 +7,6 @@ from dataclasses import dataclass, asdict
 from numpy.typing import NDArray
 
 from .utils import get_xp
-from . import get_cupy
 
 from . import (
     PositiveFloat,
@@ -18,13 +17,13 @@ from .utils import (
     calculate_phi_0
 )
 
-import warnings
 
 if TYPE_CHECKING:
     from .components import Component
 
 
 LocationT = Union[float, 'Component', Tuple['Component', ...]]
+
 
 @dataclass
 class Rays:
@@ -38,7 +37,7 @@ class Rays:
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
-    
+
     @classmethod
     def new(
         cls,
@@ -47,16 +46,18 @@ class Rays:
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
         wo: Optional[NDArray] = None,
-    ):  
-        
+    ):
+
         xp = get_xp(data)
         num_rays = data.shape[1]
-            
+
         if xp.isscalar(path_length):
             path_length = xp.full((num_rays,), path_length)
         else:
-            AssertionError("path_length must be a scalar or an array of the same length as the number of rays")
-        
+            AssertionError(
+                "path_length must be a scalar or an array of the same length as the number of rays"
+            )
+
         return cls(
             data=data,
             location=location,
@@ -88,7 +89,7 @@ class Rays:
         except AttributeError:
             pass
         return None
-   
+
     @property
     def num(self):
         return self.data.shape[1]
@@ -201,7 +202,7 @@ class Rays:
             scan_rotation=rotation,
             xp=self.xp
         )
-        
+
         if as_int:
             return self.xp.round((yy, xx)).astype(int)
         return yy, xx
