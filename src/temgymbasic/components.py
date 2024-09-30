@@ -838,8 +838,8 @@ class Detector(Component):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
-        x_det = xp.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0])
-        y_det = xp.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1])
+        x_det = xp.linspace(-det_size_y / 2, det_size_y / 2, self.shape[0], dtype=xEnd.dtype)
+        y_det = xp.linspace(-det_size_x / 2, det_size_x / 2, self.shape[1], dtype=yEnd.dtype)
         x, y = xp.meshgrid(x_det, y_det)
 
         r = xp.stack((x, y), axis=-1).reshape(-1, 2)
@@ -881,6 +881,10 @@ class Detector(Component):
             image_dtype = valid_wavefronts.dtype
         elif self.interference == 'gauss':
             image_dtype = xp.complex128
+            # Setting this next line reduces the bitdepth
+            # of the image computation which can improve the speed
+            # quite substantially
+            # image_dtype = xp.complex64
         elif self.interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
@@ -935,21 +939,23 @@ class Detector(Component):
 
     def get_gauss_image(
         self,
-        rays: Rays,
-        out: Optional[NDArray] = None
+        rays: GaussianRays,
+        out: NDArray,
     ) -> NDArray:
 
+        float_dtype = out.real.dtype.type
         xp = rays.xp
+
         wo = rays.wo
         wavelength = rays.wavelength
         div = rays.wavelength / (xp.pi * wo)
-        k = 2 * xp.pi / wavelength
-        z_r = xp.pi * wo ** 2 / wavelength
+        k = float_dtype(2 * xp.pi / wavelength)
+        z_r = float_dtype(xp.pi * wo ** 2 / wavelength)
 
-        dPx = wo
-        dPy = wo
-        dHx = div
-        dHy = div
+        dPx = float_dtype(wo)
+        dPy = float_dtype(wo)
+        dHx = float_dtype(div)
+        dHy = float_dtype(div)
 
         # rays layout
         # [5, n_rays] where n_rays = 5 * n_gauss
@@ -959,7 +965,7 @@ class Detector(Component):
         n_gauss = rays.num // 5
 
         # end_rays = rays.data[0:4, :].T
-        path_length = rays.path_length[0::5]
+        path_length = rays.path_length[0::5].astype(float_dtype)
 
         # split_end_rays = xp.split(end_rays, n_gauss, axis=0)
         # rayset1 = xp.stack(split_end_rays, axis=-1)
@@ -969,6 +975,7 @@ class Detector(Component):
             -1,
             0,
         )
+        rayset1 = rayset1.astype(float_dtype)
 
         # rayset1 layout
         # [5g, (x, dx, y, dy), n_gauss]
@@ -991,7 +998,7 @@ class Detector(Component):
 
         phi_x2m = rays.data[1, 0::5]  # slope that central ray arrives at
         phi_y2m = rays.data[3, 0::5]  # slope that central ray arrives at
-        p2m = xp.array([phi_x2m, phi_y2m]).T
+        p2m = xp.array([phi_x2m, phi_y2m]).T.astype(float_dtype)
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
         # central beam final x , y coords
