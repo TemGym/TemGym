@@ -28,7 +28,7 @@ from .gbd import (
 )
 from .rays import Rays, GaussianRays
 from .utils import (
-    get_cupy,
+    get_array_module,
     P2R, R2P,
     circular_beam,
     fibonacci_beam_gauss_rayset,
@@ -590,13 +590,7 @@ class Source(Component):
         if self.phi_0 is not None:
             wavelength = calculate_wavelength(self.phi_0)
 
-        if backend == 'gpu':
-            cp = get_cupy()
-            r = cp.array(r)
-        elif backend == 'cpu':
-            r = np.asarray(r)
-        else:
-            raise NotImplementedError
+        r = get_array_module(backend).asarray(r)
 
         return dict(
             data=r,
@@ -732,11 +726,13 @@ class GaussBeam(Source):
         if random:
             raise NotImplementedError
         else:
+            xp = get_array_module(backend)
             r = fibonacci_beam_gauss_rayset(
                 num_rays,
                 self.radius,
                 self.wo,
                 wavelength,
+                xp=xp,
             )
 
         return self._make_rays(r, backend=backend)
