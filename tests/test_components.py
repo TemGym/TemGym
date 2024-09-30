@@ -7,7 +7,7 @@ from temgymbasic.model import (
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
 from temgymbasic.utils import calculate_phi_0, calculate_wavelength, get_array_from_device
-from numpy.testing import assert_allclose, assert_equal
+from numpy.testing import assert_equal
 from temgymbasic.plotting import plot_model
 import scipy
 # import matplotlib.pyplot as plt
@@ -390,7 +390,7 @@ def test_biprism_interference():
     image = model.detector.get_image(rays[-1], interference='ray')
     peaks, _ = scipy.signal.find_peaks(np.abs(image[0, :])**2, height=0)
 
-    assert_equal(len(peaks), num_peaks)
+    xp.testing.assert_equal(len(peaks), num_peaks)
 
 @pytest.mark.skipif(USE_GPU, reason="Test not supported on GPU") 
 def test_aperture_blocking(parallel_rays, empty_rays):
