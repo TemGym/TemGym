@@ -15,7 +15,7 @@ from scipy.constants import e, m_e, h
 if TYPE_CHECKING:
     from .model import STEMModel
     from .rays import Rays
-    from . import Degrees, Radians
+    from . import Degrees, Radians, BackendT
 
 
 RadiansNP: TypeAlias = np.float64
@@ -51,6 +51,13 @@ def get_xp(data: NDArray):
     except AttributeError:
         pass
     return np
+
+
+def get_array_module(backend: 'BackendT'):
+    if backend == "cpu":
+        return np
+    elif backend == "gpu":
+        return get_cupy()
 
 
 def get_array_from_device(data: NDArray):
@@ -219,12 +226,11 @@ def initial_r(num_rays: int):
     return r
 
 
-def initial_r_rayset(num_rays: int):
-    r = np.zeros(
-        (5, num_rays * 5),
-        dtype=np.float64,
+def initial_r_rayset(num_gauss: int, xp=np):
+    r = xp.zeros(
+        (5, num_gauss * 5),
+        dtype=xp.float64,
     )  # x, theta_x, y, theta_y, 1
-
     r[4, :] = 1.
     return r
 
@@ -285,9 +291,12 @@ def concentric_rings(
     )
 
 
-def fibonacci_spiral(nb_samples: int,
-                    radius: float,
-                    alpha=2):
+def fibonacci_spiral(
+    nb_samples: int,
+    radius: float,
+    alpha=2,
+    xp=np,
+):
     # From https://github.com/matt77hias/fibpy/blob/master/src/sampling.py
     # Fibonacci spiral sampling in a unit circle
     # Alpha parameter determines smoothness of boundary - default of 2 means a smooth boundary
@@ -296,26 +305,36 @@ def fibonacci_spiral(nb_samples: int,
 
     # nb_samples * np.random.random()
 
-    ga = np.pi * (3.0 - np.sqrt(5.0))
+    ga = xp.pi * (3.0 - xp.sqrt(5.0))
 
     # Boundary points
-    np_boundary = np.round(alpha * np.sqrt(nb_samples))
+    np_boundary = xp.round(alpha * xp.sqrt(nb_samples))
 
-    ss = np.zeros((nb_samples, 2))
-    j = 0
-    for i in range(nb_samples):
-        if i == 0:
-            r = 0
-        elif i > nb_samples - (np_boundary + 1):
-            r = radius
-        else:
-            r = radius * np.sqrt((i + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
-        phi = ga * i
-        ss[j, :] = np.array([r * np.sin(phi), r * np.cos(phi)])
-        j += 1
+    # ss = np.zeros((nb_samples, 2))
 
-    y = ss[:, 0]
-    x = ss[:, 1]
+    ii = xp.arange(nb_samples)
+    rr = xp.where(
+        ii > nb_samples - (np_boundary + 1),
+        radius,
+        radius * xp.sqrt((ii + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
+    )
+    rr[0] = 0.
+    phi = ii * ga
+    y = rr * xp.sin(phi)
+    x = rr * xp.cos(phi)
+
+    # for i in range(nb_samples):
+    #     if i == 0:
+    #         r = 0
+    #     elif i > nb_samples - (np_boundary + 1):
+    #         r = radius
+    #     else:
+    #         r =
+    #     phi = ga * i
+    #     ss[j, :] = np.array([, ])
+
+    # y = ss[:, 0]
+    # x = ss[:, 1]
 
     return y, x
 
@@ -368,52 +387,33 @@ def circular_beam(
 
 
 def fibonacci_beam_gauss_rayset(
-    num_rays_approx: int,
+    num_gauss_approx: int,
     outer_radius: float,
     wo: float,
     wavelength: float,
+    xp=np,
 ) -> NDArray:
-    '''
-    Generates a circular parallel initial beam
-    in approximately equally-filled concentric rings
 
-    Parameters
-    ----------
-    num_rays_approx : int
-        The approximate number of rays
-    outer_radius : float
-        Outer radius of the circular beam
-
-    Returns
-    -------
-    r : ndarray
-        Ray position & slope matrix
-    '''
     div = wavelength / (np.pi * wo)
     dPx = wo
     dPy = wo
     dHx = div
     dHy = div
 
-    y, x = fibonacci_spiral(num_rays_approx, outer_radius)
+    y, x = fibonacci_spiral(num_gauss_approx, outer_radius, xp=xp)
+    # this multiplies n_rays by 5
+    r = initial_r_rayset(y.shape[0], xp=xp)
 
-    r = initial_r_rayset(y.shape[0])
-
-    r[0, 0::5] = x
-    r[2, 0::5] = y
-
-    r[0, 1::5] = x + dPx
-    r[2, 1::5] = y
-
-    r[0, 2::5] = x
-    r[2, 2::5] = y + dPy
-
-    r[0, 3::5] = x
+    # Central coords
+    r[0] = xp.repeat(x, 5)
+    r[2] = xp.repeat(y, 5)
+    # Offset in x
+    r[0, 1::5] += dPx
+    # Offset in y
+    r[2, 2::5] += dPy
+    # Slope in x from origin
     r[1, 3::5] += dHx
-    r[2, 3::5] = y
-
-    r[0, 4::5] = x
-    r[2, 4::5] = y
+    # Slope in y from origin
     r[3, 4::5] += dHy
 
     return r
