@@ -1,5 +1,5 @@
 from typing import (
-    Generator, Iterable, Tuple, Optional
+    Generator, Sequence, Tuple, Optional
 )
 from typing_extensions import Self
 
@@ -8,21 +8,24 @@ from . import (
     UsageError,
     InvalidModelError,
 )
-from . import components as comp, Degrees, get_cupy
+from . import components as comp, Degrees, BackendT
 from .rays import Rays
 from .utils import pairwise
 import numpy as np
 
-cp = get_cupy()
 
 class Model:
-    def __init__(self, components: Iterable[comp.Component], backend: str = 'cpu'):
+    def __init__(
+        self,
+        components: Sequence[comp.Component],
+        backend: BackendT = 'cpu'
+    ):
         self.backend = backend
         self._components = components
 
         self._sort_components()
         self._validate_components()
-         
+
     def _validate_components(self):
         if len(self._components) <= 1:
             raise InvalidModelError("Must have at least one component")
@@ -40,7 +43,7 @@ class Model:
             c._validate_component()
 
     @property
-    def components(self) -> Iterable[comp.Component]:
+    def components(self) -> Sequence[comp.Component]:
         return self._components
 
     def __repr__(self):
@@ -62,7 +65,7 @@ class Model:
     @property
     def last(self) -> comp.Detector:
         return self.components[-1]
-    
+
     def set_backend_for_components(self, backend):
         for component in self.components:
             component.set_backend(backend)
@@ -114,18 +117,20 @@ class Model:
         )
 
     def run_iter(
-        self, num_rays: int, random: bool = False, backend: Optional[str] = 'cpu',
+        self, num_rays: int, random: bool = False, backend: Optional[BackendT] = None,
     ) -> Generator[Rays, None, None]:
         source: comp.Source = self.components[0]
-        rays = source.get_rays(num_rays, random=random, backend=backend)
-            
+        rays = source.get_rays(num_rays, random=random, backend=backend or self.backend)
+
         for component in self.components:
             rays = rays.propagate_to(component.entrance_z)
             for rays in component.step(rays):
                 # Could use generator with return value here...
                 yield rays
 
-    def run_to_z(self, num_rays: int, z: float, backend: Optional[str] = 'cpu') -> Optional[Rays]:
+    def run_to_z(
+        self, num_rays: int, z: float, backend: Optional[BackendT] = None
+    ) -> Optional[Rays]:
         """
         Get the rays at a point z
 
@@ -140,7 +145,7 @@ class Model:
             last_rays = rays
         return None
 
-    def run_to_end(self, num_rays: int, backend: Optional[str] = 'cpu') -> Rays:
+    def run_to_end(self, num_rays: int, backend: Optional[BackendT] = None) -> Rays:
         for rays in self.run_iter(num_rays, backend=backend):
             pass
         return rays
@@ -149,7 +154,7 @@ class Model:
         self,
         component: comp.Component,
         num_rays: int,
-        backend: Optional[str] = 'cpu'
+        backend: Optional[BackendT] = None
     ) -> Optional[Rays]:
         for rays in self.run_iter(num_rays, backend=backend):
             if rays.component is component:
