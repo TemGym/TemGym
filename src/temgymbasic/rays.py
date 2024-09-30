@@ -7,7 +7,6 @@ from dataclasses import dataclass, asdict
 from numpy.typing import NDArray
 
 from .utils import get_xp
-from . import get_cupy
 
 from . import (
     PositiveFloat,
@@ -18,13 +17,13 @@ from .utils import (
     calculate_phi_0
 )
 
-import warnings
 
 if TYPE_CHECKING:
     from .components import Component
 
 
 LocationT = Union[float, 'Component', Tuple['Component', ...]]
+
 
 @dataclass
 class Rays:
@@ -34,11 +33,10 @@ class Rays:
     wavelength: Optional[float] = None
     mask: Optional[NDArray] = None
     blocked: Optional[NDArray] = None
-    wo: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
-    
+
     @classmethod
     def new(
         cls,
@@ -46,25 +44,24 @@ class Rays:
         location: LocationT,
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
-        wo: Optional[NDArray] = None,
-    ):  
-        
+        **kwargs,
+    ):
         xp = get_xp(data)
         num_rays = data.shape[1]
-            
         if xp.isscalar(path_length):
             path_length = xp.full((num_rays,), path_length)
-        else:
-            AssertionError("path_length must be a scalar or an array of the same length as the number of rays")
-        
+        assert len(path_length) == num_rays, (
+            "path_length must be a scalar or an array of the same length as the number of rays"
+        )
+
         return cls(
             data=data,
             location=location,
             path_length=path_length,
             wavelength=wavelength,
-            wo=wo,
+            **kwargs,
         )
-    
+
     @property
     def xp(self):
         return get_xp(self.data)
@@ -88,7 +85,7 @@ class Rays:
         except AttributeError:
             pass
         return None
-   
+
     @property
     def num(self):
         return self.data.shape[1]
@@ -130,6 +127,22 @@ class Rays:
         self.data[3, :] = yslope
 
     @property
+    def num_display(self):
+        return self.num
+
+    @property
+    def x_display(self):
+        return self.x
+
+    @property
+    def y_display(self):
+        return self.y
+
+    @property
+    def mask_display(self):
+        return self.mask
+
+    @property
     def phi_0(self):
         if self.wavelength is not None:
             return calculate_phi_0(self.wavelength)
@@ -160,13 +173,13 @@ class Rays:
 
     def propagate(self, distance: float) -> Self:
 
-        degree_x = self.xp.rad2deg(self.xp.arctan(self.dx))
-        degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
+        # degree_x = self.xp.rad2deg(self.xp.arctan(self.dx))
+        # degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
 
-        if self.xp.any(degree_x > 20):
-            warnings.warn(f"dx is too large for parabasal representation: {self.xp.max(degree_x)}", UserWarning)
-        elif self.xp.any(degree_y > 20):
-            warnings.warn(f"dy is too large for parabasal representation: {self.xp.max(degree_y)}", UserWarning)
+        # if self.xp.any(degree_x > 20):
+        #     warnings.warn("dx is too large for parabasal representation", UserWarning)
+        # elif self.xp.any(degree_y > 20):
+        #     warnings.warn("dy is too large for parabasal representation", UserWarning)
 
         return self.new_with(
             data=self.xp.matmul(
@@ -201,7 +214,7 @@ class Rays:
             scan_rotation=rotation,
             xp=self.xp
         )
-        
+
         if as_int:
             return self.xp.round((yy, xx)).astype(int)
         return yy, xx
@@ -254,3 +267,26 @@ class Rays:
             wavelength=self.wavelength,
             mask=~self.mask,
         )
+
+
+@dataclass
+class GaussianRays(Rays):
+    wo: Optional[NDArray] = None
+
+    @property
+    def x_display(self):
+        return self.x[0::5]
+
+    @property
+    def y_display(self):
+        return self.y[2::5]
+
+    @property
+    def mask_display(self):
+        if self.mask is not None:
+            raise NotImplementedError
+        return self.mask
+
+    @property
+    def num_display(self):
+        return self.x_display.size
