@@ -853,12 +853,11 @@ class Detector(Component):
     def get_image(
         self,
         rays: Rays,
-        interference: str = None,
         out: Optional[NDArray] = None,
     ) -> NDArray:
-        
+
         xp = rays.xp
-        
+
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
@@ -873,16 +872,16 @@ class Detector(Component):
             )
         )
 
-        if interference == 'ray':
+        if self.interference == 'ray':
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
             wavefronts = 1.0 * xp.exp(-1j * (2 * xp.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
             image_dtype = valid_wavefronts.dtype
-        elif interference == 'gauss':
+        elif self.interference == 'gauss':
             image_dtype = xp.complex128
-        elif interference is None:
+        elif self.interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
             image_dtype = type(valid_wavefronts)
@@ -896,7 +895,7 @@ class Detector(Component):
             assert out.dtype == image_dtype
             assert out.shape == self.shape
 
-        if interference == 'gauss':
+        if self.interference == 'gauss':
             self.get_gauss_image(rays, out)
         else:
             flat_icds = xp.ravel_multi_index(
@@ -906,9 +905,9 @@ class Detector(Component):
                     ],
                     out.shape
                 )
-            
+
             # Increment at each pixel for each ray that hits
-            
+
             if xp == np:
                 np.add.at(
                     out.ravel(),
@@ -1057,7 +1056,6 @@ class AccumulatingDetector(Detector):
 
         super().get_image(
             rays,
-            interference=self.interference,
             out=self.buffer[self.buffer_idx],
         )
 
