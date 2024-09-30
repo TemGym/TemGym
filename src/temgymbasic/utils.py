@@ -40,10 +40,10 @@ def get_xp(data):
         return cp
 
 def get_array_from_device(data):
-    if isinstance(data, np.ndarray):
+    try:
+        return data.get()
+    except AttributeError:
         return data
-    else:
-        return np.asarray(data.get())
 
 
 def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex128]:

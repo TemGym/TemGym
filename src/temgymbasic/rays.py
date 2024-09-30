@@ -64,7 +64,7 @@ class Rays:
             wavelength=wavelength,
             wo=wo,
         )
-    
+
     @property
     def xp(self):
         return get_xp(self.data)
@@ -160,13 +160,13 @@ class Rays:
 
     def propagate(self, distance: float) -> Self:
 
-        degree_x = self.xp.rad2deg(self.xp.arctan(self.dx))
-        degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
+        # degree_x = self.xp.rad2deg(self.xp.arctan(self.dx))
+        # degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
 
-        if self.xp.any(degree_x > 20):
-            warnings.warn(f"dx is too large for parabasal representation: {self.xp.max(degree_x)}", UserWarning)
-        elif self.xp.any(degree_y > 20):
-            warnings.warn(f"dy is too large for parabasal representation: {self.xp.max(degree_y)}", UserWarning)
+        # if self.xp.any(degree_x > 20):
+        #     warnings.warn("dx is too large for parabasal representation", UserWarning)
+        # elif self.xp.any(degree_y > 20):
+        #     warnings.warn("dy is too large for parabasal representation", UserWarning)
 
         return self.new_with(
             data=self.xp.matmul(
