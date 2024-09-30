@@ -375,7 +375,7 @@ class PerfectLens(Lens):
         # L2, M2, N2 - direction cosines of the ray at the exit pupil
         # R - reference sphere radius
         # dopl - optical path length change
-        
+
         xp = rays.xp
         x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp = xp)
 
@@ -938,10 +938,8 @@ class Detector(Component):
                     # Perform the addition directly for non-complex arrays
                     xp.add.at(out.reshape(-1), flat_icds, valid_wavefronts)
 
-        #Convert always to array on cpu device. 
-        out = get_array_from_device(out)
-        
-        return out
+        # Convert always to array on cpu device.
+        return get_array_from_device(out)
 
     @line_profiler.profile
     def get_gauss_image(
@@ -969,12 +967,17 @@ class Detector(Component):
 
         n_gauss = rays.num // 5
 
-        end_rays = rays.data[0:4, :].T
+        # end_rays = rays.data[0:4, :].T
         path_length = rays.path_length[0::5]
 
-        split_end_rays = xp.split(end_rays, n_gauss, axis=0)
+        # split_end_rays = xp.split(end_rays, n_gauss, axis=0)
+        # rayset1 = xp.stack(split_end_rays, axis=-1)
 
-        rayset1 = xp.stack(split_end_rays, axis=-1)
+        rayset1 = xp.moveaxis(
+            rays.data[0:4, :].reshape(4, n_gauss, 5),
+            -1,
+            0,
+        )
 
         # rayset1 layout
         # [5g, (x, dx, y, dy), n_gauss]
