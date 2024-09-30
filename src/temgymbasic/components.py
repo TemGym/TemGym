@@ -1,13 +1,14 @@
 import abc
+import warnings
 from typing import (
     Generator, Tuple, Optional, Type,
     TYPE_CHECKING
 )
 
 
+import numpy as np
 from numpy.typing import NDArray  # Assuming np is an alias for numpy
-import warnings
-import line_profiler
+from scipy.constants import c, e, m_e
 
 from . import (
     UsageError,
@@ -16,7 +17,7 @@ from . import (
     NonNegativeFloat,
     Radians,
     Degrees,
-    get_cupy
+    BackendT
 )
 from .aber import dopd_dx, dopd_dy, opd
 from .gbd import (
@@ -25,8 +26,9 @@ from .gbd import (
     calculate_Qpinv,
     propagate_misaligned_gaussian
 )
-from .rays import Rays
+from .rays import Rays, GaussianRays
 from .utils import (
+    get_cupy,
     P2R, R2P,
     circular_beam,
     fibonacci_beam_gauss_rayset,
@@ -36,19 +38,11 @@ from .utils import (
     get_array_from_device
 )
 
-from scipy.constants import c, e, m_e
-
-# Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
-EPSILON = abs(e)/(2*m_e*c**2)
-
-import numpy as np
-cp = get_cupy()
-
-# Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
-EPSILON = abs(e)/(2*m_e*c**2)
-
 if TYPE_CHECKING:
     from .gui import ComponentGUIWrapper
+
+# Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
+EPSILON = abs(e)/(2*m_e*c**2)
 
 
 class Component(abc.ABC):
@@ -119,7 +113,7 @@ class Lens(Component):
         return self.z - abs(self.f)
 
     @staticmethod
-    def lens_matrix(f, xp = np):
+    def lens_matrix(f, xp=np):
         '''
         Lens ray transfer matrix
 
@@ -191,7 +185,7 @@ class PerfectLens(Lens):
         f = self._f
         self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
 
-    def initalise_m_and_principal_planes(self, z1, z2, m, f, xp = np):
+    def initalise_m_and_principal_planes(self, z1, z2, m, f, xp=np):
 
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
@@ -377,7 +371,7 @@ class PerfectLens(Lens):
         # dopl - optical path length change
 
         xp = rays.xp
-        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp = xp)
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp=xp)
 
         rays.x = u2
         rays.y = v2
@@ -421,7 +415,7 @@ class AberratedLens(PerfectLens):
         xp = rays.xp
         
         z2 = self._z2
-        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp = xp)
+        x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp=xp)
 
         coeffs = self.coeffs
 
@@ -437,16 +431,16 @@ class AberratedLens(PerfectLens):
         h = xp.sqrt(x1 ** 2 + y1 ** 2)
 
         # Calculate the aberration in x and y (Approximate)
-        eps_x = -dopd_dx(u1, v1, h, coeffs, xp = xp) * z2
-        eps_y = -dopd_dy(u1, v1, h, coeffs, xp = xp) * z2
+        eps_x = -dopd_dx(u1, v1, h, coeffs, xp=xp) * z2
+        eps_y = -dopd_dy(u1, v1, h, coeffs, xp=xp) * z2
 
-        W = opd(u1, v1, h, coeffs, xp = xp)
+        W = opd(u1, v1, h, coeffs, xp=xp)
 
         # Get aberration direction cosines - remember the aberrated rays must
         # go through the same point on the reference sphere
         # as the perfect rays
         nx, ny, nz = calculate_direction_cosines(x2 + eps_x, y2 + eps_y, z2,
-                                                 u2_circle, v2_circle, z2_circle, xp = xp)
+                                                 u2_circle, v2_circle, z2_circle, xp=xp)
 
         # Calculate the new aberrated ray coordinates in the image plane
         x2_aber = x2 + eps_x
@@ -557,7 +551,7 @@ class STEMSample(Sample):
 
 class Source(Component):
     def __init__(
-        self, 
+        self,
         z: float,
         tilt_yx: Tuple[float, float] = (0., 0.),
         voltage: Optional[float] = None,
@@ -573,14 +567,13 @@ class Source(Component):
         return self.phi_0
 
     @abc.abstractmethod
-    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         raise NotImplementedError
 
     def set_centre(self, centre_yx: tuple[float, float]):
         self.centre_yx = centre_yx
 
-    def _make_rays(self, r: NDArray, wo: Optional[float] = None) -> Rays:
-        
+    def _rays_args(self, r: NDArray, backend: BackendT = 'cpu'):
         # Add beam tilt (if any)
         if self.tilt_yx[1] != 0:
             r[1, :] += self.tilt_yx[1]
@@ -597,11 +590,23 @@ class Source(Component):
         if self.phi_0 is not None:
             wavelength = calculate_wavelength(self.phi_0)
 
-        return Rays.new(
+        if backend == 'gpu':
+            cp = get_cupy()
+            r = cp.array(r)
+        elif backend == 'cpu':
+            r = np.asarray(r)
+        else:
+            raise NotImplementedError
+
+        return dict(
             data=r,
             location=self,
             wavelength=wavelength,
-            wo=wo,
+        )
+
+    def _make_rays(self, r: NDArray, backend: BackendT = 'cpu') -> Rays:
+        return Rays.new(
+            **self._rays_args(r, backend=backend),
         )
 
     def step(
@@ -625,15 +630,9 @@ class ParallelBeam(Source):
         super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage)
         self.radius = radius
 
-    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         r = circular_beam(num_rays, self.radius, random=random)
-        
-        if backend == 'gpu':
-            r = cp.array(r)
-        elif backend == 'cpu':
-            r = np.asarray(r)
-            
-        return self._make_rays(r)
+        return self._make_rays(r, backend=backend)
 
     @staticmethod
     def gui_wrapper():
@@ -642,7 +641,7 @@ class ParallelBeam(Source):
 
 
 class XAxialBeam(ParallelBeam):
-    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         r = np.zeros((5, num_rays))
         r[0, :] = np.random.uniform(
             -self.radius, self.radius, size=num_rays
@@ -651,7 +650,7 @@ class XAxialBeam(ParallelBeam):
 
 
 class RadialSpikesBeam(ParallelBeam):
-    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         xvals = np.linspace(
             0., self.radius, num=num_rays // 4, endpoint=True
         )
@@ -683,15 +682,9 @@ class PointBeam(Source):
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         r = point_beam(num_rays, self.semi_angle, random=random)
-        
-        if backend == 'gpu':
-            r = cp.array(r)
-        elif backend == 'cpu':
-            r = np.asarray(r)
-            
-        return self._make_rays(r)
+        return self._make_rays(r, backend=backend)
 
     @staticmethod
     def gui_wrapper():
@@ -700,18 +693,12 @@ class PointBeam(Source):
 
 
 class XPointBeam(PointBeam):
-    def get_rays(self, num_rays: int, random: bool = False, backend = 'cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         r = np.zeros((5, num_rays))
         r[1, :] = np.linspace(
             -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
             )
-        
-        if backend == 'gpu':
-            r = cp.array(r)
-        elif backend == 'cpu':
-            r = np.asarray(r)
-            
-        return self._make_rays(r)
+        return self._make_rays(r, backend=backend)
 
     @staticmethod
     def gui_wrapper():
@@ -734,21 +721,31 @@ class GaussBeam(Source):
         self.radius = radius
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int, beam_type: str = 'fibonacci', random: str = 'False', backend = 'cpu') -> Rays:
+    def get_rays(
+        self,
+        num_rays: int,
+        random: bool = False,
+        backend='cpu',
+    ) -> Rays:
         wavelength = calculate_wavelength(self.voltage)
 
-        if beam_type == 'fibonacci':
-            r = fibonacci_beam_gauss_rayset(num_rays, self.radius, self.wo,
-                                           wavelength)
-        else:
+        if random:
             raise NotImplementedError
-        
-        if backend == 'gpu':
-            r = cp.array(r)
-        elif backend == 'cpu':
-            r = np.asarray(r)
-        
-        return self._make_rays(r, self.wo)
+        else:
+            r = fibonacci_beam_gauss_rayset(
+                num_rays,
+                self.radius,
+                self.wo,
+                wavelength,
+            )
+
+        return self._make_rays(r, backend=backend)
+
+    def _make_rays(self, r: NDArray, backend: BackendT = 'cpu') -> Rays:
+        return GaussianRays.new(
+            **self._rays_args(r, backend=backend),
+            wo=self.wo,
+        )
 
     @staticmethod
     def gui_wrapper():
@@ -841,7 +838,7 @@ class Detector(Component):
             as_int=as_int,
         )
 
-    def get_det_coords_for_gauss_rays(self, xEnd, yEnd, xp = np):
+    def get_det_coords_for_gauss_rays(self, xEnd, yEnd, xp=np):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
@@ -941,7 +938,6 @@ class Detector(Component):
         # Convert always to array on cpu device.
         return get_array_from_device(out)
 
-    @line_profiler.profile
     def get_gauss_image(
         self,
         rays: Rays,
@@ -983,15 +979,15 @@ class Detector(Component):
         # [5g, (x, dx, y, dy), n_gauss]
 
         # rayset1 = cp.array(rayset1)
-        A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy, xp = xp)
+        A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy, xp=xp)
         # A, B, C, D all have shape (n_gauss, 2, 2)
-        Qinv = calculate_Qinv(z_r, n_gauss, xp = xp)
+        Qinv = calculate_Qinv(z_r, n_gauss, xp=xp)
         # matmul, addition and mat inverse inside
         # on operands with form (n_gauss, 2, 2)
         # matmul broadcasts in the last two indices
         # inv can be broadcast with xp.linalg.inv last 2 idcs
         # if all inputs are stacked in the first dim
-        Qpinv = calculate_Qpinv(A, B, C, D, Qinv, xp = xp)
+        Qpinv = calculate_Qpinv(A, B, C, D, Qinv, xp=xp)
 
         # det_coords = cp.array(det_coords)
         # p2m = cp.array(p2m)
@@ -1004,10 +1000,10 @@ class Detector(Component):
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
         # central beam final x , y coords
-        det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd, xp = xp)
+        det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd, xp=xp)
         propagate_misaligned_gaussian(
             Qinv, Qpinv, det_coords,
-            p2m, k, A, B, path_length, out.ravel(), xp = xp
+            p2m, k, A, B, path_length, out.ravel(), xp=xp
         )
 
     @staticmethod
@@ -1104,7 +1100,7 @@ class Deflector(Component):
         self.defy = defy
 
     @staticmethod
-    def deflector_matrix(def_x, def_y, xp = np):
+    def deflector_matrix(def_x, def_y, xp=np):
         '''Single deflector ray transfer matrix
 
         Parameters
@@ -1134,7 +1130,7 @@ class Deflector(Component):
         xp = rays.xp
         yield rays.new_with(
             data=xp.matmul(
-                self.deflector_matrix(xp.float64(self.defx), xp.float64(self.defy), xp = xp),
+                self.deflector_matrix(xp.float64(self.defx), xp.float64(self.defy), xp=xp),
                 rays.data,
             ),
             location=self,
@@ -1485,4 +1481,3 @@ class PotentialSample(Sample):
     def gui_wrapper():
         from .gui import SampleGUI
         return SampleGUI
-

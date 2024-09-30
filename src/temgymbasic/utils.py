@@ -1,8 +1,14 @@
 from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
 
+import numpy as np
 from numpy.typing import NDArray
 from numba import njit
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 from scipy.constants import e, m_e, h
 
@@ -11,9 +17,6 @@ if TYPE_CHECKING:
     from .rays import Rays
     from . import Degrees, Radians
 
-
-from . import get_cupy
-import numpy as np
 
 RadiansNP: TypeAlias = np.float64
 
@@ -30,16 +33,27 @@ except ImportError:
         return zip(a, b)
 
 
-def get_xp(data):
-    if isinstance(data, np.ndarray):
-        return np
-    else:
-        cp = get_cupy()
-        if cp is None:
-            raise ImportError("Cupy is not installed")
-        return cp
+def get_cupy():
+    """
+    Get CuPy, previously imported
 
-def get_array_from_device(data):
+    If not available raises ModuleNotFoundError
+    """
+    if cp is None:
+        raise ModuleNotFoundError("Cannot use backend == gpu, cupy not found")
+    return cp
+
+
+def get_xp(data: NDArray):
+    try:
+        if data.device != 'cpu':
+            return cp
+    except AttributeError:
+        pass
+    return np
+
+
+def get_array_from_device(data: NDArray):
     try:
         return data.get()
     except AttributeError:
@@ -57,10 +71,11 @@ def R2P(x: NDArray[np.complex128]) -> Tuple[NDArray[np.float64], NDArray[Radians
 def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
     num_vertices = 0
     for r in all_rays[:-1]:
-        num_vertices += r.num
+        num_vertices += r.num_display
     num_vertices *= 2
 
-    vertices = np.empty(
+    xp = all_rays[0].xp
+    vertices = xp.empty(
         (num_vertices, 3),
         dtype=np.float32,
     )
@@ -69,16 +84,16 @@ def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
     def _add_vertices(r1: 'Rays', r0: 'Rays'):
         nonlocal idx, vertices
 
-        num_endpoints = r1.num
+        num_endpoints = r1.num_display
         sl = slice(idx, idx + num_endpoints * 2, 2)
-        vertices[sl, 0] = r1.x
-        vertices[sl, 1] = r1.y
+        vertices[sl, 0] = r1.x_display
+        vertices[sl, 1] = r1.y_display
         vertices[sl, 2] = r1.z * z_mult
         sl = slice(1 + idx, 1 + idx + num_endpoints * 2, 2)
         # Relies on the fact that indexing
         # with None creates a new axis, only
-        vertices[sl, 0] = r0.x[r1.mask].flat
-        vertices[sl, 1] = r0.y[r1.mask].flat
+        vertices[sl, 0] = r0.x_display[r1.mask_display].ravel()
+        vertices[sl, 1] = r0.y_display[r1.mask_display].ravel()
         vertices[sl, 2] = r0.z * z_mult
         idx += num_endpoints * 2
         return idx
@@ -90,7 +105,7 @@ def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
             _add_vertices(r1b, r0)
         r1 = r0
 
-    return vertices
+    return get_array_from_device(vertices)
 
 
 def plot_rays(model: 'STEMModel'):
@@ -450,7 +465,7 @@ def convert_slope_to_direction_cosines(dx, dy):
     return l_dir_cosine, m_dir_cosine, n_dir_cosine
 
 
-def calculate_direction_cosines(x0, y0, z0, x1, y1, z1, xp = np):
+def calculate_direction_cosines(x0, y0, z0, x1, y1, z1, xp=np):
     # Calculate the principal ray vector from ray coordinate on object to centre of lens
     vx = x1 - x0
     vy = y1 - y0
