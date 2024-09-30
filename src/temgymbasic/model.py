@@ -15,6 +15,7 @@ import numpy as np
 
 cp = get_cupy()
 
+
 class Model:
     def __init__(self, components: Iterable[comp.Component], backend: str = 'cpu'):
         self.backend = backend
@@ -22,7 +23,7 @@ class Model:
 
         self._sort_components()
         self._validate_components()
-         
+
     def _validate_components(self):
         if len(self._components) <= 1:
             raise InvalidModelError("Must have at least one component")
@@ -62,7 +63,7 @@ class Model:
     @property
     def last(self) -> comp.Detector:
         return self.components[-1]
-    
+
     def set_backend_for_components(self, backend):
         for component in self.components:
             component.set_backend(backend)
@@ -118,7 +119,7 @@ class Model:
     ) -> Generator[Rays, None, None]:
         source: comp.Source = self.components[0]
         rays = source.get_rays(num_rays, random=random, backend=backend)
-            
+
         for component in self.components:
             rays = rays.propagate_to(component.entrance_z)
             for rays in component.step(rays):
