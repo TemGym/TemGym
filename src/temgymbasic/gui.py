@@ -953,13 +953,13 @@ class GaussBeamGUI(SourceGUI):
 
         beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
-            beam_radius, 0.001, 0.1, name='Parallel Beam Width', insert_into=vbox, decimals=3
+            beam_radius, 0.001, 1., name='Beam Radius', insert_into=vbox, decimals=3
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
         wo = self.beam.wo
         self.woslider, _ = labelled_slider(
-            wo, 0.001, 1, name='Gaussian Beam Width', insert_into=vbox, decimals=3
+            wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox, decimals=3
         )
         self.woslider.valueChanged.connect(self.set_wo)
 
