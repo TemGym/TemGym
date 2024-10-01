@@ -634,7 +634,7 @@ class PerfectLensGUI(LensGUI):
         self.perfectlens._m = (
             self.mslider.value(),
         )
-        self.perfectlens.update_m_and_principal_planes(None, None, val)
+        self.perfectlens.update_m_and_image_planes(None, None, val)
         self.try_update()
 
     @Slot(float)
@@ -643,7 +643,7 @@ class PerfectLensGUI(LensGUI):
             return
 
         self.perfectlens.f = val
-        self.perfectlens.update_m_and_principal_planes(None, None, self.perfectlens._m)
+        self.perfectlens.update_m_and_image_planes(None, None, self.perfectlens._m)
         self.try_update()
 
     def sync(self, block: bool = True):

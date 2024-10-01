@@ -89,6 +89,28 @@ def parallel_rays(request):
         path_length=xp.zeros((n_rays,)),
         wavelength=xp.ones(shape=n_rays)*calculate_wavelength(1.0)
     )
+    
+@pytest.fixture(
+    params=[128],
+)
+def paraxial_parallel_rays(request):
+    n_rays = request.param
+    data = xp.zeros(shape=(5, n_rays))
+    radius = 1e-3
+    low = -radius / 2
+    high = radius / 2
+    data[0, :] = xp.random.uniform(low=low, high=high, size=n_rays)
+    data[1, :] = xp.zeros(shape=n_rays)
+    data[2, :] = xp.random.uniform(low=low, high=high, size=n_rays)
+    data[3, :] = xp.zeros(shape=n_rays)
+    data[4, :] = xp.ones(shape=n_rays)
+
+    return Rays(
+        data=data,
+        location=0.2,
+        path_length=xp.zeros((n_rays,)),
+        wavelength=xp.ones(shape=n_rays)*calculate_wavelength(1.0)
+    )
 
 
 @pytest.fixture(
@@ -98,10 +120,38 @@ def point_rays(request):
     n_rays = request.param
     data = xp.zeros(shape=(5, n_rays))
 
+    radius = 0.5
+    low = -radius / 2
+    high = radius / 2
+    
     data[0, :] = xp.zeros(shape=n_rays)
-    data[1, :] = xp.random.uniform(low=-0.1, high=0.1, size=n_rays)
+    data[1, :] = xp.random.uniform(low=low, high=high, size=n_rays)
     data[2, :] = xp.zeros(shape=n_rays)
-    data[3, :] = xp.random.uniform(low=-0.1, high=0.1, size=n_rays)
+    data[3, :] = xp.random.uniform(low=low, high=high, size=n_rays)
+    data[4, :] = xp.ones(shape=n_rays)
+
+    return Rays(
+        data=data,
+        location=0.0,
+        path_length=xp.zeros((n_rays,)),
+    )
+    
+    
+@pytest.fixture(
+    params=[128],
+)
+def paraxial_point_rays(request):
+    n_rays = request.param
+    data = xp.zeros(shape=(5, n_rays))
+    
+    radius = 3e-2
+    low = -radius / 2
+    high = radius / 2
+
+    data[0, :] = xp.zeros(shape=n_rays)
+    data[1, :] = xp.random.uniform(low=low, high=high, size=n_rays)
+    data[2, :] = xp.zeros(shape=n_rays)
+    data[3, :] = xp.random.uniform(low=low, high=high, size=n_rays)
     data[4, :] = xp.ones(shape=n_rays)
 
     return Rays(
@@ -196,13 +246,13 @@ def test_lens_focusing_to_infinity(point_rays):
     # so we test this behaviour here.
 
     f = 0.5
-
+    m = 1e11
     propagated_rays_to_lens = point_rays.propagate(f)
 
     out_manual_dx = 0.0
     out_manual_dy = 0.0
 
-    lens = comp.Lens(propagated_rays_to_lens.location, f)
+    lens = comp.Lens(propagated_rays_to_lens.location, f, m=m)
     out_rays = tuple(lens.step(propagated_rays_to_lens))[0]
 
     # First check that the lens has applied the correct deflection to rays
@@ -218,6 +268,104 @@ def test_lens_focusing_to_infinity(point_rays):
     xp.testing.assert_allclose(propagated_rays.y, out_rays.y)
     xp.testing.assert_allclose(propagated_rays.dx, out_rays.dx)
     xp.testing.assert_allclose(propagated_rays.dy, out_rays.dy)
+    
+    
+def test_lens_path_length_parallel_incoming_rays_to_focal_plane(paraxial_parallel_rays):
+    f = 0.5
+    lens = comp.Lens(paraxial_parallel_rays.location, f, z1 = -1e11, z2 = f)
+    out_rays = tuple(lens.step(paraxial_parallel_rays))[0]
+    rays_at_focal = out_rays.propagate(f)
+    
+    #All rays should have the same path length as the distance from the reference sphere to the focal plane
+    xp.testing.assert_allclose(rays_at_focal.path_length, f, atol = 1e-12)
+    
+def test_lens_path_length_point_rays_object_to_image_plane(paraxial_point_rays):
+    #Small analytic function to test optical path length of lens
+    def opl_lens(x1, y1, u1, v1, x2, y2, z1, z2):
+        
+        #Optical path length of principal ray
+        opl0 = np.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2) + np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+        
+        #Optical path length of actual ray
+        opl1 = np.sqrt((u1 - x1) ** 2 + (v1 - y1) ** 2 + z1 ** 2) + np.sqrt((u1 - x2) ** 2 + (v1 - y2) ** 2 + z2 ** 2)
+        
+        #The lens should apply the path length different to each actual ray, such that all rays will have the same opl
+        #as the principal ray at the end. 
+        return opl0 - opl1
+    
+    #Set up object and image planes
+    object_plane = -15
+    image_plane = 20
+    
+    # Determine focal length, which will perfectly image these planes
+    f = (1 / image_plane  - 1 / object_plane) ** -1
+    
+    # Set up lens and propagate rays
+    input_rays = paraxial_point_rays
+    opl_object = input_rays.path_length.copy()
+    lens_rays = input_rays.propagate(abs(object_plane))
+    opl_before_lens_temgym = lens_rays.path_length.copy() #Get the path length before the lens from temgym
+
+    # Make lens and propagate rays through lens to image plane
+    lens = comp.Lens(z = abs(object_plane), f = f, z1 = object_plane, z2 = image_plane)
+    out_rays = tuple(lens.step(lens_rays))[0]
+    opl_after_lens_temgym = out_rays.path_length
+    rays_at_image = out_rays.propagate(image_plane)
+    
+    opl_shift_lens_temgym = opl_after_lens_temgym - opl_before_lens_temgym #Calculate the path length temgyms lens applies to the ray
+    opl_image_lens_temgym = rays_at_image.path_length #Get the path length at the image plane from temgym
+    
+    # Calculate the path length of the lens analytically, with almost no approximations (Only the approximation that the rays 
+    # leave the lens from the same height they entered from - i.e the abbe sine condition in the small angle approximation)
+    opl_before_lens_analytic = opl_object + np.sqrt(object_plane**2 + (lens_rays.x - input_rays.x) ** 2 + (lens_rays.y - input_rays.y) ** 2)
+    opl_shift_lens_analytic = opl_lens(input_rays.x, input_rays.y, 
+                                        lens_rays.x, lens_rays.y, 
+                                        rays_at_image.x, rays_at_image.y,
+                                        object_plane, image_plane)
+    opl_after_lens_analytic = opl_before_lens_analytic + opl_shift_lens_analytic
+    opl_image_lens_analytic = opl_after_lens_analytic + np.sqrt(image_plane ** 2 + (lens_rays.x - rays_at_image.x) ** 2 + (lens_rays.y - rays_at_image.y) ** 2)
+
+    xp.testing.assert_allclose(opl_before_lens_temgym, opl_before_lens_analytic, atol=1e-6)
+    xp.testing.assert_allclose(opl_shift_lens_temgym, opl_shift_lens_analytic, atol=1e-6)
+    xp.testing.assert_allclose(opl_after_lens_temgym, opl_after_lens_analytic, atol=1e-6)
+    xp.testing.assert_allclose(opl_image_lens_temgym, opl_image_lens_analytic, atol=1e-6)
+    
+
+def test_lens_path_length_point_rays_from_focal_plane_to_veryfaraway(paraxial_point_rays):
+    #Small analytic function to test optical path length of lens
+    def opl_lens(x1, y1, u1, v1, x2, y2, z1, z2):
+        
+        #Optical path length of principal ray
+        opl0 = np.sqrt(x1 ** 2 + y1 ** 2 + z1 ** 2) + np.sqrt(x2 ** 2 + y2 ** 2 + z2 ** 2)
+        
+        #Optical path length of actual ray
+        opl1 = np.sqrt((u1 - x1) ** 2 + (v1 - y1) ** 2 + z1 ** 2) + np.sqrt((u1 - x2) ** 2 + (v1 - y2) ** 2 + z2 ** 2)
+        
+        #The lens should apply the path length different to each actual ray, such that all rays will have the same opl
+        #as the principal ray at the end. 
+        return opl0 - opl1
+    
+    #Set up object and image planes
+    object_plane = -5
+    image_plane = 1e11
+    
+    # Determine focal length, which will perfectly image these planes
+    f = (1 / image_plane  - 1 / object_plane) ** -1
+    
+    # Set up lens and propagate rays
+    input_rays = paraxial_point_rays
+    lens_rays = input_rays.propagate(abs(object_plane))
+
+    # Make lens and propagate rays through lens to image plane
+    lens = comp.Lens(z = abs(object_plane), f = f, z1 = object_plane, z2 = image_plane)
+    out_rays = tuple(lens.step(lens_rays))[0]
+    opl_after_lens_temgym = out_rays.path_length
+    rays_at_image = out_rays.propagate(image_plane)
+    
+    opl_image_lens_temgym = rays_at_image.path_length #Get the path length at the image plane from temgym
+    
+    xp.testing.assert_allclose(opl_after_lens_temgym, f, atol=1e-6)
+    xp.testing.assert_allclose(opl_image_lens_temgym, f + image_plane, atol=1e-6)
 
 
 def test_deflector_random_rays(random_rays):
@@ -482,7 +630,6 @@ def test_sample_potential_deflection():
     rho = xp.sqrt(1 + ray.dx ** 2 + ray.dy ** 2)
 
     # Step rays
-    import pdb; pdb.set_trace()
     out_rays = tuple(sample.step(ray))[0]
 
     # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
