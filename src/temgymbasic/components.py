@@ -96,10 +96,15 @@ class Component(abc.ABC):
 class Lens(Component):
     def __init__(self, z: float,
                  f: float,
+                 m: Optional[float] = None,
+                 z1: Optional[Tuple[float]] = None,
+                 z2: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
         super().__init__(z=z, name=name)
         self._f = f
 
+        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
+        
     @property
     def f(self) -> float:
         return self._f
@@ -107,10 +112,56 @@ class Lens(Component):
     @f.setter
     def f(self, f: float):
         self._f = f
-
+        
     @property
     def ffp(self) -> float:
-        return self.z - abs(self.f)
+        return self.z - abs(self._f)
+    
+    def initalise_m_and_image_planes(self, z1, z2, m, f, xp=np):
+
+        # If statements to decide how to define z1, z2 and magnification.
+        # We check if magnification is too small or large,
+        # and thus a finite-long conjugate approximation is applied
+        if ((z1 or z2) is None) and (m is None):
+            raise AssertionError('Must have either m defined, or both z1 and z2')
+
+        if ((z1 and z2) is None) and (m is not None):
+            if xp.abs(m) <= 1e-10:
+                z1 = -1e10
+                z2 = f
+            elif xp.abs(m) > 1e10:
+                z1 = -f
+                z2 = 1e10
+            else:
+                z1 = f * (1/m - 1)
+                z2 = f * (1 - m)
+        elif (m is None) and ((z1 and z2) is not None):
+            if xp.abs(z1) > 1e-10:
+                m = z2 / z1
+            elif z1 <= 1e-10:
+                m = 1e10
+        elif (
+            (m is not None)
+            and ((z1 and z2) is not None)
+        ):
+            warnings.warn("Overspecified magnification (m) and image and object planes (z1 and z2),\
+                          the provided magnification is ignored")
+            m = z2 / z1
+
+        # If finite long conjugate approximation,
+        # we need to set the signal that the numerical aperture is
+        # 0.0, which is neccessary for later
+        if xp.abs(z1) >= 1e10:
+            z1 = 1e10 * (z1 / xp.abs(z1))
+            self.NA1 = 0.0  # collimated input - only neccessary for the perfect, fourier and aberrated lens
+
+        if xp.abs(z2) >= 1e10:
+            z2 = 1e10 * (z2 / xp.abs(z2))
+            self.NA2 = 0.0  # collimated input - only neccessary for the perfect, fourier and aberrated lens
+
+        m = z2 / z1
+
+        return z1, z2, m
 
     @staticmethod
     def lens_matrix(f, xp=np):
@@ -141,9 +192,15 @@ class Lens(Component):
         
         xp = rays.xp
         
+        #Convention is that focal length of lens is positive for converging lens, which means we need 
+        #to subtract the path length for converging lens,
+        #and negative for diverging lens meaning we need to add a path length
+        # Hence the minus sign in front of the path length = sign. 
+        rays.path_length -=  (rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
+        
         # Just straightforward matrix multiplication
         yield rays.new_with(
-            data=xp.matmul(self.lens_matrix(xp.float64(self.f), xp=xp), rays.data),
+            data=xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data),
             location=self,
         )
 
@@ -163,10 +220,6 @@ class PerfectLens(Lens):
         super().__init__(name=name, z=z, f=f)
         self._f = f
 
-        # Initial Numerical Aperture
-        self.NA1 = 0.1
-        self.NA2 = 0.1
-
         self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
 
     @property
@@ -178,58 +231,36 @@ class PerfectLens(Lens):
         self._f = f
 
     @property
+    def z1(self) -> float:
+        return self._z1
+
+    @z1.setter
+    def z1(self, z1: float):
+        self._z1 = z1
+
+    @property
+    def z2(self) -> float:
+        return self._z2
+
+    @z2.setter
+    def z2(self, z2: float):
+        self._z2 = z2
+
+    @property
+    def m(self) -> float:
+        return self._m
+
+    @m.setter
+    def m(self, m: float):
+        self._m = m
+        
+    @property
     def ffp(self) -> float:
-        return self.z - abs(self.f)
+        return self.z - abs(self._f)
 
-    def update_m_and_principal_planes(self, z1, z2, m):
+    def update_m_and_image_planes(self, z1, z2, m):
         f = self._f
-        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
-
-    def initalise_m_and_principal_planes(self, z1, z2, m, f, xp=np):
-
-        # If statements to decide how to define z1, z2 and magnification.
-        # We check if magnification is too small or large,
-        # and thus a finite-long conjugate approximation is applied
-        if ((z1 or z2) is None) and (m is None):
-            assert ('Must have either m defined, or both z1 and z2')
-
-        if ((z1 and z2) is None) and (m is not None):
-            if xp.abs(m) <= 1e-10:
-                z1 = -1e10
-                z2 = f
-            elif xp.abs(m) > 1e10:
-                z1 = -f
-                z2 = 1e10
-            else:
-                z1 = f * (1/m - 1)
-                z2 = f * (1 - m)
-        elif (m is None) and ((z1 and z2) is not None):
-            if xp.abs(z1) > 1e-10:
-                m = z2 / z1
-            elif z1 <= 1e-10:
-                m = 1e10
-        elif (
-            (m is not None)
-            and ((z1 and z2) is not None)
-        ):
-            warnings.warn("Overspecified magnification (m) and image and object planes (z1 and z2),\
-                          the provided magnification is ignored")
-            m = z2 / z1
-
-        # If finite long conjugate approximation,
-        # we need to set the signal that the numerical aperture is
-        # 0.0, which is neccessary for later
-        if xp.abs(z1) >= 1e10:
-            z1 = 1e10 * (z1 / xp.abs(z1))
-            self.NA1 = 0.0  # collimated input
-
-        if xp.abs(z2) >= 1e10:
-            z2 = 1e10 * (z2 / xp.abs(z2))
-            self.NA2 = 0.0  # collimated input
-
-        m = z2 / z1
-
-        return z1, z2, m
+        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
 
     def get_exit_pupil_coords(self, rays, xp=np):
 
@@ -407,7 +438,7 @@ class AberratedLens(PerfectLens):
         self.NA1 = 0.1
         self.NA2 = 0.1
 
-        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
 
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class
