@@ -368,6 +368,32 @@ def test_lens_path_length_point_rays_from_focal_plane_to_veryfaraway(paraxial_po
     xp.testing.assert_allclose(opl_image_lens_temgym, f + image_plane, atol=1e-6)
 
 
+def test_perfect_lens_parallel_rays_to_focal_point(parallel_rays):
+    
+    # If rays are parallel, lens focuses them to a point, so we test this behaviour here.
+    f = 8
+    m = 1e-11
+    lens = comp.PerfectLens(parallel_rays.location, f=f, m=m)
+    out_rays = tuple(lens.step(parallel_rays))[0]
+    propagated_rays = out_rays.propagate(f)
+    
+    # First check that the lens has applied the correct deflection to rays
+    xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
+    xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
+
+def test_perfect_lens_parallel_rays_to_focal_point(parallel_rays):
+    
+    # If rays are parallel, lens focuses them to a point, so we test this behaviour here.
+    f = 8
+    m = 1e-11
+    lens = comp.PerfectLens(parallel_rays.location, f=f, m=m)
+    out_rays = tuple(lens.step(parallel_rays))[0]
+    propagated_rays = out_rays.propagate(f)
+    
+    # First check that the lens has applied the correct deflection to rays
+    xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
+    xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
+
 def test_deflector_random_rays(random_rays):
     deflection = xp.random.uniform(-5, 5)
 
