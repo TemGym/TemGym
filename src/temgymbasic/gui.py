@@ -706,7 +706,7 @@ class AberratedLensGUI(PerfectLensGUI):
         self.aberratedlens._m = (
             self.mslider.value(),
         )
-        self.aberratedlens.update_m_and_principal_planes(None, None, val)
+        self.aberratedlens.update_m_and_image_planes(None, None, val)
         self.try_update()
 
     @Slot(float)
@@ -715,7 +715,7 @@ class AberratedLensGUI(PerfectLensGUI):
             return
 
         self.aberratedlens.f = val
-        self.aberratedlens.update_m_and_principal_planes(None, None, self.aberratedlens._m)
+        self.aberratedlens.update_m_and_image_planes(None, None, self.aberratedlens._m)
         self.try_update()
 
     @Slot(float)
@@ -775,31 +775,31 @@ class AberratedLensGUI(PerfectLensGUI):
         self.mslider.valueChanged.connect(self.set_m)
 
         self.sphericalslider, _ = labelled_slider(
-            self.aberratedlens.coeffs[0], -5., 5., name="Spherical Aberration",
+            self.aberratedlens.coeffs[0], -1., 1., name="Spherical Aberration",
             insert_into=vbox, decimals=2,
         )
         self.sphericalslider.valueChanged.connect(self.set_spherical_aberration)
 
         self.comaslider, _ = labelled_slider(
-            self.aberratedlens.coeffs[1], -5., 5., name="Coma",
+            self.aberratedlens.coeffs[1], -1., 1., name="Coma",
             insert_into=vbox, decimals=2,
         )
         self.comaslider.valueChanged.connect(self.set_coma_aberration)
 
         self.astigmatismslider, _ = labelled_slider(
-            self.aberratedlens.coeffs[2], -5., 5., name="Astigmatism",
+            self.aberratedlens.coeffs[2], -1., 1., name="Astigmatism",
             insert_into=vbox, decimals=2,
         )
         self.astigmatismslider.valueChanged.connect(self.set_astigmatism_aberration)
 
         self.fieldcurvatureslider, _ = labelled_slider(
-            self.aberratedlens.coeffs[3], -5., 5., name="Field Curvature",
+            self.aberratedlens.coeffs[3], -1., 1., name="Field Curvature",
             insert_into=vbox, decimals=2,
         )
         self.fieldcurvatureslider.valueChanged.connect(self.set_field_curvature_aberration)
 
         self.distortionslider, _ = labelled_slider(
-            self.aberratedlens.coeffs[4], -5., 5., name="Distortion",
+            self.aberratedlens.coeffs[4], -1., 1., name="Distortion",
             insert_into=vbox, decimals=2,
         )
         self.distortionslider.valueChanged.connect(self.set_distortion_aberration)

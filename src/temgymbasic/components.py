@@ -100,10 +100,11 @@ class Lens(Component):
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
-        super().__init__(z=z, name=name)
+        super().__init__(name=name, z=z)
         self._f = f
+        self._m = m
 
-        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
         
     @property
     def f(self) -> float:
@@ -117,7 +118,7 @@ class Lens(Component):
     def ffp(self) -> float:
         return self.z - abs(self._f)
     
-    def initalise_m_and_image_planes(self, z1, z2, m, f, xp=np):
+    def initialise_m_and_image_planes(self, z1, z2, m, f, xp=np):
 
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
@@ -217,10 +218,11 @@ class PerfectLens(Lens):
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
-        super().__init__(name=name, z=z, f=f)
+        super().__init__(name=name, z=z, f=f, m=m)
         self._f = f
+        self._m = m
 
-        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
 
     @property
     def f(self) -> float:
@@ -260,7 +262,7 @@ class PerfectLens(Lens):
 
     def update_m_and_image_planes(self, z1, z2, m):
         f = self._f
-        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
 
     def get_exit_pupil_coords(self, rays, xp=np):
 
@@ -433,12 +435,13 @@ class AberratedLens(PerfectLens):
         self.coeffs = coeffs
 
         self._f = f
+        self._m = m
 
         # Initial Numerical Aperture
         self.NA1 = 0.1
         self.NA2 = 0.1
 
-        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
 
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class
@@ -790,7 +793,7 @@ class Detector(Component):
         flip_y: bool = False,
         center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
-        interference: Optional[str] = 'gauss'
+        interference: Optional[str] = 'ray'
     ):
         """
         The intention of rotation is to rotate the detector
