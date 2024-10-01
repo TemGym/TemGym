@@ -279,7 +279,7 @@ class GaussianRays(Rays):
 
     @property
     def y_display(self):
-        return self.y[2::5]
+        return self.y[0::5]
 
     @property
     def mask_display(self):
