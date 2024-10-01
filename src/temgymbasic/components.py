@@ -118,7 +118,11 @@ class Lens(Component):
         return self.z - abs(self._f)
     
     def initalise_m_and_image_planes(self, z1, z2, m, f, xp=np):
-
+        
+        #Initialise numerical aperture - mostly used for perfect and fourier lens
+        self.NA1 = 0.2
+        self.NA2 = 0.2
+        
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
         # and thus a finite-long conjugate approximation is applied
@@ -217,10 +221,11 @@ class PerfectLens(Lens):
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
-        super().__init__(name=name, z=z, f=f)
+        super().__init__(z=z, f=f, m=m, name=name)
         self._f = f
+        self._m = m
 
-        self._z1, self._z2, self._m = self.initalise_m_and_principal_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
 
     @property
     def f(self) -> float:

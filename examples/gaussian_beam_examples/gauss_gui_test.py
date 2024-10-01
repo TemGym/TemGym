@@ -27,6 +27,8 @@ lens_dist = 1
 focal = 0.7
 prop_dist = 1
 
+coeffs = [0, 0, 0, 0, 0]
+
 components = (
     comp.GaussBeam(
         z=0.0,
@@ -35,9 +37,12 @@ components = (
         wo=wo,
         tilt_yx=tilt_yx
     ),
-    comp.Lens(
+    comp.AberratedLens(
         z=lens_dist,
+        z1=-lens_dist,
+        z2=lens_dist + prop_dist,
         f=focal,
+        coeffs=coeffs,
     ),
     comp.Detector(
         z=lens_dist + prop_dist,
