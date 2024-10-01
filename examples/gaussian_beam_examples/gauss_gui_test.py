@@ -43,9 +43,9 @@ components = (
     ),
     comp.AberratedLens(
         z=lens_dist,
+        z1=-lens_dist,
+        z2=lens_dist + prop_dist,
         f=focal,
-        m=m,
-        coeffs=coeffs
     ),
     comp.Detector(
         z=lens_dist + prop_dist,
