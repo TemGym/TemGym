@@ -1,8 +1,6 @@
-import numexpr as ne
-import line_profiler
 import numpy as np
 
-@line_profiler.profile
+
 def differential_matrix(rayset, dPx, dPy, dHx, dHy, xp=np):
 
     x_cen_T = rayset[0, 0, :]
@@ -39,7 +37,7 @@ def differential_matrix(rayset, dPx, dPy, dHx, dHy, xp=np):
          (l_pl_T - l_cen_T) / dHx, (l_pm_T - l_cen_T) / dHy],
         [(m_px_T - m_cen_T) / dPx, (m_py_T - m_cen_T) / dPy,
          (m_pl_T - m_cen_T) / dHx, (m_pm_T - m_cen_T) / dHy]
-    ])
+    ], dtype=rayset.dtype)
 
     ABCD = ABCD.transpose(2, 0, 1)
     A = ABCD[:, 0:2, 0:2]
@@ -88,7 +86,6 @@ def misalign_phase(B, A, r1m, r2, k, xp=np):
     return xp.exp(-1j * k / 2 * (misalign + cross))
 
 
-@line_profiler.profile
 def transversal_phase(Qpinv, r, k, xp=np):
     """compute the transverse gaussian phase of a gaussian beam
 
@@ -147,7 +144,8 @@ def transversal_phase(Qpinv, r, k, xp=np):
     transversal += (r[..., 1] ** 2 * Qpinv[xp.newaxis, ..., 1, 1] / 2)
     return transversal
     # return xp.exp(1j * k * transversal)
-    
+
+
 def eigenvalues_2x2(array, xp=np):
     """ Computes the eigenvalues of a 2x2 matrix using a trick
 
@@ -173,10 +171,15 @@ def eigenvalues_2x2(array, xp=np):
 
     return e1, e2
 
+
 def calculate_Qinv(z_r, num_rays, xp=np):
 
-    qinv = 1/(-1j*z_r)
-    Qinv = xp.zeros((num_rays, 2, 2), dtype=xp.complex128)
+    qinv = 1 / (-1j * z_r)
+    try:
+        dtype = qinv.dtype
+    except AttributeError:
+        dtype = complex
+    Qinv = xp.zeros((num_rays, 2, 2), dtype=dtype)
 
     # Fill the diagonal elements
     Qinv[:, 0, 0] = qinv
@@ -194,7 +197,6 @@ def calculate_Qpinv(A, B, C, D, Qinv, xp=np):
     return NUM @ DEN
 
 
-
 def phase_correction(r1m, p1m, r2m, p2m, k, xp=np):
     # See https://www.tandfonline.com/doi/abs/10.1080/09500340600842237
     z1_phase = xp.sum(r1m * p1m, axis=1)
@@ -202,13 +204,11 @@ def phase_correction(r1m, p1m, r2m, p2m, k, xp=np):
     return xp.exp(-1j * k / 2 * (-z2_phase + z1_phase))
 
 
-@line_profiler.profile
 def gaussian_amplitude(Qinv, A, B, xp=np):
     den = A + B @ Qinv
     return 1 / xp.sqrt(xp.linalg.det(den))
 
 
-@line_profiler.profile
 def guoy_phase(Qpinv, xp=np):
     """compute the guoy phase of a complex curvature matrix
 
@@ -229,7 +229,6 @@ def guoy_phase(Qpinv, xp=np):
     return guoy
 
 
-@line_profiler.profile
 def misalign_phase_plane_wave(r2, p2m, k, xp=np):
     # r2: (n_px, n_gauss, 2:[x ,y])
     # p2m: (n_gauss, 2:[x ,y])
@@ -250,7 +249,6 @@ def misalign_phase_plane_wave(r2, p2m, k, xp=np):
     # return xp.exp(1j * k * phi)
 
 
-@line_profiler.profile
 def propagate_misaligned_gaussian(
     Qinv,
     Qpinv,
@@ -274,7 +272,8 @@ def propagate_misaligned_gaussian(
 
     misaligned_phase = misalign_phase_plane_wave(r, p2m, k, xp=xp)
     # (n_px, n_gauss): complex
-    aligned = transversal_phase(Qpinv, r, k, xp=xp)  # Phase and Amplitude at transversal plane to beam dir
+    # Phase and Amplitude at transversal plane to beam dir
+    aligned = transversal_phase(Qpinv, r, k, xp=xp)
     # (n_px, n_gauss): complex
     # opl = xp.exp(1j * k * path_length)  # Optical path length phase
     # (n_gauss,): complex
