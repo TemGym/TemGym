@@ -100,7 +100,7 @@ class Lens(Component):
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
-        super().__init__(name=name, z=z)
+        super().__init__(z=z, name=name) 
         self._f = f
         self._m = m
 
@@ -118,17 +118,12 @@ class Lens(Component):
     def ffp(self) -> float:
         return self.z - abs(self._f)
     
-<<<<<<< HEAD
     def initialise_m_and_image_planes(self, z1, z2, m, f, xp=np):
-
-=======
-    def initalise_m_and_image_planes(self, z1, z2, m, f, xp=np):
         
         #Initialise numerical aperture - mostly used for perfect and fourier lens
         self.NA1 = 0.2
         self.NA2 = 0.2
         
->>>>>>> 721860f588dc19c1debac3f8847cf60431ed4545
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
         # and thus a finite-long conjugate approximation is applied
@@ -155,7 +150,7 @@ class Lens(Component):
             and ((z1 and z2) is not None)
         ):
             warnings.warn("Overspecified magnification (m) and image and object planes (z1 and z2),\
-                          the provided magnification is ignored")
+                        the provided magnification is ignored")
             m = z2 / z1
 
         # If finite long conjugate approximation,
@@ -227,19 +222,11 @@ class PerfectLens(Lens):
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
-<<<<<<< HEAD
-        super().__init__(name=name, z=z, f=f, m=m)
-        self._f = f
-        self._m = m
+        super().__init__(z=z, f=f, m=m, z1=z1, z2=z2, name=name)
+        # self._f = f
+        # self._m = m
 
-        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
-=======
-        super().__init__(z=z, f=f, m=m, name=name)
-        self._f = f
-        self._m = m
-
-        self._z1, self._z2, self._m = self.initalise_m_and_image_planes(z1, z2, m, f)
->>>>>>> 721860f588dc19c1debac3f8847cf60431ed4545
+        # self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
 
     @property
     def f(self) -> float:
@@ -451,14 +438,14 @@ class AberratedLens(PerfectLens):
         super().__init__(z=z, f=f, m=m, z1=z1, z2=z2, name=name)
         self.coeffs = coeffs
 
-        self._f = f
-        self._m = m
+        # self._f = f
+        # self._m = m
 
-        # Initial Numerical Aperture
-        self.NA1 = 0.1
-        self.NA2 = 0.1
+        # # Initial Numerical Aperture
+        # self.NA1 = 0.1
+        # self.NA2 = 0.1
 
-        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
+        # self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
 
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class

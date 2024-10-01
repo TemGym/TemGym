@@ -6,7 +6,11 @@ from temgymbasic.model import (
 )
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
-from temgymbasic.utils import calculate_phi_0, calculate_wavelength, get_array_from_device
+from temgymbasic.utils import (calculate_phi_0, 
+                               calculate_wavelength, 
+                               get_array_from_device,
+                               concentric_rings)
+
 from numpy.testing import assert_equal
 from temgymbasic.plotting import plot_model
 import scipy
@@ -55,6 +59,7 @@ def single_random_uniform_ray(x, y, phi_0=1.0):
         location=0.2,
         path_length=0.0,
         wavelength=calculate_wavelength(phi_0=phi_0)
+        
     )
 
 
@@ -130,6 +135,25 @@ def point_rays(request):
     data[3, :] = xp.random.uniform(low=low, high=high, size=n_rays)
     data[4, :] = xp.ones(shape=n_rays)
 
+    return Rays(
+        data=data,
+        location=0.0,
+        path_length=xp.zeros((n_rays,)),
+    )
+    
+@pytest.fixture(
+    params=[128],
+)
+def increasing_slope_rays(request):
+    n_rays = request.param
+    data = xp.zeros(shape=(5, n_rays))
+    
+    y, x = concentric_rings(n_rays, 1e-3)
+    data[0, :] = xp.zeros(shape=n_rays)
+    data[1, :] = x
+    data[2, :] = xp.zeros(shape=n_rays)
+    data[3, :] = y
+    data[4, :] = xp.ones(shape=n_rays)
     return Rays(
         data=data,
         location=0.0,
@@ -381,18 +405,51 @@ def test_perfect_lens_parallel_rays_to_focal_point(parallel_rays):
     xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
     xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
 
-def test_perfect_lens_parallel_rays_to_focal_point(parallel_rays):
+def test_aberrated_lens_spherical_aberration(increasing_slope_rays):
+    import matplotlib.pyplot as plt
+    z_o = -10
+    z_i = 11 
+    f = 4
     
-    # If rays are parallel, lens focuses them to a point, so we test this behaviour here.
-    f = 8
-    m = 1e-11
-    lens = comp.PerfectLens(parallel_rays.location, f=f, m=m)
-    out_rays = tuple(lens.step(parallel_rays))[0]
-    propagated_rays = out_rays.propagate(f)
+    input_rays = increasing_slope_rays
+    lens_rays = input_rays.propagate(abs(z_o))
+    
+    coeffs = [0.5, 0, 0, 0, 0]
+    lens = comp.AberratedLens(z=lens_rays.location, f=f, z1=z_o, z2=z_i, coeffs = coeffs)
+    out_rays = tuple(lens.step(lens_rays))[0]
+    propagated_rays = out_rays.propagate(z_i)
     
     # First check that the lens has applied the correct deflection to rays
-    xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
-    xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
+    # xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
+    # xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
+    
+    plt.figure()
+    plt.plot(propagated_rays.x, propagated_rays.y, 'o')
+    plt.savefig('test_aberrated_lens_spherical.png')
+    
+def test_aberrated_lens_coma(increasing_slope_rays):
+    import matplotlib.pyplot as plt
+    z_o = -10
+    z_i = 11 
+    f = 4
+    
+    input_rays = increasing_slope_rays
+    input_rays.x += 0.1
+    input_rays.y += 0.1
+    lens_rays = input_rays.propagate(abs(z_o))
+    
+    coeffs = [0.0, 0.5, 0, 0, 0]
+    lens = comp.AberratedLens(z=lens_rays.location, f=f, z1=z_o, z2=z_i, coeffs = coeffs)
+    out_rays = tuple(lens.step(lens_rays))[0]
+    propagated_rays = out_rays.propagate(z_i)
+    
+    # First check that the lens has applied the correct deflection to rays
+    # xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
+    # xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
+    
+    plt.figure()
+    plt.plot(propagated_rays.x, propagated_rays.y, 'o')
+    plt.savefig('test_aberrated_lens_coma.png')
 
 def test_deflector_random_rays(random_rays):
     deflection = xp.random.uniform(-5, 5)
