@@ -127,8 +127,9 @@ class Lens(Component):
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
         # and thus a finite-long conjugate approximation is applied
-        if ((z1 or z2) is None) and (m is None):
-            raise AssertionError('Must have either m defined, or both z1 and z2')
+        if ((z1 and z2) is None) and (m is None):
+            assert('Should have either m defined, or both z1 and z2 - choosing z1 = -1.0 as default')
+            z1 = -1.0
 
         if ((z1 and z2) is None) and (m is not None):
             if xp.abs(m) <= 1e-10:
@@ -145,6 +146,9 @@ class Lens(Component):
                 m = z2 / z1
             elif z1 <= 1e-10:
                 m = 1e10
+        elif (m is None) and (z1 is not None):
+            z2 = (1 / f + 1 / z1) ** -1
+            m = z2 / z1
         elif (
             (m is not None)
             and ((z1 and z2) is not None)
@@ -450,6 +454,9 @@ class AberratedLens(PerfectLens):
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class
         # yield from super().step(rays)
+        
+        M = self._m
+        
         xp = rays.xp
         
         z2 = self._z2
@@ -464,29 +471,30 @@ class AberratedLens(PerfectLens):
         u2_circle = x2 - L2 * R
         v2_circle = y2 - M2 * R
         z2_circle = z2 - N2 * R
-
-        # Height of object point from the optical axis
-        h = xp.sqrt(x1 ** 2 + y1 ** 2)
+        
+        psi_a = np.arctan2(v2_circle, u2_circle)
+        psi_o = np.arctan2(y1, x1)
+        psi = psi_a - psi_o
 
         # Calculate the aberration in x and y (Approximate)
-        eps_x = -dopd_dx(u1, v1, h, coeffs, xp=xp) * z2
-        eps_y = -dopd_dy(u1, v1, h, coeffs, xp=xp) * z2
+        eps_x = -dopd_dx(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp) * z2
+        eps_y = -dopd_dy(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp) * z2
 
-        W = opd(u1, v1, h, coeffs, xp=xp)
+        W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
 
         # Get aberration direction cosines - remember the aberrated rays must
         # go through the same point on the reference sphere
         # as the perfect rays
         nx, ny, nz = calculate_direction_cosines(x2 + eps_x, y2 + eps_y, z2,
-                                                 u2_circle, v2_circle, z2_circle, xp=xp)
+                                                 u1, v1, z2_circle, xp=xp)
 
         # Calculate the new aberrated ray coordinates in the image plane
         x2_aber = x2 + eps_x
         y2_aber = y2 + eps_y
 
         # Calculate the new aberrated ray coordinates in the exit pupil plane
-        u2_aber = x2_aber - nx / nz * (z2)
-        v2_aber = y2_aber - ny / nz * (z2)
+        u2_aber = u1 #x2_aber - nx / nz * (z2)
+        v2_aber = v1 #y2_aber - ny / nz * (z2)
 
         # u2_aber = -nx / nz * (phi_zn) + phi_xn
         # v2_aber = -ny / nz * (phi_zn) + phi_yn
