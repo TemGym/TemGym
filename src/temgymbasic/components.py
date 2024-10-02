@@ -450,6 +450,7 @@ class AberratedLens(PerfectLens):
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class
         # yield from super().step(rays)
+        
         xp = rays.xp
         
         z2 = self._z2
@@ -464,15 +465,16 @@ class AberratedLens(PerfectLens):
         u2_circle = x2 - L2 * R
         v2_circle = y2 - M2 * R
         z2_circle = z2 - N2 * R
-
-        # Height of object point from the optical axis
-        h = xp.sqrt(x1 ** 2 + y1 ** 2)
+        
+        psi_a = np.arctan2(v2_circle, u2_circle)
+        psi_o = np.arctan2(y1, x1)
+        psi = psi_a - psi_o
 
         # Calculate the aberration in x and y (Approximate)
-        eps_x = -dopd_dx(u1, v1, h, coeffs, xp=xp) * z2
-        eps_y = -dopd_dy(u1, v1, h, coeffs, xp=xp) * z2
+        eps_x = -dopd_dx(u2, v2, x1, y1, psi, coeffs, R, xp=xp) * R
+        eps_y = -dopd_dy(u2, v2, x1, y1, psi, coeffs, R, xp=xp) * R
 
-        W = opd(u1, v1, h, coeffs, xp=xp)
+        W = opd(u2, v2, x1, y1, psi, coeffs, R, xp=xp)
 
         # Get aberration direction cosines - remember the aberrated rays must
         # go through the same point on the reference sphere
