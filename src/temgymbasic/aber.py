@@ -16,7 +16,7 @@ def ref_sphere(X, Y, r, xs, ys, zs, xp=np):
     return zs - xp.sqrt(r**2 - (X - xs)**2 - (Y - ys)**2)
 
 
-def aber(r_aperture, r_object, psi, coeffs, R, xp=np):
+def aber(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     """
     Evaluate the path length difference of the aberrated function.
 
@@ -32,11 +32,11 @@ def aber(r_aperture, r_object, psi, coeffs, R, xp=np):
     """
     B, F, C, D, E = coeffs
     
-    B = B / (R ** 4)
-    F = F / (R ** 3)
-    C = C / (R ** 2)
-    D = D / (R ** 2)
-    E = E / (R)
+    B = B * (M ** 4) / (R ** 4)
+    F = F * (M ** 3) / (R ** 3)
+    C = C * (M ** 2) / (R ** 2)
+    D = D * (M ** 2) / (R ** 2)
+    E = E * M / R
 
     Spherical = 1 / 4 * B * r_aperture ** 4
     Coma = (F * xp.cos(psi)) * r_aperture ** 3 * r_object
@@ -49,7 +49,7 @@ def aber(r_aperture, r_object, psi, coeffs, R, xp=np):
     return W
 
 
-def daber_dr_a(r_aperture, r_object, psi, coeffs, R, xp=np):
+def daber_dr_a(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     """
     Evaluate the derivative of aberration function with respect to r_aperture.
 
@@ -66,11 +66,11 @@ def daber_dr_a(r_aperture, r_object, psi, coeffs, R, xp=np):
     """
     B, F, C, D, E = coeffs
     
-    B = B / (R ** 4)
-    F = F / (R ** 3)
-    C = C / (R ** 2)
-    D = D / (R ** 2)
-    E = E / (R)
+    B = B * (M ** 4) / (R ** 4)
+    F = F * (M ** 3) / (R ** 3)
+    C = C * (M ** 2) / (R ** 2)
+    D = D * (M ** 2) / (R ** 2)
+    E = E * M / R
 
     
     dSpherical = B * r_aperture ** 3
@@ -84,7 +84,7 @@ def daber_dr_a(r_aperture, r_object, psi, coeffs, R, xp=np):
     return dW_dr_a
 
 
-def daber_dpsi(r_aperture, r_object, psi, coeffs, R, xp=np):
+def daber_dpsi(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     """
     Evaluate the derivative of aberration function with respect to r_aperture.
 
@@ -102,11 +102,11 @@ def daber_dpsi(r_aperture, r_object, psi, coeffs, R, xp=np):
     
     B, F, C, D, E = coeffs
 
-    B = B / (R ** 4)
-    F = F / (R ** 3)
-    C = C / (R ** 2)
-    D = D / (R ** 2)
-    E = E / (R)
+    B = B * (M ** 4) / (R ** 4)
+    F = F * (M ** 3) / (R ** 3)
+    C = C * (M ** 2) / (R ** 2)
+    D = D * (M ** 2) / (R ** 2)
+    E = E * M / R
     
     dComa = - F * r_aperture ** 3 * r_object * xp.sin(psi)
     dAstig = - C * r_aperture ** 2 * r_object ** 2 * xp.cos(psi) * xp.sin(psi)
@@ -153,7 +153,7 @@ def grad_psi(X, Y, xp=np):
     return dpsi_dx, dpsi_dy
 
 
-def opd(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
+def opd(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     """
     Evaluate the optical path difference (OPD).
 
@@ -170,10 +170,10 @@ def opd(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
     r_a = xp.sqrt(x_a**2 + y_a**2)
     r_o = xp.sqrt(x_o**2 + y_o**2)
     
-    return aber(r_a, r_o, psi, coeffs, R, xp=xp)
+    return aber(r_a, r_o, psi, coeffs, R, M, xp=xp)
 
 
-def dopd_dx(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
+def dopd_dx(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     """
     Evaluate the derivative of the optical path difference (OPD) with respect to x.
 
@@ -191,8 +191,8 @@ def dopd_dx(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
     r_a = xp.sqrt(x_a**2 + y_a**2)
     r_o = xp.sqrt(x_o**2 + y_o**2)
 
-    dW_dr_a = daber_dr_a(r_a, r_o, psi, coeffs, R, xp=xp)
-    dW_dpsi = daber_dpsi(r_a, r_o, psi, coeffs, R, xp=xp)
+    dW_dr_a = daber_dr_a(r_a, r_o, psi, coeffs, R, M, xp=xp)
+    dW_dpsi = daber_dpsi(r_a, r_o, psi, coeffs, R, M, xp=xp)
     dr_a_dx, _ = grad_r_a(x_a, y_a, xp=xp)
     dpsi_dx, _ = grad_psi(x_a, y_a, xp=xp)
     dW_dx = (dW_dr_a * dr_a_dx + dW_dpsi * dpsi_dx)
@@ -200,7 +200,7 @@ def dopd_dx(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
     return dW_dx
 
 
-def dopd_dy(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
+def dopd_dy(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     """
     Evaluate the derivative of the optical path difference (OPD) with respect to y.
 
@@ -218,8 +218,8 @@ def dopd_dy(x_a, y_a, x_o, y_o, psi, coeffs, R, xp=np):
     r_a = xp.sqrt(x_a**2 + y_a**2)
     r_o = xp.sqrt(x_o**2 + y_o**2)
 
-    dW_dr_a = daber_dr_a(r_a, r_o, psi, coeffs, R, xp=xp)
-    dW_dpsi = daber_dpsi(r_a, r_o, psi, coeffs, R, xp=xp)
+    dW_dr_a = daber_dr_a(r_a, r_o, psi, coeffs, R, M, xp=xp)
+    dW_dpsi = daber_dpsi(r_a, r_o, psi, coeffs, R, M, xp=xp)
     _, dr_ady = grad_r_a(x_a, y_a, xp=xp)
     _, dpsi_dy = grad_psi(x_a, y_a, xp=xp)
     dW_dy = (dW_dr_a * dr_ady + dW_dpsi * dpsi_dy)
