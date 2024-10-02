@@ -24,33 +24,35 @@ tilt_yx = np.tan(deg_yx)
 
 radius = 0.2
 lens_dist = 10
-focal = 0.7
-prop_dist = 50
+prop_dist = 20
 
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
-m = 1e-11
-focal = prop_dist
+#m = 1e-11
+focal = 4
 
-coeffs = [0, 0, 0, 0, 0]
+centre_yx = [0.1, 0.0]
+coeffs = [0., 0., 0., 0., 0.]
 components = (
-    comp.ParallelBeam(
+    comp.GaussBeam(
         z=0.0,
         voltage=calculate_phi_0(wavelength),
         radius=radius,
-        #wo=wo,
+        #centre_yx=centre_yx,
+        wo=wo,
         tilt_yx=tilt_yx
     ),
     comp.AberratedLens(
         z=lens_dist,
         z1=-lens_dist,
-        z2=lens_dist + prop_dist,
+        z2=prop_dist,
         f=focal,
     ),
     comp.Detector(
         z=lens_dist + prop_dist,
         pixel_size=pixel_size,
         shape=det_shape,
+        interference='gauss'
     ),
 )
 

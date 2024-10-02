@@ -592,12 +592,13 @@ class Source(Component):
         self,
         z: float,
         tilt_yx: Tuple[float, float] = (0., 0.),
+        centre_yx: Tuple[float, float] = (0., 0.),
         voltage: Optional[float] = None,
         name: Optional[str] = None,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
-        self.centre_yx: tuple[float, float] = (0., 0.)
+        self.centre_yx = centre_yx
         self.phi_0 = voltage
 
     @property
@@ -657,9 +658,10 @@ class ParallelBeam(Source):
         radius: float,
         voltage: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
+        centre_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage)
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage, centre_yx=centre_yx)
         self.radius = radius
 
     def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
@@ -708,11 +710,13 @@ class PointBeam(Source):
         voltage: Optional[float] = None,
         semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
+        centre_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(name=name, z=z, voltage=voltage)
+        super().__init__(name=name, z=z, voltage=voltage, centre_yx=centre_yx)
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
+        self.centre_yx = centre_yx
 
     def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
         r = point_beam(num_rays, self.semi_angle, random=random)
