@@ -415,9 +415,13 @@ def fibonacci_beam_gauss_rayset(
     # Offset in y
     r[2, 2::5] += dPy
     # Slope in x from origin
-    r[1, 3::5] += dx + dHx
+    r[1, 3::5] += dHx
     # Slope in y from origin
-    r[3, 4::5] += dy + dHy
+    r[3, 4::5] += dHy
+
+    # Semi Angle addition to each ray
+    r[1, :] += dx
+    r[3, :] += dy
 
     return r
 
