@@ -1571,7 +1571,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         if val:
             self.detector.interference = 'gauss'
         else:
-            self.detector.interference = 'ray'
+            self.detector.interference = None
         self.try_update()
 
     @Slot(str)

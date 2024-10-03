@@ -970,7 +970,7 @@ class Detector(Component):
         elif self.interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
-            image_dtype = type(valid_wavefronts)
+            image_dtype = xp.int32
 
         if out is None:
             out = xp.zeros(
