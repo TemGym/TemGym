@@ -1001,6 +1001,11 @@ class GaussBeamGUI(SourceGUI):
     def set_radius(self, val):
         self.beam.radius = val
         self.try_update(geom=True)
+        
+    @Slot(float)
+    def set_semi_angle(self, val):
+        self.beam.semi_angle = val
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_wo(self, val):
@@ -1011,6 +1016,8 @@ class GaussBeamGUI(SourceGUI):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
             self.beamwidthslider.setValue(self.beam.radius)
+        with blocker(self.beamsemiangleslider):
+            self.beamsemiangleslider.setValue(self.beam.semi_angle)
         with blocker(self.xangleslider):
             self.xangleslider.setValue(self.beam.tilt_yx[1])
         with blocker(self.yangleslider):
@@ -1037,6 +1044,12 @@ class GaussBeamGUI(SourceGUI):
             wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox, decimals=3
         )
         self.woslider.valueChanged.connect(self.set_wo)
+        
+        beamsemiangle = self.beam.semi_angle
+        self.beamsemiangleslider, _ = labelled_slider(
+            beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox, decimals=3
+        )
+        self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.xangleslider)
