@@ -99,11 +99,11 @@ class Lens(Component):
                  m: Optional[float] = None,
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
-                 aber_coeffs: Tuple = [0, 0, 0, 0, 0],
+                 aber_coeffs: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
         super().__init__(z=z, name=name) 
 
-        self._aber_coeffs = aber_coeffs
+        self.aber_coeffs = aber_coeffs
         self._z1, self._z2, self._m, self._f = self.initialise_m_and_image_planes(z1, z2, m, f)
         
     @property
@@ -200,7 +200,7 @@ class Lens(Component):
     ) -> Generator[Rays, None, None]:
         
         xp = rays.xp
-        coeffs = self._aber_coeffs
+
         M = self._m
         z2 = self._z2
         
@@ -216,25 +216,28 @@ class Lens(Component):
         psi_o = np.arctan2(y1, x1)
         psi = psi_a - psi_o
 
-        # Calculate the aberration in x and y (Approximate R' as the reference sphere radius at image side)
-        eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
-        
-        W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
-        
-        rays.path_length +=  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f)) + W
-        
         rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
-        
-        x2 = rays.x + rays.dx * z2
-        y2 = rays.y + rays.dy * z2
-        
-        x2_aber = x2 + eps_x
-        y2_aber = y2 + eps_y
-        
-        nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
 
-        rays.dx = nx / nz
-        rays.dy = ny / nz
+        if self.aber_coeffs:
+
+            coeffs = self.aber_coeffs
+            # Calculate the aberration in x and y (Approximate R' as the reference sphere radius at image side)
+            eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
+            
+            W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
+            
+            rays.path_length +=  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f)) + W
+            
+            x2 = rays.x + rays.dx * z2
+            y2 = rays.y + rays.dy * z2
+            
+            x2_aber = x2 + eps_x
+            y2_aber = y2 + eps_y
+            
+            nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
+
+            rays.dx = nx / nz
+            rays.dy = ny / nz
         
         # Just straightforward matrix multiplication
         yield rays.new_with(

@@ -585,6 +585,47 @@ class LensGUI(ComponentGUIWrapper):
         self.lens.f = val
         self.try_update()
 
+    @Slot(float)
+    def set_spherical_aberration(self, val):
+        self.lens.spherical = (
+            self.sphericalslider.value(),
+        )
+        self.lens.aber_coeffs[0] = val
+        self.try_update()
+
+    @Slot(float)
+    def set_coma_aberration(self, val):
+        self.lens.coma = (
+            self.comaslider.value(),
+        )
+        self.lens.aber_coeffs[1] = val
+        self.try_update()
+
+    @Slot(float)
+    def set_astigmatism_aberration(self, val):
+        self.lens.astigmatism = (
+            self.astigmatismslider.value(),
+        )
+        self.lens.aber_coeffs[2] = val
+        self.try_update()
+
+    @Slot(float)
+    def set_field_curvature_aberration(self, val):
+        self.lens.field_curvature = (
+            self.fieldcurvatureslider.value(),
+        )
+        self.lens.aber_coeffs[3] = val
+        self.try_update()
+
+    @Slot(float)
+    def set_distortion_aberration(self, val):
+        self.lens.distortion = (
+            self.distortionslider.value(),
+        )
+        self.lens.aber_coeffs[4] = val
+        self.try_update()
+
+
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.fslider):
@@ -601,6 +642,40 @@ class LensGUI(ComponentGUIWrapper):
 
         self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
         self.flabel_table.setMinimumWidth(80)
+
+        if self.lens.aber_coeffs:
+            self.sphericalslider, _ = labelled_slider(
+            self.lens.aber_coeffs[0], -1., 1., name="Spherical Aberration",
+            insert_into=vbox, decimals=2,
+            )
+            self.sphericalslider.valueChanged.connect(self.set_spherical_aberration)
+
+            self.comaslider, _ = labelled_slider(
+                self.lens.aber_coeffs[1], -1., 1., name="Coma",
+                insert_into=vbox, decimals=2,
+            )
+            self.comaslider.valueChanged.connect(self.set_coma_aberration)
+
+            self.astigmatismslider, _ = labelled_slider(
+                self.lens.aber_coeffs[2], -1., 1., name="Astigmatism",
+                insert_into=vbox, decimals=2,
+            )
+            self.astigmatismslider.valueChanged.connect(self.set_astigmatism_aberration)
+
+            self.fieldcurvatureslider, _ = labelled_slider(
+                self.lens.aber_coeffs[3], -1., 1., name="Field Curvature",
+                insert_into=vbox, decimals=2,
+            )
+            self.fieldcurvatureslider.valueChanged.connect(self.set_field_curvature_aberration)
+
+            self.distortionslider, _ = labelled_slider(
+                self.lens.aber_coeffs[4], -1., 1., name="Distortion",
+                insert_into=vbox, decimals=2,
+            )
+            self.distortionslider.valueChanged.connect(self.set_distortion_aberration)
+
+        self.box.setLayout(vbox)
+        vbox = self.box.layout()
         hbox = QHBoxLayout()
         hbox.addWidget(self.flabel_table)
         vbox = QVBoxLayout()
@@ -1492,6 +1567,14 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.try_update()
 
     @Slot(str)
+    def set_interference(self, val: str):
+        if val:
+            self.detector.interference = 'gauss'
+        else:
+            self.detector.interference = 'ray'
+        self.try_update()
+
+    @Slot(str)
     @Slot(int)
     @Slot(float)
     def set_shape(self, val: bool):
@@ -1536,6 +1619,13 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.flipy_cbox.setChecked(self.detector.flip_y)
         self.flipy_cbox.stateChanged.connect(self.set_flip_y)
         hbox.addWidget(self.flipy_cbox)
+
+        hbox = QHBoxLayout()
+        self.intfrnce_cbox = QCheckBox("Turn on Gauss Beam Interference")
+        self.intfrnce_cbox.setChecked(self.detector.interference == 'gauss')
+        self.intfrnce_cbox.stateChanged.connect(self.set_interference)
+        hbox.addWidget(self.intfrnce_cbox)
+
         self.rotationslider, _ = labelled_slider(
             self.detector.rotation, -180., 180., name="Rotation",
             insert_into=hbox, decimals=1, tick_interval=10.,

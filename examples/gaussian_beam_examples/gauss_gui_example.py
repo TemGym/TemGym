@@ -24,7 +24,7 @@ tilt_yx = np.tan(deg_yx)
 
 radius = 0.2
 lens_dist = 10
-prop_dist = 20
+prop_dist = 5
 
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
@@ -42,11 +42,12 @@ components = (
         wo=wo,
         tilt_yx=tilt_yx
     ),
-    comp.AberratedLens(
+    comp.Lens(
         z=lens_dist,
         z1=-lens_dist,
         z2=prop_dist,
         f=focal,
+        aber_coeffs = coeffs
     ),
     comp.Detector(
         z=lens_dist + prop_dist,
