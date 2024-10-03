@@ -425,6 +425,119 @@ def test_perfect_lens_parallel_rays_to_focal_point(parallel_rays):
     # First check that the lens has applied the correct deflection to rays
     xp.testing.assert_allclose(propagated_rays.x, 0.0, atol = 1e-12)
     xp.testing.assert_allclose(propagated_rays.y, 0.0, atol = 1e-12)
+    
+
+@pytest.mark.parametrize("x, dx, y, dy", [
+    ([0.0], [0.01], [0.0], [0.0]),
+    (np.zeros(100), np.random.uniform(-0.01, 0.01, 100), np.zeros(100), np.random.uniform(-0.01, 0.01, 100)),
+])
+def test_aberrated_matrix_lens_spherical_aberration(x, dx, y, dy):
+    
+    z_o = -10
+    z_i = 11 
+    
+    R = z_i
+    M = z_i / z_o
+    
+    input_rays = single_ray(x, dx, y, dy)
+    
+    x_o = input_rays.x
+    y_o = input_rays.y
+    
+    x_i = M * x_o
+    y_i = M * y_o
+
+    lens_rays = input_rays.propagate(abs(z_o))
+    
+    x_a = lens_rays.x
+    y_a = lens_rays.y
+    
+    B = 10
+    
+    aber_coeffs = [B, 0.0, 0.0, 0.0, 0.0]
+    B, F, C, D, E = aber_coeffs
+    
+    lens = comp.Lens(z=lens_rays.location, z1=z_o, z2=z_i, aber_coeffs = aber_coeffs)
+    out_rays = tuple(lens.step(lens_rays))[0]
+    propagated_rays = out_rays.propagate(z_i)
+    
+    dx = x_i + -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
+                   1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
+                   1.0*D*x_a*(x_o**2 + y_o**2) + 
+                   E*x_o*(x_o**2 + y_o**2) + 
+                   2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
+    dy = y_i + -R*(1.0*B*y_a*(x_a**2 + y_a**2) + 
+                   1.0*C*y_o*(x_a*x_o + y_a*y_o) + 
+                   1.0*D*y_a*(x_o**2 + y_o**2) + 
+                   E*y_o*(x_o**2 + y_o**2) + 
+                   2*F*y_a*(x_a*x_o + y_a*y_o) + 
+                   F*y_o*(x_a**2 + y_a**2))
+    
+    # First check that the lens has applied the correct deflection to rays
+    xp.testing.assert_allclose(propagated_rays.x, dx, atol = 1e-9)
+    xp.testing.assert_allclose(propagated_rays.y, dy, atol = 1e-9)
+    
+    # plt.figure()
+    # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
+    # plt.plot(delta_x_i, delta_y_i, 'or')
+    # plt.savefig('test_aberrated_lens_spherical.png')
+    
+
+@pytest.mark.parametrize("x, dx, y, dy", [
+    ([0.01], [0.01], [0.0], [0.0]),
+    (np.random.uniform(-0.001, 0.001, 100), np.random.uniform(-0.01, 0.01, 100), np.random.uniform(-0.001, 0.001, 100), np.random.uniform(-0.01, 0.01, 100)),
+])
+def test_aberrated_matrix_lens_coma(x, dx, y, dy):
+    
+    z_o = -10
+    z_i = 11 
+    
+    R = z_i
+    M = z_i / z_o
+    
+    input_rays = single_ray(x, dx, y, dy)
+    
+    x_o = input_rays.x
+    y_o = input_rays.y
+    
+    x_i = M * x_o
+    y_i = M * y_o
+
+    lens_rays = input_rays.propagate(abs(z_o))
+    
+    x_a = lens_rays.x
+    y_a = lens_rays.y
+    
+    F = 10
+    
+    aber_coeffs = [0, F, 0.0, 0.0, 0.0]
+    B, F, C, D, E = aber_coeffs
+    
+    lens = comp.Lens(z=lens_rays.location, z1=z_o, z2=z_i, aber_coeffs = aber_coeffs)
+    out_rays = tuple(lens.step(lens_rays))[0]
+    propagated_rays = out_rays.propagate(z_i)
+    
+    dx = x_i + -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
+                   1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
+                   1.0*D*x_a*(x_o**2 + y_o**2) + 
+                   E*x_o*(x_o**2 + y_o**2) + 
+                   2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
+    dy = y_i + -R*(1.0*B*y_a*(x_a**2 + y_a**2) + 
+                   1.0*C*y_o*(x_a*x_o + y_a*y_o) + 
+                   1.0*D*y_a*(x_o**2 + y_o**2) + 
+                   E*y_o*(x_o**2 + y_o**2) + 
+                   2*F*y_a*(x_a*x_o + y_a*y_o) + 
+                   F*y_o*(x_a**2 + y_a**2))
+    
+    # First check that the lens has applied the correct deflection to rays
+    xp.testing.assert_allclose(propagated_rays.x, dx, atol = 1e-9)
+    xp.testing.assert_allclose(propagated_rays.y, dy, atol = 1e-9)
+    
+    # plt.figure()
+    # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
+    # plt.plot(delta_x_i, delta_y_i, 'or')
+    # plt.savefig('test_aberrated_lens_spherical.png')
+    
 
 @pytest.mark.parametrize("x, dx, y, dy", [
     ([0.0], [0.01], [0.0], [0.0]),
@@ -481,6 +594,7 @@ def test_aberrated_lens_coma(x, dx, y, dy):
     
     M = z_i / z_o
     
+    R = z_i
     input_rays = single_ray(x, dx, y, dy)
     
     x_o = input_rays.x
@@ -492,20 +606,32 @@ def test_aberrated_lens_coma(x, dx, y, dy):
     y_i = M * y_o
 
     lens_rays = input_rays.propagate(abs(z_o))
+    x_a = lens_rays.x
+    y_a = lens_rays.y
     
     F = 1
     
     coeffs = [0, F, 0.0, 0.0, 0.0]
+    B, F, C, D, E = coeffs
     lens = comp.AberratedLens(z=lens_rays.location, f=f, z1=z_o, z2=z_i, coeffs = coeffs)
     out_rays = tuple(lens.step(lens_rays))[0]
     propagated_rays = out_rays.propagate(z_i)
     
-    delta_x_i = x_i + M * F * x_o * (x_o_slope ** 2 + y_o_slope ** 2) + 2 * F * x_o_slope * (x_o * x_o_slope + y_o * y_o_slope)
-    delta_y_i = y_i + M * F * (y_o * (x_o_slope ** 2 + y_o_slope ** 2) + 2 * y_o_slope * (x_o * x_o_slope + y_o * y_o_slope))
+    dx = x_i + -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
+                   1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
+                   1.0*D*x_a*(x_o**2 + y_o**2) + 
+                   E*x_o*(x_o**2 + y_o**2) + 
+                   2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
+    dy = y_i + -R*(1.0*B*y_a*(x_a**2 + y_a**2) + 
+                   1.0*C*y_o*(x_a*x_o + y_a*y_o) + 
+                   1.0*D*y_a*(x_o**2 + y_o**2) + 
+                   E*y_o*(x_o**2 + y_o**2) + 
+                   2*F*y_a*(x_a*x_o + y_a*y_o) + 
+                   F*y_o*(x_a**2 + y_a**2))
     
     # First check that the lens has applied the correct deflection to rays
-    xp.testing.assert_allclose(propagated_rays.x, delta_x_i, atol = 1e-5)
-    xp.testing.assert_allclose(propagated_rays.y, delta_y_i, atol = 1e-5)
+    xp.testing.assert_allclose(propagated_rays.x, dx, atol = 1e-5)
+    xp.testing.assert_allclose(propagated_rays.y, dy, atol = 1e-5)
     
     # plt.figure()
     # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
