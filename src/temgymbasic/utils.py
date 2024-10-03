@@ -389,6 +389,7 @@ def circular_beam(
 def fibonacci_beam_gauss_rayset(
     num_gauss_approx: int,
     outer_radius: float,
+    semi_angle: float,
     wo: float,
     wavelength: float,
     xp=np,
@@ -401,6 +402,8 @@ def fibonacci_beam_gauss_rayset(
     dHy = div
 
     y, x = fibonacci_spiral(num_gauss_approx, outer_radius, xp=xp)
+    dy, dx = fibonacci_spiral(num_gauss_approx, semi_angle, xp=xp)
+    
     # this multiplies n_rays by 5
     r = initial_r_rayset(y.shape[0], xp=xp)
 
@@ -412,9 +415,9 @@ def fibonacci_beam_gauss_rayset(
     # Offset in y
     r[2, 2::5] += dPy
     # Slope in x from origin
-    r[1, 3::5] += dHx
+    r[1, 3::5] += dx + dHx
     # Slope in y from origin
-    r[3, 4::5] += dHy
+    r[3, 4::5] += dy + dHy
 
     return r
 
