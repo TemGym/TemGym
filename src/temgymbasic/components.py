@@ -939,7 +939,7 @@ class Detector(Component):
     ) -> NDArray:
 
         xp = rays.xp
-
+        
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
