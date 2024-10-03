@@ -206,8 +206,8 @@ class Rays:
     ) -> Tuple[NDArray, NDArray]:
         """Returns in yy, xx!"""
         xx, yy = get_pixel_coords(
-            rays_x=self.x,
-            rays_y=self.y,
+            rays_x=self.x_display,
+            rays_y=self.y_display,
             shape=shape,
             pixel_size=pixel_size,
             flip_y=flip_y,
