@@ -814,6 +814,7 @@ class GaussBeam(Source):
             r = fibonacci_beam_gauss_rayset(
                 num_rays,
                 self.radius,
+                self.semi_angle,
                 self.wo,
                 wavelength,
                 xp=xp,
