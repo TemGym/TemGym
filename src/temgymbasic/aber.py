@@ -32,11 +32,11 @@ def aber(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     """
     B, F, C, D, E = coeffs
     
-    B = B * (M ** 4) / (R ** 4)
-    F = F * (M ** 3) / (R ** 3)
-    C = C * (M ** 2) / (R ** 2)
-    D = D * (M ** 2) / (R ** 2)
-    E = E * M / R
+    B = B
+    F = F
+    C = C
+    D = D
+    E = E
 
     Spherical = 1 / 4 * B * r_aperture ** 4
     Coma = (F * xp.cos(psi)) * r_aperture ** 3 * r_object
@@ -172,7 +172,29 @@ def opd(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     
     return aber(r_a, r_o, psi, coeffs, R, M, xp=xp)
 
+def aber_x_aber_y(x_a, y_a, x_o, y_o, coeffs, R, M, xp=np):
+    B, F, C, D, E = coeffs
 
+    B = B
+    F = F
+    C = C
+    D = D
+    E = E
+    
+    dx = -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
+             1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
+             1.0*D*x_a*(x_o**2 + y_o**2) + 
+             E*x_o*(x_o**2 + y_o**2) + 
+             2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
+    dy = -R*(1.0*B*y_a*(x_a**2 + y_a**2)
+             + 1.0*C*y_o*(x_a*x_o + y_a*y_o)
+             + 1.0*D*y_a*(x_o**2 + y_o**2)
+             + E*y_o*(x_o**2 + y_o**2)
+             + 2*F*y_a*(x_a*x_o + y_a*y_o)
+             + F*y_o*(x_a**2 + y_a**2))
+    
+    return dx, dy
+    
 def dopd_dx(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     """
     Evaluate the derivative of the optical path difference (OPD) with respect to x.

@@ -19,7 +19,7 @@ from . import (
     Degrees,
     BackendT
 )
-from .aber import dopd_dx, dopd_dy, opd
+from .aber import dopd_dx, dopd_dy, opd, aber_x_aber_y
 from .gbd import (
     differential_matrix,
     calculate_Qinv,
@@ -95,16 +95,16 @@ class Component(abc.ABC):
 
 class Lens(Component):
     def __init__(self, z: float,
-                 f: float,
+                 f: Optional[float] = None,
                  m: Optional[float] = None,
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
+                 aber_coeffs: Tuple = [0, 0, 0, 0, 0],
                  name: Optional[str] = None):
         super().__init__(z=z, name=name) 
-        self._f = f
-        self._m = m
 
-        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
+        self._aber_coeffs = aber_coeffs
+        self._z1, self._z2, self._m, self._f = self.initialise_m_and_image_planes(z1, z2, m, f)
         
     @property
     def f(self) -> float:
@@ -146,16 +146,16 @@ class Lens(Component):
                 m = z2 / z1
             elif z1 <= 1e-10:
                 m = 1e10
-        elif (m is None) and (z1 is not None):
+            f = (1 / z2 - 1 / z1) ** -1
+            
+        elif (m is None) and (z1 is not None) and (z2 is None) and (f is not None):
             z2 = (1 / f + 1 / z1) ** -1
-            m = z2 / z1
         elif (
             (m is not None)
             and ((z1 and z2) is not None)
         ):
             warnings.warn("Overspecified magnification (m) and image and object planes (z1 and z2),\
                         the provided magnification is ignored")
-            m = z2 / z1
 
         # If finite long conjugate approximation,
         # we need to set the signal that the numerical aperture is
@@ -170,7 +170,7 @@ class Lens(Component):
 
         m = z2 / z1
 
-        return z1, z2, m
+        return z1, z2, m, f
 
     @staticmethod
     def lens_matrix(f, xp=np):
@@ -200,16 +200,45 @@ class Lens(Component):
     ) -> Generator[Rays, None, None]:
         
         xp = rays.xp
+        coeffs = self._aber_coeffs
+        M = self._m
+        z2 = self._z2
         
-        #Convention is that focal length of lens is positive for converging lens, which means we need 
-        #to subtract the path length for converging lens,
-        #and negative for diverging lens meaning we need to add a path length
-        # Hence the minus sign in front of the path length = sign. 
-        rays.path_length -=  (rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
+        #Rays at lens plane
+        u1 = rays.x
+        v1 = rays.y
+        
+        #Rays at object plane
+        x1 = rays.x + rays.dx * self._z1
+        y1 = rays.y + rays.dy * self._z1
+
+        psi_a = np.arctan2(v1, u1)
+        psi_o = np.arctan2(y1, x1)
+        psi = psi_a - psi_o
+
+        # Calculate the aberration in x and y (Approximate R' as the reference sphere radius at image side)
+        eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
+        
+        W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
+        
+        rays.path_length +=  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f)) + W
+        
+        rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
+        
+        x2 = rays.x + rays.dx * z2
+        y2 = rays.y + rays.dy * z2
+        
+        x2_aber = x2 + eps_x
+        y2_aber = y2 + eps_y
+        
+        nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
+
+        rays.dx = nx / nz
+        rays.dy = ny / nz
         
         # Just straightforward matrix multiplication
         yield rays.new_with(
-            data=xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data),
+            data=rays.data,
             location=self,
         )
 
@@ -270,7 +299,7 @@ class PerfectLens(Lens):
 
     def update_m_and_image_planes(self, z1, z2, m):
         f = self._f
-        self._z1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
+        self._z, self._f1, self._z2, self._m = self.initialise_m_and_image_planes(z1, z2, m, f)
 
     def get_exit_pupil_coords(self, rays, xp=np):
 
