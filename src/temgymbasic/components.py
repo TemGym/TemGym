@@ -787,12 +787,14 @@ class GaussBeam(Source):
         wo: float,
         voltage: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
+        semi_angle: Optional[float] = 0.,
         name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z, voltage=voltage)
         self.wo = wo
         self.radius = radius
         self.tilt_yx = tilt_yx
+        self.semi_angle = semi_angle
 
     def get_rays(
         self,
@@ -936,7 +938,7 @@ class Detector(Component):
     ) -> NDArray:
 
         xp = rays.xp
-        
+
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
