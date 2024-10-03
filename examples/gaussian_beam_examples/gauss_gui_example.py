@@ -40,7 +40,8 @@ components = (
         radius=radius,
         #centre_yx=centre_yx,
         wo=wo,
-        tilt_yx=tilt_yx
+        tilt_yx=tilt_yx,
+        semi_angle = 0.0
     ),
     comp.Lens(
         z=lens_dist,
