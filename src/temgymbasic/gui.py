@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QButtonGroup,
     QRadioButton,
+    QToolBox,
 )
 from PySide6.QtGui import (
     QKeyEvent,
@@ -34,7 +35,7 @@ import numpy as np
 
 from . import shapes as comp_geom
 from .utils import as_gl_lines, P2R, R2P
-from .widgets import labelled_slider, LabelledIntField, GLImageItem
+from .widgets import labelled_slider, LabelledIntField, GLImageItem, MyDockLabel
 
 if TYPE_CHECKING:
     from .model import Model, STEMModel
@@ -258,9 +259,12 @@ class TemGymWindow(QMainWindow):
         self.resize(1600, 1200)
 
         # Create Docks
-        self.tem_dock = Dock("3D View", size=(4, 5))
-        self.detector_dock = Dock("Detector", size=(4, 5))
-        self.gui_dock = Dock("Controls", size=(3.5, 5))
+        label = MyDockLabel("3D View")
+        self.tem_dock = Dock("3D View", size=(4, 10), label=label)
+        label = MyDockLabel("Detector")
+        self.detector_dock = Dock("Detector", size=(4, 10), label=label)
+        label = MyDockLabel("Controls")
+        self.gui_dock = Dock("Controls", size=(3.5, 10), label=label)
         # self.table_dock = Dock("Parameter Table", size=(5, 5))
         self.centralWidget = DockArea()
         self.setCentralWidget(self.centralWidget)
@@ -351,7 +355,7 @@ class TemGymWindow(QMainWindow):
         # Create the detector window, which shows where rays land at the bottom
         self.detector_window = pg.GraphicsLayoutWidget()
         self.detector_window.setAspectLocked(1.0)
-        self.spot_img = pg.ImageItem(border="b")
+        self.spot_img = pg.ImageItem(border="k")
         v2 = self.detector_window.addViewBox()
         v2.setAspectLocked()
 
@@ -382,8 +386,15 @@ class TemGymWindow(QMainWindow):
         self.model_gui = self.model.gui_wrapper()(window=self).build()
         # self.gui_layout.addWidget(self.model_gui.box)
 
+        tab_widget = QToolBox()
+        # tab_widget.setUsesScrollButtons(False)
+        self.gui_layout.addWidget(tab_widget)
+
         for gui_component in self.gui_components:
-            self.gui_layout.addWidget(gui_component.box)
+            wgt = QWidget()
+            wgt.setLayout(gui_component.box)
+            tab_widget.addItem(wgt, gui_component.component.name)
+            # self.gui_layout.addWidget(gui_component.box)
             # self.table_layout.addWidget(gui_component.table)
 
         self.gui_layout.addStretch()
@@ -474,7 +485,7 @@ class ModelGUI(ComponentGUIWrapper):
         hbox_push_buttons.addWidget(self.y_button)
         vbox.addLayout(hbox_label)
         vbox.addLayout(hbox_push_buttons)
-        self.box.setLayout(vbox)
+        self.box = vbox
         return self
 
     @Slot()
@@ -646,7 +657,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens.f, -5., 5., name="Focal Length", insert_into=vbox, decimals=2,
         )
         self.fslider.valueChanged.connect(self.set_f)
-        self.box.setLayout(vbox)
+        self.box = vbox
 
         self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
         self.flabel_table.setMinimumWidth(80)
@@ -682,7 +693,7 @@ class LensGUI(ComponentGUIWrapper):
             )
             self.distortionslider.valueChanged.connect(self.set_distortion_aberration)
 
-        self.box.setLayout(vbox)
+        self.box = vbox
         vbox = self.box.layout()
         hbox = QHBoxLayout()
         hbox.addWidget(self.flabel_table)
@@ -706,40 +717,40 @@ class LensGUI(ComponentGUIWrapper):
             )
         ]
 
-        # Add spherical dots for z1 and z2 planes
-        z = Z_ORIENT * self.lens.z
-        z1 = Z_ORIENT * self.lens.z1
-        z2 = Z_ORIENT * self.lens.z2
-        dot_size = 10  # Adjust the size of the dot as needed
-        z1_color = (1, 0, 0, 1)
-        z2_color = (1, 0, 1, 0)
+        # # Add spherical dots for z1 and z2 planes
+        # z = Z_ORIENT * self.lens.z
+        # z1 = Z_ORIENT * self.lens.z1
+        # z2 = Z_ORIENT * self.lens.z2
+        # dot_size = 10  # Adjust the size of the dot as needed
+        # z1_color = (1, 0, 0, 1)
+        # z2_color = (1, 0, 1, 0)
 
-        z1_dot = gl.GLScatterPlotItem(
-            pos=np.array([[0, 0, z + z1]]),
-            size=dot_size,
-            color=z1_color,
-        )
-        z2_dot = gl.GLScatterPlotItem(
-            pos=np.array([[0, 0, z + z2]]),
-            size=dot_size,
-            color=z2_color,
-        )
+        # z1_dot = gl.GLScatterPlotItem(
+        #     pos=np.array([[0, 0, z + z1]]),
+        #     size=dot_size,
+        #     color=z1_color,
+        # )
+        # z2_dot = gl.GLScatterPlotItem(
+        #     pos=np.array([[0, 0, z + z2]]),
+        #     size=dot_size,
+        #     color=z2_color,
+        # )
 
-        # Add text items for z1 and z2 dots
-        z1_text = gl.GLTextItem(
-            pos=np.array([0, 0, z + z1]),
-            text=f"z1 {self.component.name}",
-            color='w',
-        )
-        z2_text = gl.GLTextItem(
-            pos=np.array([0, 0, z + z2]),
-            text=f"z2 {self.component.name}",
-            color='w',
-        )
+        # # Add text items for z1 and z2 dots
+        # z1_text = gl.GLTextItem(
+        #     pos=np.array([0, 0, z + z1]),
+        #     text=f"z1 {self.component.name}",
+        #     color='w',
+        # )
+        # z2_text = gl.GLTextItem(
+        #     pos=np.array([0, 0, z + z2]),
+        #     text=f"z2 {self.component.name}",
+        #     color='w',
+        # )
 
-        lens_geom.extend([z1_dot, z2_dot, z1_text, z2_text])
-        lens_geom.extend([z1_dot, z2_dot])
-        
+        # lens_geom.extend([z1_dot, z2_dot, z1_text, z2_text])
+        # lens_geom.extend([z1_dot, z2_dot])
+
         return lens_geom
 
 
@@ -781,14 +792,14 @@ class PerfectLensGUI(LensGUI):
             insert_into=vbox, decimals=2)
 
         self.fslider.valueChanged.connect(self.set_f)
-        self.box.setLayout(vbox)
+        self.box = vbox
 
         self.mslider, _ = labelled_slider(
             self.perfectlens._m, -5., 5., name="Magnification",
             insert_into=vbox, decimals=2,
         )
         self.mslider.valueChanged.connect(self.set_m)
-        self.box.setLayout(vbox)
+        self.box = vbox
 
         # self.flabel_table = QLabel('Focal Length = ' + f"{self.perfectlens.f:.2f}")
         # self.flabel_table.setMinimumWidth(80)
@@ -923,7 +934,7 @@ class AberratedLensGUI(PerfectLensGUI):
         )
         self.distortionslider.valueChanged.connect(self.set_distortion_aberration)
 
-        self.box.setLayout(vbox)
+        self.box = vbox
         vbox = self.box.layout()
 
         return self
@@ -945,7 +956,7 @@ class SourceGUI(ComponentGUIWrapper):
             self.xangleslider.value(),
         )
         self.try_update()
-        
+
     @Slot(float)
     def set_centre(self, val):
         self.beam.centre_yx = (
@@ -955,19 +966,25 @@ class SourceGUI(ComponentGUIWrapper):
         self.try_update()
 
     def _build(self):
-        num_rays = 64
-        beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
-        
-        beam_centre_y, beam_centre_x = self.beam.centre_yx
+        self._build_rayslider()
+        self._build_tiltsliders()
+        self._build_shiftsliders()
 
-        self.rayslider, _ = labelled_slider(
-            num_rays, 1, 4096, name="Number of Rays"
+    def _build_rayslider(self, into=None):
+        num_rays = 64
+
+        self.rayslider, self.raysliderbox = labelled_slider(
+            num_rays, 1, 4096, name="Number of Rays", tick_interval=64,
+            insert_into=into,
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
+    def _build_tiltsliders(self, into=None):
         common_args = dict(
             vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
+            insert_into=into,
         )
+        beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
         self.xangleslider, _ = labelled_slider(
             value=beam_tilt_x, name="Beam Tilt X", **common_args
         )
@@ -977,7 +994,13 @@ class SourceGUI(ComponentGUIWrapper):
 
         self.xangleslider.valueChanged.connect(self.set_tilt)
         self.yangleslider.valueChanged.connect(self.set_tilt)
-        
+
+    def _build_shiftsliders(self, into=None):
+        common_args = dict(
+            vmin=-0.1, vmax=0.1, decimals=2,
+            insert_into=into,
+        )
+        beam_centre_y, beam_centre_x = self.beam.centre_yx
         self.xcentreslider, _ = labelled_slider(
             value=beam_centre_x, name="Beam Centre X", **common_args
         )
@@ -1036,7 +1059,6 @@ class ParallelBeamGUI(SourceGUI):
         vbox = QVBoxLayout()
 
         self._build()
-
         vbox.addWidget(self.rayslider)
 
         beam_radius = self.beam.radius
@@ -1049,7 +1071,7 @@ class ParallelBeamGUI(SourceGUI):
         hbox.addWidget(self.xangleslider)
         hbox.addWidget(self.yangleslider)
         vbox.addLayout(hbox)
-        self.box.setLayout(vbox)
+        self.box = vbox
         return self
 
     def _get_geom(self):
@@ -1101,35 +1123,33 @@ class GaussBeamGUI(SourceGUI):
 
         vbox = QVBoxLayout()
 
-        self._build()
-
-        vbox.addWidget(self.rayslider)
+        self._build_rayslider(into=vbox)
 
         beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
-            beam_radius, 0.001, 1., name='Beam Radius', insert_into=vbox, decimals=3
+            beam_radius, 0.001, 1., name='Beam Radius', insert_into=vbox,
+            decimals=3, tick_interval=0.1
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
         wo = self.beam.wo
         self.woslider, _ = labelled_slider(
-            wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox, decimals=3
+            wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox,
+            decimals=3, tick_interval=0.1
         )
         self.woslider.valueChanged.connect(self.set_wo)
 
         beamsemiangle = self.beam.semi_angle
         self.beamsemiangleslider, _ = labelled_slider(
-            beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox, decimals=3
+            beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox,
+            decimals=3, tick_interval=0.1,
         )
         self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.xangleslider)
-        hbox.addWidget(self.yangleslider)
-        hbox.addWidget(self.xcentreslider)
-        hbox.addWidget(self.ycentreslider)
-        vbox.addLayout(hbox)
-        self.box.setLayout(vbox)
+        self._build_tiltsliders(into=vbox)
+        self._build_shiftsliders(into=vbox)
+
+        self.box = vbox
         return self
 
     def _get_geom(self):
@@ -1184,7 +1204,7 @@ class PointBeamGUI(SourceGUI):
         hbox.addWidget(self.xcentreslider)
         hbox.addWidget(self.ycentreslider)
         vbox.addLayout(hbox)
-        self.box.setLayout(vbox)
+        self.box = vbox
 
         return self
 
@@ -1402,7 +1422,7 @@ class STEMSampleGUI(SampleGUI):
         vbox.addLayout(x_hbox)
         vbox.addLayout(y_hbox)
 
-        self.box.setLayout(vbox)
+        self.box = vbox
         return self
 
     def _get_image(self):
@@ -1570,7 +1590,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         # hbox.addWidget(self.usedefratio)
         # vbox.addLayout(hbox)
 
-        self.box.setLayout(vbox)
+        self.box = vbox
 
         hbox = QHBoxLayout()
 
@@ -1772,7 +1792,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.rotationslider.valueChanged.connect(self.set_rotation)
         vbox.addLayout(hbox)
 
-        self.box.setLayout(vbox)
+        self.box = vbox
         return self
 
     def _get_image(self):
@@ -1823,7 +1843,7 @@ class ApertureGUI(LensGUI):
         )
         vbox.addLayout(hbox)
 
-        self.box.setLayout(vbox)
+        self.box = vbox
         return self
 
 
@@ -1884,7 +1904,7 @@ class BiprismGUI(ComponentGUIWrapper):
         self.rotation_slider.valueChanged.connect(self.set_rotation)
 
         vbox.addLayout(hbox)
-        self.box.setLayout(vbox)
+        self.box = vbox
 
         return self
 
