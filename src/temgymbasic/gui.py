@@ -644,31 +644,31 @@ class LensGUI(ComponentGUIWrapper):
 
         if self.lens.aber_coeffs:
             self.sphericalslider, _ = labelled_slider(
-                self.lens.aber_coeffs[0], -1., 1., name="Spherical Aberration",
+                self.lens.aber_coeffs[0], -1000, 1000, name="Spherical Aberration",
                 insert_into=vbox, decimals=2,
             )
             self.sphericalslider.valueChanged.connect(self.set_spherical_aberration)
 
             self.comaslider, _ = labelled_slider(
-                self.lens.aber_coeffs[1], -1., 1., name="Coma",
+                self.lens.aber_coeffs[1], -1000, 1000, name="Coma",
                 insert_into=vbox, decimals=2,
             )
             self.comaslider.valueChanged.connect(self.set_coma_aberration)
 
             self.astigmatismslider, _ = labelled_slider(
-                self.lens.aber_coeffs[2], -1., 1., name="Astigmatism",
+                self.lens.aber_coeffs[2], -1000, 1000, name="Astigmatism",
                 insert_into=vbox, decimals=2,
             )
             self.astigmatismslider.valueChanged.connect(self.set_astigmatism_aberration)
 
             self.fieldcurvatureslider, _ = labelled_slider(
-                self.lens.aber_coeffs[3], -1., 1., name="Field Curvature",
+                self.lens.aber_coeffs[3], -1000, 1000, name="Field Curvature",
                 insert_into=vbox, decimals=2,
             )
             self.fieldcurvatureslider.valueChanged.connect(self.set_field_curvature_aberration)
 
             self.distortionslider, _ = labelled_slider(
-                self.lens.aber_coeffs[4], -1., 1., name="Distortion",
+                self.lens.aber_coeffs[4], -1000, 1000, name="Distortion",
                 insert_into=vbox, decimals=2,
             )
             self.distortionslider.valueChanged.connect(self.set_distortion_aberration)
