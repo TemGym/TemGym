@@ -93,14 +93,14 @@ def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
 
         num_endpoints = r1.num_display
         sl = slice(idx, idx + num_endpoints * 2, 2)
-        vertices[sl, 0] = r1.x_display
-        vertices[sl, 1] = r1.y_display
+        vertices[sl, 0] = r1.x_central
+        vertices[sl, 1] = r1.y_central
         vertices[sl, 2] = r1.z * z_mult
         sl = slice(1 + idx, 1 + idx + num_endpoints * 2, 2)
         # Relies on the fact that indexing
         # with None creates a new axis, only
-        vertices[sl, 0] = r0.x_display[r1.mask_display].ravel()
-        vertices[sl, 1] = r0.y_display[r1.mask_display].ravel()
+        vertices[sl, 0] = r0.x_central[r1.mask_display].ravel()
+        vertices[sl, 1] = r0.y_central[r1.mask_display].ravel()
         vertices[sl, 2] = r0.z * z_mult
         idx += num_endpoints * 2
         return idx
@@ -410,6 +410,11 @@ def fibonacci_beam_gauss_rayset(
     # Central coords
     r[0] = xp.repeat(x, 5)
     r[2] = xp.repeat(y, 5)
+
+    # Semi Angle addition to each ray
+    r[1] += xp.repeat(dx, 5)
+    r[3] += xp.repeat(dy, 5)
+
     # Offset in x
     r[0, 1::5] += dPx
     # Offset in y
@@ -418,10 +423,6 @@ def fibonacci_beam_gauss_rayset(
     r[1, 3::5] += dHx
     # Slope in y from origin
     r[3, 4::5] += dHy
-
-    # Semi Angle addition to each ray
-    r[1, :] += dx
-    r[3, :] += dy
 
     return r
 
