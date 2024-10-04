@@ -461,17 +461,8 @@ def test_aberrated_matrix_lens_spherical_aberration(x, dx, y, dy):
     out_rays = tuple(lens.step(lens_rays))[0]
     propagated_rays = out_rays.propagate(z_i)
     
-    dx = x_i + -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
-                   1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
-                   1.0*D*x_a*(x_o**2 + y_o**2) + 
-                   E*x_o*(x_o**2 + y_o**2) + 
-                   2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
-    dy = y_i + -R*(1.0*B*y_a*(x_a**2 + y_a**2) + 
-                   1.0*C*y_o*(x_a*x_o + y_a*y_o) + 
-                   1.0*D*y_a*(x_o**2 + y_o**2) + 
-                   E*y_o*(x_o**2 + y_o**2) + 
-                   2*F*y_a*(x_a*x_o + y_a*y_o) + 
-                   F*y_o*(x_a**2 + y_a**2))
+    dx = x_i + -R*(1.0 * B*x_a*(x_a**2 + y_a**2))
+    dy = y_i + -R*(1.0 * B*y_a*(x_a**2 + y_a**2))
     
     # First check that the lens has applied the correct deflection to rays
     xp.testing.assert_allclose(propagated_rays.x, dx, atol = 1e-9)
@@ -517,17 +508,8 @@ def test_aberrated_matrix_lens_coma(x, dx, y, dy):
     out_rays = tuple(lens.step(lens_rays))[0]
     propagated_rays = out_rays.propagate(z_i)
     
-    dx = x_i + -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
-                   1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
-                   1.0*D*x_a*(x_o**2 + y_o**2) + 
-                   E*x_o*(x_o**2 + y_o**2) + 
-                   2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
-    dy = y_i + -R*(1.0*B*y_a*(x_a**2 + y_a**2) + 
-                   1.0*C*y_o*(x_a*x_o + y_a*y_o) + 
-                   1.0*D*y_a*(x_o**2 + y_o**2) + 
-                   E*y_o*(x_o**2 + y_o**2) + 
-                   2*F*y_a*(x_a*x_o + y_a*y_o) + 
-                   F*y_o*(x_a**2 + y_a**2))
+    dx = x_i + -R*(2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
+    dy = y_i + -R*(2*F*y_a*(x_a*x_o + y_a*y_o) + F*y_o*(x_a**2 + y_a**2))
     
     # First check that the lens has applied the correct deflection to rays
     xp.testing.assert_allclose(propagated_rays.x, dx, atol = 1e-9)

@@ -243,8 +243,8 @@ class Lens(Component):
                 rays.dy += xp.repeat(ny / nz, 5)
                 rays.path_length += xp.repeat(W, 5)
             else:
-                rays.dx = nx / nz
-                rays.dy = ny / nz
+                rays.dx += nx / nz
+                rays.dy += ny / nz
                 rays.path_length += W
             
 
