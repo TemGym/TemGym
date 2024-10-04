@@ -31,7 +31,7 @@ from .utils import (
     get_array_module,
     P2R, R2P,
     circular_beam,
-    fibonacci_beam_gauss_rayset,
+    gauss_beam_rayset,
     point_beam,
     calculate_direction_cosines,
     calculate_wavelength,
@@ -52,7 +52,7 @@ class Component(abc.ABC):
 
         self._name = name
         self._z = z
-        
+
     def _validate_component(self):
         pass
 
@@ -101,11 +101,11 @@ class Lens(Component):
                  z2: Optional[Tuple[float]] = None,
                  aber_coeffs: Optional[Tuple[float]] = None,
                  name: Optional[str] = None):
-        super().__init__(z=z, name=name) 
+        super().__init__(z=z, name=name)
 
         self.aber_coeffs = aber_coeffs
         self._z1, self._z2, self._m, self._f = self.initialise_m_and_image_planes(z1, z2, m, f)
-        
+
     @property
     def f(self) -> float:
         return self._f
@@ -129,22 +129,22 @@ class Lens(Component):
     @z2.setter
     def z2(self, z2: float):
         self._z2 = z2
-        
+
     @property
     def ffp(self) -> float:
         return self.z - abs(self._f)
-    
+
     def initialise_m_and_image_planes(self, z1, z2, m, f, xp=np):
-        
-        #Initialise numerical aperture - mostly used for perfect and fourier lens
+
+        # Initialise numerical aperture - mostly used for perfect and fourier lens
         self.NA1 = 0.2
         self.NA2 = 0.2
-        
+
         # If statements to decide how to define z1, z2 and magnification.
         # We check if magnification is too small or large,
         # and thus a finite-long conjugate approximation is applied
         if ((z1 and z2) is None) and (m is None):
-            assert('Should have either m defined, or both z1 and z2 - choosing z1 = -1.0 as default')
+            assert ('Should have either m defined, or both z1 and z2 - choosing z1=-1.0 as default')
             z1 = -1.0
 
         if ((z1 and z2) is None) and (m is not None):
@@ -163,7 +163,7 @@ class Lens(Component):
             elif z1 <= 1e-10:
                 m = 1e10
             f = (1 / z2 - 1 / z1) ** -1
-            
+
         elif (m is None) and (z1 is not None) and (z2 is None) and (f is not None):
             z2 = (1 / f + 1 / z1) ** -1
         elif (
@@ -832,18 +832,19 @@ class GaussBeam(Source):
     ) -> Rays:
         wavelength = calculate_wavelength(self.voltage)
 
-        if random:
-            raise NotImplementedError
-        else:
-            xp = get_array_module(backend)
-            r = fibonacci_beam_gauss_rayset(
-                num_rays,
-                self.radius,
-                self.semi_angle,
-                self.wo,
-                wavelength,
-                xp=xp,
-            )
+        # if random:
+        #     raise NotImplementedError
+        # else:
+        xp = get_array_module(backend)
+        r = gauss_beam_rayset(
+            num_rays,
+            self.radius,
+            self.semi_angle,
+            self.wo,
+            wavelength,
+            random=random,
+            xp=xp,
+        )
 
         return self._make_rays(r, backend=backend)
 
