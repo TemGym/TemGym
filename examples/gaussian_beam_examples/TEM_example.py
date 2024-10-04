@@ -63,13 +63,13 @@ components = (
     comp.Lens(
         z=0.7,
         z1=-0.15,
-        z2=0.2,
+        f=0.12,
         name='Projector Lens 1',
     ),
     comp.Lens(
         z=1.0,
         z1=-0.1,
-        z2=0.5,
+        f=0.07,
         name='Projector Lens 2',
     ),
     comp.AccumulatingDetector(
@@ -83,8 +83,9 @@ components = (
 
 
 model = Model(components, backend='gpu')
-#rays = tuple(model.run_iter(num_rays=n_rays, random = False))
-AppWindow = QApplication(sys.argv)
-viewer = TemGymWindow(model)
-viewer.show()
-AppWindow.exec()
+rays = tuple(model.run_iter(num_rays=n_rays, random = False))
+image = model.detector.get_image(rays[-1])
+# AppWindow = QApplication(sys.argv)
+# viewer = TemGymWindow(model)
+# viewer.show()
+# AppWindow.exec()
