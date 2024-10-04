@@ -113,6 +113,22 @@ class Lens(Component):
     @f.setter
     def f(self, f: float):
         self._f = f
+
+    @property
+    def z1(self) -> float:
+        return self._z1
+
+    @z1.setter
+    def z1(self, z1: float):
+        self._z1 = z1
+
+    @property
+    def z2(self) -> float:
+        return self._z2
+
+    @z2.setter
+    def z2(self, z2: float):
+        self._z2 = z2
         
     @property
     def ffp(self) -> float:
