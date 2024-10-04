@@ -60,7 +60,7 @@ components = (
     ),
 )
 
-model = Model(components, backend='cpu')
+model = Model(components, backend='gpu')
 #rays = tuple(model.run_iter(num_rays=n_rays, random = False))
 AppWindow = QApplication(sys.argv)
 viewer = TemGymWindow(model)
