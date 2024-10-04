@@ -403,7 +403,7 @@ class TemGymWindow(QMainWindow):
             image = self.model.detector.get_image(
                 all_rays[-1]
             )
-            self.spot_img.setImage(image.T)
+            self.spot_img.setImage(image.T, autoLevels=False)
 
     def add_geometry(self):
         self.tem_window.clear()
