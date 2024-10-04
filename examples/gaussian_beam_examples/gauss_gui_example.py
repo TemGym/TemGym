@@ -31,7 +31,7 @@ z_i = lens_dist + prop_dist
 #m = 1e-11
 focal = 3
 
-f = (1 / z_i - 1 / z_o) **-1
+f = (1 / z_i - 1 / z_o) ** -1
 
 centre_yx = [0.0, 0.0]
 coeffs = [0., 0., 0., 0., 0.]
@@ -60,7 +60,7 @@ components = (
     ),
 )
 
-model = Model(components, backend='gpu')
+model = Model(components, backend='cpu')
 #rays = tuple(model.run_iter(num_rays=n_rays, random = False))
 AppWindow = QApplication(sys.argv)
 viewer = TemGymWindow(model)
