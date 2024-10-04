@@ -366,8 +366,8 @@ class TemGymWindow(QMainWindow):
         scroll.setWidgetResizable(1)
         content = QWidget()
         scroll.setWidget(content)
-        self.table_layout = QVBoxLayout(content)
-        self.table_dock.addWidget(scroll, 1, 0)
+        # self.table_layout = QVBoxLayout(content)
+        # self.table_dock.addWidget(scroll, 1, 0)
 
         # Create the window which houses the GUI
         scroll = QScrollArea()
@@ -382,7 +382,7 @@ class TemGymWindow(QMainWindow):
 
         for gui_component in self.gui_components:
             self.gui_layout.addWidget(gui_component.box)
-            self.table_layout.addWidget(gui_component.table)
+            # self.table_layout.addWidget(gui_component.table)
 
         self.gui_layout.addStretch()
 
