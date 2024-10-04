@@ -29,9 +29,11 @@ prop_dist = 5
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
 #m = 1e-11
-focal = 4
+focal = 3
 
-centre_yx = [0.1, 0.0]
+f = (1 / z_i - 1 / z_o) **-1
+
+centre_yx = [0.0, 0.0]
 coeffs = [0., 0., 0., 0., 0.]
 components = (
     comp.GaussBeam(
@@ -59,8 +61,8 @@ components = (
 )
 
 model = Model(components, backend='gpu')
-rays = tuple(model.run_iter(num_rays=n_rays, random = False))
-# AppWindow = QApplication(sys.argv)
-# viewer = TemGymWindow(model)
-# viewer.show()
-# AppWindow.exec()
+#rays = tuple(model.run_iter(num_rays=n_rays, random = False))
+AppWindow = QApplication(sys.argv)
+viewer = TemGymWindow(model)
+viewer.show()
+AppWindow.exec()
