@@ -698,9 +698,9 @@ class LensGUI(ComponentGUIWrapper):
         ]
 
         # Add spherical dots for z1 and z2 planes
-        z = self.lens.z
-        z1 = self.lens.z1
-        z2 = self.lens.z2
+        z = Z_ORIENT * self.lens.z
+        z1 = Z_ORIENT * self.lens.z1
+        z2 = Z_ORIENT * self.lens.z2
         dot_size = 10  # Adjust the size of the dot as needed
         z1_color = (1, 0, 0, 1)
         z2_color = (1, 0, 1, 0)
