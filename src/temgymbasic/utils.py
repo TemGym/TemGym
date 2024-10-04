@@ -340,15 +340,15 @@ def fibonacci_spiral(
     return y, x
 
 
-def random_coords(num: int, max_r: float, xp=np, with_radii: bool = False):
+def random_coords(num: int, xp=np):
     # generate random points uniformly sampled in x/y
-    # within a centred circle of radius max_r
+    # within a centred circle of radius 0.5
     # return (y, x)
     yx = xp.random.uniform(
-        -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / np.pi
+        -1, 1, size=(int(num * 1.28), 2)  # 4 / np.pi
     )
     radii = xp.sqrt((yx ** 2).sum(axis=1))
-    mask = radii < max_r
+    mask = radii < 1
     yx = yx[mask, :]
     return (
         yx[:, 0],
@@ -378,7 +378,7 @@ def circular_beam(
         Ray position & slope matrix
     '''
     if random:
-        y, x = random_coords(num_rays_approx, outer_radius)
+        y, x = random_coords(num_rays_approx) * outer_radius
     else:
         y, x = concentric_rings(num_rays_approx, outer_radius)
     r = initial_r(y.shape[0])
@@ -404,8 +404,11 @@ def gauss_beam_rayset(
     dHy = div
 
     if random:
-        y, x = random_coords(num_gauss_approx, outer_radius, xp=xp)
-        dy, dx = random_coords(num_gauss_approx, semi_angle, xp=xp)
+        y, x = random_coords(num_gauss_approx, xp=xp)
+
+        dy, dx = y * semi_angle, x * semi_angle
+        y, x = y * outer_radius, x * outer_radius
+
     else:
         y, x = fibonacci_spiral(num_gauss_approx, outer_radius, xp=xp)
         dy, dx = fibonacci_spiral(num_gauss_approx, semi_angle, xp=xp)
@@ -455,7 +458,7 @@ def point_beam(
         Ray position & slope matrix
     '''
     if random:
-        y, x = random_coords(num_rays_approx, semiangle, with_radii=True)
+        y, x = random_coords(num_rays_approx) * semiangle
     else:
         y, x = concentric_rings(num_rays_approx, semiangle)
     r = initial_r(y.size)
