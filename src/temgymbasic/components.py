@@ -236,13 +236,18 @@ class Lens(Component):
             y2_aber = y2 + eps_y
             
             nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
-
-            rays.dx += xp.repeat(nx / nz, 5)
-            rays.dy += xp.repeat(ny / nz, 5)
-            
             W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
-            rays.path_length +=  xp.repeat(W, 5)
-        
+            
+            if isinstance(rays, GaussianRays):
+                rays.dx += xp.repeat(nx / nz, 5)
+                rays.dy += xp.repeat(ny / nz, 5)
+                rays.path_length += xp.repeat(W, 5)
+            else:
+                rays.dx = nx / nz
+                rays.dy = ny / nz
+                rays.path_length += W
+            
+
         # Just straightforward matrix multiplication
         yield rays.new_with(
             data=rays.data,
