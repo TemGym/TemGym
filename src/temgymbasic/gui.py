@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QPushButton,
     QComboBox,
+    QButtonGroup,
+    QRadioButton,
 )
 from PySide6.QtGui import (
     QKeyEvent,
@@ -390,7 +392,7 @@ class TemGymWindow(QMainWindow):
     def update_rays(self):
         all_rays = tuple(self.model.run_iter(
             self.gui_components[0].num_rays,
-            random=False,
+            random=True,
         ))
 
         vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
@@ -403,7 +405,14 @@ class TemGymWindow(QMainWindow):
             image = self.model.detector.get_image(
                 all_rays[-1]
             )
-            self.spot_img.setImage(image.T)
+            detector_gui = self.gui_components[-1]
+            if detector_gui is not None:
+                if detector_gui.display_type == 'amplitude':
+                    self.spot_img.setImage(np.abs(image.T))
+                elif detector_gui.display_type == 'phase':
+                    self.spot_img.setImage(np.angle(image.T))
+                elif detector_gui.display_type == 'intensity':
+                    self.spot_img.setImage(np.abs(image.T) ** 2)
 
     def add_geometry(self):
         self.tem_window.clear()
@@ -1009,7 +1018,6 @@ class ParallelBeamGUI(SourceGUI):
         self.beam.radius = val
         self.try_update(geom=True)
 
-
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
@@ -1022,7 +1030,6 @@ class ParallelBeamGUI(SourceGUI):
             self.xcentreslider.setValue(self.beam.centre_yx[1])
         with blocker(self.ycentreslider):
             self.ycentreslider.setValue(self.beam.centre_yx[0])
-
 
     def build(self) -> Self:
 
@@ -1062,7 +1069,7 @@ class GaussBeamGUI(SourceGUI):
     def set_radius(self, val):
         self.beam.radius = val
         self.try_update(geom=True)
-        
+
     @Slot(float)
     def set_semi_angle(self, val):
         self.beam.semi_angle = val
@@ -1109,7 +1116,7 @@ class GaussBeamGUI(SourceGUI):
             wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox, decimals=3
         )
         self.woslider.valueChanged.connect(self.set_wo)
-        
+
         beamsemiangle = self.beam.semi_angle
         self.beamsemiangleslider, _ = labelled_slider(
             beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox, decimals=3
@@ -1633,6 +1640,11 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
 
 
 class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._display_type = 'intensity'
+
     @property
     def detector(self) -> 'comp.Detector':
         return self.component
@@ -1650,6 +1662,22 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
     @Slot(bool)
     def set_flip_y(self, val: bool):
         self.detector.flip_y = bool(val)
+        self.try_update()
+
+    @property
+    def display_type(self) -> str:
+        return self._display_type
+
+    @display_type.setter
+    def display_type(self, val: str):
+        if val not in ['amplitude', 'phase', 'intensity']:
+            raise ValueError("display_type must be 'amplitude', 'phase', or 'intensity'")
+        self._display_type = val
+        self.try_update()
+
+    @Slot(str)
+    def set_detector_display_type(self, val: str):
+        self.display_type = val
         self.try_update()
 
     @Slot(str)
@@ -1700,6 +1728,31 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
         vbox.addLayout(hbox)
 
+        self.display_type_group = QButtonGroup(self.box)
+        self.amplitude_radio = QRadioButton("Amplitude")
+        self.phase_radio = QRadioButton("Phase")
+        self.intensity_radio = QRadioButton("Intensity")
+
+        self.display_type_group.addButton(self.amplitude_radio)
+        self.display_type_group.addButton(self.phase_radio)
+        self.display_type_group.addButton(self.intensity_radio)
+
+        if self.display_type == 'amplitude':
+            self.amplitude_radio.setChecked(True)
+        elif self.display_type == 'phase':
+            self.phase_radio.setChecked(True)
+        else:
+            self.intensity_radio.setChecked(True)
+
+        self.amplitude_radio.toggled.connect(lambda: self.set_detector_display_type('amplitude'))
+        self.phase_radio.toggled.connect(lambda: self.set_detector_display_type('phase'))
+        self.intensity_radio.toggled.connect(lambda: self.set_detector_display_type('intensity'))
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.amplitude_radio)
+        hbox.addWidget(self.phase_radio)
+        hbox.addWidget(self.intensity_radio)
+        vbox.addLayout(hbox)
         hbox = QHBoxLayout()
         self.flipy_cbox = QCheckBox("Flip-y")
         self.flipy_cbox.setChecked(self.detector.flip_y)

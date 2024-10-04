@@ -234,6 +234,7 @@ def initial_r_rayset(num_gauss: int, xp=np):
     r[4, :] = 1.
     return r
 
+
 @njit
 def multi_cumsum_inplace(values, partitions, start):
     part_idx = 0
@@ -275,10 +276,10 @@ def concentric_rings(
     div_angle = 2 * np.pi / points_per_ring
 
     params = np.stack((radii, div_angle), axis=0)
-    
-    #Cupy gave an error here saying that points_per_ring must not be an array
+
+    # Cupy gave an error here saying that points_per_ring must not be an array
     repeats = points_per_ring.tolist()
-    
+
     all_params = np.repeat(params, repeats, axis=-1)
     multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
 
@@ -339,14 +340,14 @@ def fibonacci_spiral(
     return y, x
 
 
-def random_coords(num: int, max_r: float, with_radii: bool = False):
+def random_coords(num: int, max_r: float, xp=np, with_radii: bool = False):
     # generate random points uniformly sampled in x/y
     # within a centred circle of radius max_r
     # return (y, x)
-    yx = np.random.uniform(
+    yx = xp.random.uniform(
         -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / np.pi
     )
-    radii = np.sqrt((yx ** 2).sum(axis=1))
+    radii = xp.sqrt((yx ** 2).sum(axis=1))
     mask = radii < max_r
     yx = yx[mask, :]
     return (
@@ -386,13 +387,14 @@ def circular_beam(
     return r
 
 
-def fibonacci_beam_gauss_rayset(
+def gauss_beam_rayset(
     num_gauss_approx: int,
     outer_radius: float,
     semi_angle: float,
     wo: float,
     wavelength: float,
     xp=np,
+    random: bool = False,
 ) -> NDArray:
 
     div = wavelength / (np.pi * wo)
@@ -401,9 +403,13 @@ def fibonacci_beam_gauss_rayset(
     dHx = div
     dHy = div
 
-    y, x = fibonacci_spiral(num_gauss_approx, outer_radius, xp=xp)
-    dy, dx = fibonacci_spiral(num_gauss_approx, semi_angle, xp=xp)
-    
+    if random:
+        y, x = random_coords(num_gauss_approx, outer_radius, xp=xp)
+        dy, dx = random_coords(num_gauss_approx, semi_angle, xp=xp)
+    else:
+        y, x = fibonacci_spiral(num_gauss_approx, outer_radius, xp=xp)
+        dy, dx = fibonacci_spiral(num_gauss_approx, semi_angle, xp=xp)
+
     # this multiplies n_rays by 5
     r = initial_r_rayset(y.shape[0], xp=xp)
 
