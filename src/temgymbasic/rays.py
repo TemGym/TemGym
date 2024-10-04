@@ -131,11 +131,11 @@ class Rays:
         return self.num
 
     @property
-    def x_display(self):
+    def x_central(self):
         return self.x
 
     @property
-    def y_display(self):
+    def y_central(self):
         return self.y
 
     @property
@@ -206,8 +206,8 @@ class Rays:
     ) -> Tuple[NDArray, NDArray]:
         """Returns in yy, xx!"""
         xx, yy = get_pixel_coords(
-            rays_x=self.x_display,
-            rays_y=self.y_display,
+            rays_x=self.x_central,
+            rays_y=self.y_central,
             shape=shape,
             pixel_size=pixel_size,
             flip_y=flip_y,
@@ -274,12 +274,20 @@ class GaussianRays(Rays):
     wo: Optional[NDArray] = None
 
     @property
-    def x_display(self):
+    def x_central(self):
         return self.x[0::5]
 
     @property
-    def y_display(self):
+    def dx_central(self):
+        return self.dx[0::5]
+
+    @property
+    def y_central(self):
         return self.y[0::5]
+    
+    @property
+    def dy_central(self):
+        return self.dy[0::5]
 
     @property
     def mask_display(self):
@@ -289,4 +297,4 @@ class GaussianRays(Rays):
 
     @property
     def num_display(self):
-        return self.x_display.size
+        return self.x_central.size
