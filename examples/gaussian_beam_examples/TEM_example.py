@@ -83,9 +83,9 @@ components = (
 
 
 model = Model(components, backend='gpu')
-rays = tuple(model.run_iter(num_rays=n_rays, random = False))
-image = model.detector.get_image(rays[-1])
-# AppWindow = QApplication(sys.argv)
-# viewer = TemGymWindow(model)
-# viewer.show()
-# AppWindow.exec()
+# rays = tuple(model.run_iter(num_rays=n_rays, random = False))
+# image = model.detector.get_image(rays[-1])
+AppWindow = QApplication(sys.argv)
+viewer = TemGymWindow(model)
+viewer.show()
+AppWindow.exec()
