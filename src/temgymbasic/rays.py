@@ -129,14 +129,22 @@ class Rays:
     @property
     def num_display(self):
         return self.num
-
+    
     @property
     def x_central(self):
         return self.x
+    
+    @property
+    def dx_central(self):
+        return self.dx
 
     @property
     def y_central(self):
         return self.y
+    
+    @property
+    def dy_central(self):
+        return self.dy
 
     @property
     def mask_display(self):
