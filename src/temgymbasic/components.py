@@ -205,39 +205,43 @@ class Lens(Component):
         z2 = self._z2
         
         #Rays at lens plane
-        u1 = rays.x
-        v1 = rays.y
+        u1 = rays.x_central
+        v1 = rays.y_central
+        
+        du1 = rays.dx_central
+        dv1 = rays.dy_central
         
         #Rays at object plane
-        x1 = rays.x + rays.dx * self._z1
-        y1 = rays.y + rays.dy * self._z1
+        x1 = u1 + du1 * self._z1
+        y1 = v1 + dv1 * self._z1
 
         psi_a = np.arctan2(v1, u1)
         psi_o = np.arctan2(y1, x1)
         psi = psi_a - psi_o
 
         rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
-
+        rays.path_length =  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
+        
         if self.aber_coeffs:
 
             coeffs = self.aber_coeffs
+            
             # Calculate the aberration in x and y (Approximate R' as the reference sphere radius at image side)
             eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
             
-            W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
-            
-            rays.path_length +=  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f)) + W
-            
-            x2 = rays.x + rays.dx * z2
-            y2 = rays.y + rays.dy * z2
+            x2 = u1 + rays.dx_central * z2
+            y2 = v1 + rays.dy_central * z2
             
             x2_aber = x2 + eps_x
             y2_aber = y2 + eps_y
             
             nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
 
-            rays.dx = nx / nz
-            rays.dy = ny / nz
+            rays.dx += xp.repeat(nx / nz, 5)
+            rays.dy += xp.repeat(ny / nz, 5)
+            
+            W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
+            rays.path_length +=  xp.repeat(W, 5)
         
         # Just straightforward matrix multiplication
         yield rays.new_with(
