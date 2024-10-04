@@ -18,8 +18,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QGroupBox,
     QCheckBox,
-    # QPushButton,
-    # QComboBox,
+    QPushButton,
+    QComboBox,
 )
 from PySide6.QtGui import (
     QKeyEvent,
@@ -256,17 +256,17 @@ class TemGymWindow(QMainWindow):
         self.resize(1600, 1200)
 
         # Create Docks
-        self.tem_dock = Dock("3D View", size=(3, 5))
-        self.detector_dock = Dock("Detector", size=(4, 5))
-        self.gui_dock = Dock("GUI", size=(4, 5))
-        # self.table_dock = Dock("Parameter Table", size=(5, 5))
+        self.tem_dock = Dock("3D View")
+        self.detector_dock = Dock("Detector", size=(5, 5))
+        self.gui_dock = Dock("GUI", size=(10, 3))
+        self.table_dock = Dock("Parameter Table", size=(5, 5))
 
         self.centralWidget = DockArea()
         self.setCentralWidget(self.centralWidget)
         self.centralWidget.addDock(self.tem_dock, "left")
-        self.centralWidget.addDock(self.detector_dock, "right")
+        self.centralWidget.addDock(self.table_dock, "bottom", self.tem_dock)
         self.centralWidget.addDock(self.gui_dock, "right")
-        # self.centralWidget.addDock(self.table_dock, "bottom", self.tem_dock)
+        self.centralWidget.addDock(self.detector_dock, "above", self.table_dock)
 
         # Create the display and the buttons
         self.create3DDisplay()
@@ -303,9 +303,9 @@ class TemGymWindow(QMainWindow):
         # Define Camera Parameters
         self.initial_camera_params = {
             'center': QVector3D(0.0, 0.0, mean_z),
-            'fov': 35,
-            'azimuth': 45.0,
-            'distance': 3 * abs(mean_z),
+            'fov': 25,
+            'azimuth': -45.0,
+            'distance': 5,
             'elevation': 25.0,
         }
 
@@ -366,8 +366,8 @@ class TemGymWindow(QMainWindow):
         scroll.setWidgetResizable(1)
         content = QWidget()
         scroll.setWidget(content)
-        # self.table_layout = QVBoxLayout(content)
-        # self.table_dock.addWidget(scroll, 1, 0)
+        self.table_layout = QVBoxLayout(content)
+        self.table_dock.addWidget(scroll, 1, 0)
 
         # Create the window which houses the GUI
         scroll = QScrollArea()
@@ -378,11 +378,11 @@ class TemGymWindow(QMainWindow):
 
         self.gui_layout = QVBoxLayout(content)
         self.model_gui = self.model.gui_wrapper()(window=self).build()
-        # self.gui_layout.addWidget(self.model_gui.box)
+        self.gui_layout.addWidget(self.model_gui.box)
 
         for gui_component in self.gui_components:
             self.gui_layout.addWidget(gui_component.box)
-            # self.table_layout.addWidget(gui_component.table)
+            self.table_layout.addWidget(gui_component.table)
 
         self.gui_layout.addStretch()
 
@@ -403,7 +403,7 @@ class TemGymWindow(QMainWindow):
             image = self.model.detector.get_image(
                 all_rays[-1]
             )
-            self.spot_img.setImage(image.T, autoLevels=False)
+            self.spot_img.setImage(image.T)
 
     def add_geometry(self):
         self.tem_window.clear()
@@ -434,41 +434,39 @@ class ModelGUI(ComponentGUIWrapper):
         super().__init__(component=component, window=window)
 
     def build(self):
+        vbox = QVBoxLayout()
+
+        self.beamSelect = QComboBox()
+        self.beamSelect.addItem("Parallel Beam")
+        self.beamSelect.addItem("Point Beam")
+        self.beamSelect.addItem("Axial Beam")
+        self.beamSelectLabel = QLabel("Beam type")
+
+        hbox = QHBoxLayout()
+        hbox.addWidget(self.beamSelectLabel)
+        hbox.addWidget(self.beamSelect)
+        vbox.addLayout(hbox)
+
+        self.view_label = QLabel('Set Camera View')
+        self.init_button = QPushButton('Initial View')
+        self.init_button.pressed.connect(self.set_camera_initial)
+        self.x_button = QPushButton('X View')
+        self.x_button.pressed.connect(self.set_camera_x)
+        self.y_button = QPushButton('Y View')
+        self.y_button.pressed.connect(self.set_camera_y)
+
+        hbox_label = QHBoxLayout()
+        hbox_label.addWidget(self.view_label)
+        hbox_push_buttons = QHBoxLayout()
+        hbox_push_buttons.addWidget(self.init_button)
+        hbox_push_buttons.addSpacing(15)
+        hbox_push_buttons.addWidget(self.x_button)
+        hbox_push_buttons.addSpacing(15)
+        hbox_push_buttons.addWidget(self.y_button)
+        vbox.addLayout(hbox_label)
+        vbox.addLayout(hbox_push_buttons)
+        self.box.setLayout(vbox)
         return self
-    # def build(self):
-    #     vbox = QVBoxLayout()
-
-    #     # self.beamSelect = QComboBox()
-    #     # self.beamSelect.addItem("Parallel Beam")
-    #     # self.beamSelect.addItem("Point Beam")
-    #     # self.beamSelect.addItem("Axial Beam")
-    #     # self.beamSelectLabel = QLabel("Beam type")
-
-    #     # hbox = QHBoxLayout()
-    #     # hbox.addWidget(self.beamSelectLabel)
-    #     # hbox.addWidget(self.beamSelect)
-    #     # vbox.addLayout(hbox)
-
-    #     self.view_label = QLabel('Set Camera View')
-    #     self.init_button = QPushButton('Initial View')
-    #     self.init_button.pressed.connect(self.set_camera_initial)
-    #     self.x_button = QPushButton('X View')
-    #     self.x_button.pressed.connect(self.set_camera_x)
-    #     self.y_button = QPushButton('Y View')
-    #     self.y_button.pressed.connect(self.set_camera_y)
-
-    #     hbox_label = QHBoxLayout()
-    #     hbox_label.addWidget(self.view_label)
-    #     hbox_push_buttons = QHBoxLayout()
-    #     hbox_push_buttons.addWidget(self.init_button)
-    #     hbox_push_buttons.addSpacing(15)
-    #     hbox_push_buttons.addWidget(self.x_button)
-    #     hbox_push_buttons.addSpacing(15)
-    #     hbox_push_buttons.addWidget(self.y_button)
-    #     vbox.addLayout(hbox_label)
-    #     vbox.addLayout(hbox_push_buttons)
-    #     self.box.setLayout(vbox)
-    #     return self
 
     @Slot()
     def set_camera_x(self):
@@ -515,11 +513,11 @@ class STEMModelGUI(ModelGUI):
             return window.model
         return None
 
-    # def build(self):
-    #     super().build()
-    #     self.beamSelect.removeItem(2)
-    #     self.beamSelect.removeItem(1)
-    #     return self
+    def build(self):
+        super().build()
+        self.beamSelect.removeItem(2)
+        self.beamSelect.removeItem(1)
+        return self
 
     def sync(self, block: bool = True):
         model = self.model
@@ -699,40 +697,40 @@ class LensGUI(ComponentGUIWrapper):
             )
         ]
 
-        # # Add spherical dots for z1 and z2 planes
-        # z = Z_ORIENT * self.lens.z
-        # z1 = Z_ORIENT * self.lens.z1
-        # z2 = Z_ORIENT * self.lens.z2
-        # dot_size = 10  # Adjust the size of the dot as needed
-        # z1_color = (1, 0, 0, 1)
-        # z2_color = (1, 0, 1, 0)
+        # Add spherical dots for z1 and z2 planes
+        z = Z_ORIENT * self.lens.z
+        z1 = Z_ORIENT * self.lens.z1
+        z2 = Z_ORIENT * self.lens.z2
+        dot_size = 10  # Adjust the size of the dot as needed
+        z1_color = (1, 0, 0, 1)
+        z2_color = (1, 0, 1, 0)
 
-        # z1_dot = gl.GLScatterPlotItem(
-        #     pos=np.array([[0, 0, z + z1]]),
-        #     size=dot_size,
-        #     color=z1_color,
-        # )
-        # z2_dot = gl.GLScatterPlotItem(
-        #     pos=np.array([[0, 0, z + z2]]),
-        #     size=dot_size,
-        #     color=z2_color,
-        # )
+        z1_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, z + z1]]),
+            size=dot_size,
+            color=z1_color,
+        )
+        z2_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, z + z2]]),
+            size=dot_size,
+            color=z2_color,
+        )
 
-        # # Add text items for z1 and z2 dots
-        # z1_text = gl.GLTextItem(
-        #     pos=np.array([0, 0, z + z1]),
-        #     text=f"z1 {self.component.name}",
-        #     color='w',
-        # )
-        # z2_text = gl.GLTextItem(
-        #     pos=np.array([0, 0, z + z2]),
-        #     text=f"z2 {self.component.name}",
-        #     color='w',
-        # )
+        # Add text items for z1 and z2 dots
+        z1_text = gl.GLTextItem(
+            pos=np.array([0, 0, z + z1]),
+            text=f"z1 {self.component.name}",
+            color='w',
+        )
+        z2_text = gl.GLTextItem(
+            pos=np.array([0, 0, z + z2]),
+            text=f"z2 {self.component.name}",
+            color='w',
+        )
 
-        # lens_geom.extend([z1_dot, z2_dot, z1_text, z2_text])
-        # lens_geom.extend([z1_dot, z2_dot])
-
+        lens_geom.extend([z1_dot, z2_dot, z1_text, z2_text])
+        lens_geom.extend([z1_dot, z2_dot])
+        
         return lens_geom
 
 
@@ -938,7 +936,7 @@ class SourceGUI(ComponentGUIWrapper):
             self.xangleslider.value(),
         )
         self.try_update()
-
+        
     @Slot(float)
     def set_centre(self, val):
         self.beam.centre_yx = (
@@ -950,7 +948,7 @@ class SourceGUI(ComponentGUIWrapper):
     def _build(self):
         num_rays = 64
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
-
+        
         beam_centre_y, beam_centre_x = self.beam.centre_yx
 
         self.rayslider, _ = labelled_slider(
@@ -970,7 +968,7 @@ class SourceGUI(ComponentGUIWrapper):
 
         self.xangleslider.valueChanged.connect(self.set_tilt)
         self.yangleslider.valueChanged.connect(self.set_tilt)
-
+        
         self.xcentreslider, _ = labelled_slider(
             value=beam_centre_x, name="Beam Centre X", **common_args
         )
@@ -1011,6 +1009,7 @@ class ParallelBeamGUI(SourceGUI):
         self.beam.radius = val
         self.try_update(geom=True)
 
+
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
@@ -1023,6 +1022,7 @@ class ParallelBeamGUI(SourceGUI):
             self.xcentreslider.setValue(self.beam.centre_yx[1])
         with blocker(self.ycentreslider):
             self.ycentreslider.setValue(self.beam.centre_yx[0])
+
 
     def build(self) -> Self:
 
@@ -1062,7 +1062,7 @@ class GaussBeamGUI(SourceGUI):
     def set_radius(self, val):
         self.beam.radius = val
         self.try_update(geom=True)
-
+        
     @Slot(float)
     def set_semi_angle(self, val):
         self.beam.semi_angle = val
@@ -1109,7 +1109,7 @@ class GaussBeamGUI(SourceGUI):
             wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox, decimals=3
         )
         self.woslider.valueChanged.connect(self.set_wo)
-
+        
         beamsemiangle = self.beam.semi_angle
         self.beamsemiangleslider, _ = labelled_slider(
             beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox, decimals=3
