@@ -901,10 +901,20 @@ class SourceGUI(ComponentGUIWrapper):
             self.xangleslider.value(),
         )
         self.try_update()
+        
+    @Slot(float)
+    def set_centre(self, val):
+        self.beam.centre_yx = (
+            self.ycentreslider.value(),
+            self.xcentreslider.value(),
+        )
+        self.try_update()
 
     def _build(self):
         num_rays = 64
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
+        
+        beam_centre_y, beam_centre_x = self.beam.centre_yx
 
         self.rayslider, _ = labelled_slider(
             num_rays, 1, 4096, name="Number of Rays"
@@ -923,6 +933,16 @@ class SourceGUI(ComponentGUIWrapper):
 
         self.xangleslider.valueChanged.connect(self.set_tilt)
         self.yangleslider.valueChanged.connect(self.set_tilt)
+        
+        self.xcentreslider, _ = labelled_slider(
+            value=beam_centre_x, name="Beam Centre X", **common_args
+        )
+        self.ycentreslider, _ = labelled_slider(
+            value=beam_centre_y, name="Beam Centre Y", **common_args,
+        )
+
+        self.xcentreslider.valueChanged.connect(self.set_centre)
+        self.ycentreslider.valueChanged.connect(self.set_centre)
 
     def _get_geom(self):
         raise NotImplementedError("Needs to be defined")
@@ -954,6 +974,7 @@ class ParallelBeamGUI(SourceGUI):
         self.beam.radius = val
         self.try_update(geom=True)
 
+
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
@@ -962,6 +983,11 @@ class ParallelBeamGUI(SourceGUI):
             self.xangleslider.setValue(self.beam.tilt_yx[1])
         with blocker(self.yangleslider):
             self.yangleslider.setValue(self.beam.tilt_yx[0])
+        with blocker(self.xcentreslider):
+            self.xcentreslider.setValue(self.beam.centre_yx[1])
+        with blocker(self.ycentreslider):
+            self.ycentreslider.setValue(self.beam.centre_yx[0])
+
 
     def build(self) -> Self:
 
@@ -1022,6 +1048,10 @@ class GaussBeamGUI(SourceGUI):
             self.xangleslider.setValue(self.beam.tilt_yx[1])
         with blocker(self.yangleslider):
             self.yangleslider.setValue(self.beam.tilt_yx[0])
+        with blocker(self.xcentreslider):
+            self.xcentreslider.setValue(self.beam.centre_yx[1])
+        with blocker(self.ycentreslider):
+            self.ycentreslider.setValue(self.beam.centre_yx[0])
         with blocker(self.woslider):
             self.woslider.setValue(self.beam.wo)
 
@@ -1054,6 +1084,8 @@ class GaussBeamGUI(SourceGUI):
         hbox = QHBoxLayout()
         hbox.addWidget(self.xangleslider)
         hbox.addWidget(self.yangleslider)
+        hbox.addWidget(self.xcentreslider)
+        hbox.addWidget(self.ycentreslider)
         vbox.addLayout(hbox)
         self.box.setLayout(vbox)
         return self
@@ -1080,6 +1112,10 @@ class PointBeamGUI(SourceGUI):
         blocker = self._get_blocker(block)
         with blocker(self.beamsemiangleslider):
             self.beamsemiangleslider.setValue(self.beam.semi_angle)
+        with blocker(self.xcentreslider):
+            self.xcentreslider.setValue(self.beam.centre_yx[1])
+        with blocker(self.ycentreslider):
+            self.ycentreslider.setValue(self.beam.centre_yx[0])
 
     def build(self) -> Self:
         beam_semi_angle = self.beam.semi_angle
@@ -1103,6 +1139,8 @@ class PointBeamGUI(SourceGUI):
         hbox = QHBoxLayout()
         hbox.addWidget(self.xangleslider)
         hbox.addWidget(self.yangleslider)
+        hbox.addWidget(self.xcentreslider)
+        hbox.addWidget(self.ycentreslider)
         vbox.addLayout(hbox)
         self.box.setLayout(vbox)
 
