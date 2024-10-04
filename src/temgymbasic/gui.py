@@ -378,7 +378,7 @@ class TemGymWindow(QMainWindow):
 
         self.gui_layout = QVBoxLayout(content)
         self.model_gui = self.model.gui_wrapper()(window=self).build()
-        self.gui_layout.addWidget(self.model_gui.box)
+        # self.gui_layout.addWidget(self.model_gui.box)
 
         for gui_component in self.gui_components:
             self.gui_layout.addWidget(gui_component.box)
