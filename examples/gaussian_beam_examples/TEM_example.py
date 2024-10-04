@@ -35,39 +35,15 @@ f = (1 / z_i - 1 / z_o) **-1
 
 centre_yx = [0.0, 0.0]
 coeffs = [0., 0., 0., 0., 0.]
-components = (
-    comp.GaussBeam(
-        z=0.0,
-        voltage=calculate_phi_0(wavelength),
-        radius=radius,
-        #centre_yx=centre_yx,
-        wo=wo,
-        tilt_yx=tilt_yx,
-        semi_angle = 0.0
-    ),
-    comp.Lens(
-        z=lens_dist,
-        z1=-lens_dist,
-        z2=prop_dist,
-        f=focal,
-        aber_coeffs = coeffs
-    ),
-    comp.Detector(
-        z=lens_dist + prop_dist,
-        pixel_size=pixel_size,
-        shape=det_shape,
-        interference='gauss'
-    ),
-)
 
 components = (
     comp.GaussBeam(
         z=0.0,
         voltage=calculate_phi_0(wavelength),
-        radius=radius,
+        radius=0.0,
         wo=wo,
         tilt_yx=tilt_yx,
-        semi_angle = 0.0
+        semi_angle = 0.01
     ),
     comp.DoubleDeflector(
         first=comp.Deflector(z=0.15, name='Upper OBJ Deflector'),
