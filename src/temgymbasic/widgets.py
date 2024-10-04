@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QIntValidator,
+    QMouseEvent,
 )
 
 from superqt import QLabeledDoubleSlider, QLabeledSlider
@@ -33,7 +34,52 @@ from OpenGL.GL import (
 )
 import numpy as np
 
+from pyqtgraph.dockarea import DockLabel
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
+
+
+class MyDockLabel(DockLabel):
+    def updateStyle(self):
+        r = '3px'
+        if self.dim:
+            fg = '#aaa'
+            bg = '#44a'
+            border = '#339'
+        else:
+            fg = '#fff'
+            bg = '#333'
+            border = '#444'
+
+        if self.orientation == 'vertical':
+            self.vStyle = """DockLabel {
+                background-color : %s;
+                color : %s;
+                border-top-right-radius: 0px;
+                border-top-left-radius: %s;
+                border-bottom-right-radius: 0px;
+                border-bottom-left-radius: %s;
+                border-width: 0px;
+                border-right: 2px solid %s;
+                padding-top: 3px;
+                padding-bottom: 3px;
+                font-size: %s;
+            }""" % (bg, fg, r, r, border, self.fontSize)
+            self.setStyleSheet(self.vStyle)
+        else:
+            self.hStyle = """DockLabel {
+                background-color : %s;
+                color : %s;
+                border-top-right-radius: %s;
+                border-top-left-radius: %s;
+                border-bottom-right-radius: 0px;
+                border-bottom-left-radius: 0px;
+                border-width: 0px;
+                border-bottom: 2px solid %s;
+                padding-left: 3px;
+                padding-right: 3px;
+                font-size: %s;
+            }""" % (bg, fg, r, r, border, self.fontSize)
+            self.setStyleSheet(self.hStyle)
 
 
 def slider_config(slider: QSlider, value: int, vmin: int, vmax: int, tick_interval: Optional[int]):
@@ -63,7 +109,7 @@ def labelled_slider(
     if isinstance(insert_into, QHBoxLayout):
         hbox = insert_into
     else:
-        hbox = QHBoxLayout()
+        hbox = QVBoxLayout()
 
     if name is not None:
         slider_namelabel = QLabel(name)
