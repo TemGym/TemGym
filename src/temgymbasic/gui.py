@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QCheckBox,
     QPushButton,
-    QComboBox,
+    # QComboBox,
 )
 from PySide6.QtGui import (
     QKeyEvent,
@@ -436,16 +436,16 @@ class ModelGUI(ComponentGUIWrapper):
     def build(self):
         vbox = QVBoxLayout()
 
-        self.beamSelect = QComboBox()
-        self.beamSelect.addItem("Parallel Beam")
-        self.beamSelect.addItem("Point Beam")
-        self.beamSelect.addItem("Axial Beam")
-        self.beamSelectLabel = QLabel("Beam type")
+        # self.beamSelect = QComboBox()
+        # self.beamSelect.addItem("Parallel Beam")
+        # self.beamSelect.addItem("Point Beam")
+        # self.beamSelect.addItem("Axial Beam")
+        # self.beamSelectLabel = QLabel("Beam type")
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.beamSelectLabel)
-        hbox.addWidget(self.beamSelect)
-        vbox.addLayout(hbox)
+        # hbox = QHBoxLayout()
+        # hbox.addWidget(self.beamSelectLabel)
+        # hbox.addWidget(self.beamSelect)
+        # vbox.addLayout(hbox)
 
         self.view_label = QLabel('Set Camera View')
         self.init_button = QPushButton('Initial View')
@@ -513,11 +513,11 @@ class STEMModelGUI(ModelGUI):
             return window.model
         return None
 
-    def build(self):
-        super().build()
-        self.beamSelect.removeItem(2)
-        self.beamSelect.removeItem(1)
-        return self
+    # def build(self):
+    #     super().build()
+    #     self.beamSelect.removeItem(2)
+    #     self.beamSelect.removeItem(1)
+    #     return self
 
     def sync(self, block: bool = True):
         model = self.model
@@ -730,7 +730,7 @@ class LensGUI(ComponentGUIWrapper):
 
         lens_geom.extend([z1_dot, z2_dot, z1_text, z2_text])
         lens_geom.extend([z1_dot, z2_dot])
-        
+
         return lens_geom
 
 
@@ -936,7 +936,7 @@ class SourceGUI(ComponentGUIWrapper):
             self.xangleslider.value(),
         )
         self.try_update()
-        
+
     @Slot(float)
     def set_centre(self, val):
         self.beam.centre_yx = (
@@ -948,7 +948,7 @@ class SourceGUI(ComponentGUIWrapper):
     def _build(self):
         num_rays = 64
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
-        
+
         beam_centre_y, beam_centre_x = self.beam.centre_yx
 
         self.rayslider, _ = labelled_slider(
@@ -968,7 +968,7 @@ class SourceGUI(ComponentGUIWrapper):
 
         self.xangleslider.valueChanged.connect(self.set_tilt)
         self.yangleslider.valueChanged.connect(self.set_tilt)
-        
+
         self.xcentreslider, _ = labelled_slider(
             value=beam_centre_x, name="Beam Centre X", **common_args
         )
@@ -1009,7 +1009,6 @@ class ParallelBeamGUI(SourceGUI):
         self.beam.radius = val
         self.try_update(geom=True)
 
-
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
@@ -1022,7 +1021,6 @@ class ParallelBeamGUI(SourceGUI):
             self.xcentreslider.setValue(self.beam.centre_yx[1])
         with blocker(self.ycentreslider):
             self.ycentreslider.setValue(self.beam.centre_yx[0])
-
 
     def build(self) -> Self:
 
@@ -1062,7 +1060,7 @@ class GaussBeamGUI(SourceGUI):
     def set_radius(self, val):
         self.beam.radius = val
         self.try_update(geom=True)
-        
+
     @Slot(float)
     def set_semi_angle(self, val):
         self.beam.semi_angle = val
@@ -1109,7 +1107,7 @@ class GaussBeamGUI(SourceGUI):
             wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox, decimals=3
         )
         self.woslider.valueChanged.connect(self.set_wo)
-        
+
         beamsemiangle = self.beam.semi_angle
         self.beamsemiangleslider, _ = labelled_slider(
             beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox, decimals=3
