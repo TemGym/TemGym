@@ -256,9 +256,9 @@ class TemGymWindow(QMainWindow):
         self.resize(1600, 1200)
 
         # Create Docks
-        self.tem_dock = Dock("3D View", size=(3, 5))
+        self.tem_dock = Dock("3D View", size=(4, 5))
         self.detector_dock = Dock("Detector", size=(4, 5))
-        self.gui_dock = Dock("GUI", size=(4, 5))
+        self.gui_dock = Dock("Controls", size=(3.5, 5))
         # self.table_dock = Dock("Parameter Table", size=(5, 5))
 
         self.centralWidget = DockArea()
@@ -300,12 +300,13 @@ class TemGymWindow(QMainWindow):
         mean_z = sum(c.z for c in self.model.components) / len(self.model.components)
         mean_z *= Z_ORIENT
 
+        xyoffset = (0.2 * mean_z, -0.2 * mean_z)
         # Define Camera Parameters
         self.initial_camera_params = {
-            'center': QVector3D(0.0, 0.0, mean_z),
+            'center': QVector3D(*xyoffset, mean_z),
             'fov': 35,
             'azimuth': 45.0,
-            'distance': 3 * abs(mean_z),
+            'distance': 3.5 * abs(mean_z),
             'elevation': 25.0,
         }
 
