@@ -625,7 +625,6 @@ class LensGUI(ComponentGUIWrapper):
         self.lens.aber_coeffs[4] = val
         self.try_update()
 
-
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.fslider):
@@ -645,8 +644,8 @@ class LensGUI(ComponentGUIWrapper):
 
         if self.lens.aber_coeffs:
             self.sphericalslider, _ = labelled_slider(
-            self.lens.aber_coeffs[0], -1., 1., name="Spherical Aberration",
-            insert_into=vbox, decimals=2,
+                self.lens.aber_coeffs[0], -1., 1., name="Spherical Aberration",
+                insert_into=vbox, decimals=2,
             )
             self.sphericalslider.valueChanged.connect(self.set_spherical_aberration)
 
@@ -690,13 +689,33 @@ class LensGUI(ComponentGUIWrapper):
             Z_ORIENT * self.component.z,
             64,
         )
-        return [
+        lens_geom = [
             gl.GLLinePlotItem(
                 pos=vertices.T,
                 color="white",
                 width=5
             )
         ]
+
+        # Add spherical dots for z1 and z2 planes
+        z1 = self.lens.z1
+        z2 = self.lens.z2
+        dot_size = 10  # Adjust the size of the dot as needed
+        dot_color = (1, 0, 0, 1)  # Red color
+
+        z1_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, Z_ORIENT * z1]]),
+            size=dot_size,
+            color=dot_color,
+        )
+        z2_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, Z_ORIENT * z2]]),
+            size=dot_size,
+            color=dot_color,
+        )
+
+        lens_geom.extend([z1_dot, z2_dot])
+        return lens_geom
 
 
 class PerfectLensGUI(LensGUI):
