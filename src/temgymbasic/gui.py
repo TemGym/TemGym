@@ -1032,7 +1032,6 @@ class ParallelBeamGUI(SourceGUI):
         self.beam.radius = val
         self.try_update(geom=True)
 
-
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.beamwidthslider):
