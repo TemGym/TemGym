@@ -980,16 +980,17 @@ class SourceGUI(ComponentGUIWrapper):
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
     def _build_tiltsliders(self, into=None):
+        max_tilt = np.pi / 32
         common_args = dict(
-            vmin=-np.pi / 4, vmax=np.pi / 4, decimals=2,
-            insert_into=into,
+            vmin=-max_tilt, vmax=max_tilt, decimals=2,
+            insert_into=into, tick_interval=max_tilt / 8,
         )
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
         self.xangleslider, _ = labelled_slider(
-            value=beam_tilt_x, name="Beam Tilt X", **common_args
+            value=beam_tilt_x, name="Beam Tilt X (rad)", **common_args
         )
         self.yangleslider, _ = labelled_slider(
-            value=beam_tilt_y, name="Beam Tilt Y", **common_args,
+            value=beam_tilt_y, name="Beam Tilt Y (rad)", **common_args,
         )
 
         self.xangleslider.valueChanged.connect(self.set_tilt)
