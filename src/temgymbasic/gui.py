@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
 RAY_COLOR = (0., 0.8, 0.)
-XYZ_SCALING = np.asarray((1., 1., 1.))
+XYZ_SCALING = np.asarray((1., 1., 0.1))
 
 
 class GridGeomParams(NamedTuple):
@@ -409,7 +409,7 @@ class TemGymWindow(QMainWindow):
 
         vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
         self.ray_geometry.setData(
-            pos=vertices,
+            pos=vertices * XYZ_SCALING,
             color=RAY_COLOR + (0.05,),
         )
 
