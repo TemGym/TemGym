@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
 RAY_COLOR = (0., 0.8, 0.)
-XYZ_SCALING = np.asarray((1., 1., 0.1))
+XYZ_SCALING = np.asarray((1., 1., 1.))
 
 
 class GridGeomParams(NamedTuple):
@@ -1110,26 +1110,59 @@ class GaussBeamGUI(SourceGUI):
         self.beam.wo = val
         self.try_update(geom=True)
 
-    def sync(self, block: bool = True):
-        blocker = self._get_blocker(block)
-        with blocker(self.beamwidthslider):
-            self.beamwidthslider.setValue(self.beam.radius)
-        with blocker(self.beamsemiangleslider):
-            self.beamsemiangleslider.setValue(self.beam.semi_angle)
-        with blocker(self.xangleslider):
-            self.xangleslider.setValue(self.beam.tilt_yx[1])
-        with blocker(self.yangleslider):
-            self.yangleslider.setValue(self.beam.tilt_yx[0])
-        with blocker(self.xcentreslider):
-            self.xcentreslider.setValue(self.beam.centre_yx[1])
-        with blocker(self.ycentreslider):
-            self.ycentreslider.setValue(self.beam.centre_yx[0])
-        with blocker(self.woslider):
-            self.woslider.setValue(self.beam.wo)
+    @Slot(int)
+    def change_mode(self, btn_id, update=True):
+        if btn_id == 0:  # parallel
+            self.beamwidthslider.setDisabled(False)
+            self.beamsemiangleslider.setDisabled(True)
+            self.beam.semi_angle = 0.
+            self.beam.radius = self.beamwidthslider.value()
+        else:
+            self.beamwidthslider.setDisabled(True)
+            self.beamsemiangleslider.setDisabled(False)
+            self.beam.semi_angle = self.beamsemiangleslider.value()
+            self.beam.radius = 0.
+        if update:
+            self.try_update(geom=True)
+
+    # def sync(self, block: bool = True):
+    #     blocker = self._get_blocker(block)
+    #     with blocker(self.beamwidthslider):
+    #         self.beamwidthslider.setValue(self.beam.radius)
+    #     with blocker(self.beamsemiangleslider):
+    #         self.beamsemiangleslider.setValue(self.beam.semi_angle)
+    #     with blocker(self.xangleslider):
+    #         self.xangleslider.setValue(self.beam.tilt_yx[1])
+    #     with blocker(self.yangleslider):
+    #         self.yangleslider.setValue(self.beam.tilt_yx[0])
+    #     with blocker(self.xcentreslider):
+    #         self.xcentreslider.setValue(self.beam.centre_yx[1])
+    #     with blocker(self.ycentreslider):
+    #         self.ycentreslider.setValue(self.beam.centre_yx[0])
+    #     with blocker(self.woslider):
+    #         self.woslider.setValue(self.beam.wo)
 
     def build(self) -> Self:
 
         vbox = QVBoxLayout()
+
+        beam_parallel = QPushButton("Parallel")
+        beam_parallel.setCheckable(True)
+        beam_parallel.setChecked(True)
+        beam_point = QPushButton("Point")
+        beam_point.setCheckable(True)
+        self.modeselect = QButtonGroup()
+        self.modeselect.setExclusive(True)
+        self.modeselect.addButton(beam_parallel)
+        self.modeselect.setId(beam_parallel, 0)
+        self.modeselect.addButton(beam_point)
+        self.modeselect.setId(beam_point, 1)
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(beam_parallel)
+        btn_layout.addWidget(beam_point)
+        vbox.addLayout(
+           btn_layout
+        )
 
         self._build_rayslider(into=vbox)
 
@@ -1140,13 +1173,6 @@ class GaussBeamGUI(SourceGUI):
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
-        wo = self.beam.wo
-        self.woslider, _ = labelled_slider(
-            wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox,
-            decimals=3, tick_interval=0.1
-        )
-        self.woslider.valueChanged.connect(self.set_wo)
-
         beamsemiangle = self.beam.semi_angle
         self.beamsemiangleslider, _ = labelled_slider(
             beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox,
@@ -1154,8 +1180,18 @@ class GaussBeamGUI(SourceGUI):
         )
         self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
 
+        wo = self.beam.wo
+        self.woslider, _ = labelled_slider(
+            wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox,
+            decimals=3, tick_interval=0.1
+        )
+        self.woslider.valueChanged.connect(self.set_wo)
+
         self._build_tiltsliders(into=vbox)
         self._build_shiftsliders(into=vbox)
+
+        self.modeselect.idPressed.connect(self.change_mode)
+        self.change_mode(0, update=False)
 
         self.box = vbox
         return self
