@@ -46,6 +46,7 @@ if TYPE_CHECKING:
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
 RAY_COLOR = (0., 0.8, 0.)
+XYZ_SCALING = np.asarray((1., 1., 1.))
 
 
 class GridGeomParams(NamedTuple):
@@ -432,10 +433,16 @@ class TemGymWindow(QMainWindow):
         # FIXME Add in reverse to simulate better depth stacking
         for component in reversed(self.gui_components):
             for geometry in component.get_geom():
+                try:
+                    geometry.pos *= XYZ_SCALING
+                except AttributeError:
+                    geometry.vertices *= XYZ_SCALING
                 self.tem_window.addItem(geometry)
         # Add labels next so they appear above geometry
         for component in reversed(self.gui_components):
-            self.tem_window.addItem(component.get_label())
+            label = component.get_label()
+            label.pos *= XYZ_SCALING
+            self.tem_window.addItem(label)
         # Add the ray geometry last so it is always on top
         self.tem_window.addItem(self.ray_geometry)
 
