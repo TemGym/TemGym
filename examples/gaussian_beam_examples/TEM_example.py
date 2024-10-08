@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QApplication
 from temgymbasic.gui import TemGymWindow
 import sys
 
-voltage = 100e3
+voltage = 60e3
 
 size = 256
 det_shape = (size, size)
@@ -73,6 +73,7 @@ components = (
 )
 
 
+components[0].random = True
 model = Model(components, backend='gpu')
 # rays = tuple(model.run_iter(num_rays=n_rays, random = False))
 # image = model.detector.get_image(rays[-1])
