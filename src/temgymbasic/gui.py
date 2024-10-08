@@ -1947,6 +1947,27 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         )
 
 
+class AccumulatingDetectorGUI(DetectorGUI):
+    @property
+    def detector(self) -> 'comp.AccumulatingDetector':
+        return self.component
+
+    @Slot(int)
+    def set_buffer_length(self, val):
+        self.detector.buffer_length = val
+        self.detector.delete_buffer()
+        self.try_update()
+
+    def build(self) -> Self:
+        super().build()
+        buffer_length_slider, _ = labelled_slider(
+            self.detector.buffer_length, 1, 16, "Buffer length",
+            insert_into=self.box, tick_interval=1,
+        )
+        buffer_length_slider.valueChanged.connect(self.set_buffer_length)
+        return self
+
+
 class ApertureGUI(LensGUI):
     @property
     def aperture(self) -> 'comp.Aperture':
