@@ -1832,16 +1832,11 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
     def display_type(self) -> str:
         return self._display_type
 
-    @display_type.setter
-    def display_type(self, val: str):
+    @Slot(str)
+    def set_detector_display_type(self, val: str):
         if val not in ['amplitude', 'phase', 'intensity']:
             raise ValueError("display_type must be 'amplitude', 'phase', or 'intensity'")
         self._display_type = val
-        self.try_update()
-
-    @Slot(str)
-    def set_detector_display_type(self, val: str):
-        self.display_type = val
         self.try_update()
 
     @Slot(str)
@@ -1921,10 +1916,6 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         hbox.addWidget(self.phase_radio)
         vbox.addLayout(hbox)
         hbox = QHBoxLayout()
-        self.flipy_cbox = QCheckBox("Flip-y")
-        self.flipy_cbox.setChecked(self.detector.flip_y)
-        self.flipy_cbox.stateChanged.connect(self.set_flip_y)
-        hbox.addWidget(self.flipy_cbox)
 
         hbox = QHBoxLayout()
         self.intfrnce_cbox = QCheckBox("Turn on Gauss Beam Interference")
