@@ -203,13 +203,13 @@ class Lens(Component):
         # 0.0, which is neccessary for later
         if xp.abs(z1) >= 1e10:
             z1 = 1e10 * (z1 / xp.abs(z1))
-            # collimated input - only neccessary for the perfect, fourier and aberrated lens
-            self.NA1 = 0.0
+            self.NA1 = 0.0  # collimated input - only neccessary for the perfect,
+            # fourier and aberrated lens
 
         if xp.abs(z2) >= 1e10:
             z2 = 1e10 * (z2 / xp.abs(z2))
-            # collimated input - only neccessary for the perfect, fourier and aberrated lens
-            self.NA2 = 0.0
+            self.NA2 = 0.0  # collimated input - only neccessary for the perfect,
+            # fourier and aberrated lens
 
         m = z2 / z1
 
@@ -244,23 +244,12 @@ class Lens(Component):
 
         xp = rays.xp
 
-        M = self._m
-        z2 = self._z2
-
         # Rays at lens plane
         u1 = rays.x_central
         v1 = rays.y_central
 
         du1 = rays.dx_central
         dv1 = rays.dy_central
-
-        # Rays at object plane
-        x1 = u1 + du1 * self._z1
-        y1 = v1 + dv1 * self._z1
-
-        psi_a = np.arctan2(v1, u1)
-        psi_o = np.arctan2(y1, x1)
-        psi = psi_a - psi_o
 
         rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
         rays.path_length -= (rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
@@ -269,8 +258,19 @@ class Lens(Component):
 
             coeffs = self.aber_coeffs
 
-            # Calculate the aberration in x and y (Approximate R'
-            # as the reference sphere radius at image side)
+            M = self._m
+            z2 = self._z2
+
+            # Rays at object plane
+            x1 = u1 + du1 * self._z1
+            y1 = v1 + dv1 * self._z1
+
+            psi_a = np.arctan2(v1, u1)
+            psi_o = np.arctan2(y1, x1)
+            psi = psi_a - psi_o
+
+            # Calculate the aberration in x and y
+            # (Approximate R' as the reference sphere radius at image side)
             eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
 
             x2 = u1 + rays.dx_central * z2
@@ -1101,6 +1101,9 @@ class Detector(Component):
 
         wo = rays.wo
         wavelength = rays.wavelength
+
+        # import pdb
+        # pdb.set_trace()
         div = rays.wavelength / (xp.pi * wo)
         k = float_dtype(2 * xp.pi / wavelength)
         z_r = float_dtype(xp.pi * wo ** 2 / wavelength)
@@ -1642,3 +1645,116 @@ class PotentialSample(Sample):
     def gui_wrapper():
         from .gui import SampleGUI
         return SampleGUI
+
+
+class ProjectorLensSystem(Component):
+    def __init__(
+        self,
+        first: Lens,
+        second: Lens,
+        magnification: float = -1.,
+        name: Optional[str] = None,
+    ):
+        super().__init__(
+            z=(first.z + second.z) / 2,
+            name=name,
+        )
+        self.magnification = magnification
+
+        self._first = first
+        self._second = second
+
+        self._validate_component()
+
+        self.adjust_z2_and_z3_from_magnification(self.magnification)
+
+    @classmethod
+    def from_params(
+        cls,
+        z: float,
+        z1: float,
+        z2: float,
+        z3: float,
+        z4: float,
+        distance: float = 0.1,
+        name: Optional[str] = None
+    ):
+        return cls(
+            Lens(
+                z=z - distance / 2.,
+                z1=z1,
+                z2=z2,
+            ),
+            Lens(
+                z=z + distance / 2.,
+                z3=z3,
+                z4=z4,
+            ),
+            name=name,
+        )
+
+    def _validate_component(self):
+        if self.first.z >= self.second.z:
+            raise InvalidModelError("First Projector Lens must be before second")
+
+    @property
+    def distance(self) -> float:
+        return self._second.z - self._first.z
+
+    @property
+    def first(self) -> Lens:
+        return self._first
+
+    @property
+    def second(self) -> Lens:
+        return self._second
+
+    @property
+    def z(self):
+        self._z = (self.first.z + self.second.z) / 2
+        return self._z
+
+    def _set_z(self, new_z: float):
+        dz = new_z - self.z
+        self.first._set_z(self.first.z + dz)
+        self.second._set_z(self.second.z + dz)
+
+    @property
+    def entrance_z(self) -> float:
+        return self.first.z
+
+    @property
+    def exit_z(self) -> float:
+        return self.second.z
+
+    def step(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        for rays in self.first.step(rays):
+            yield rays.new_with(
+                location=(self, self.first)
+            )
+        rays = rays.propagate_to(self.second.entrance_z)
+        for rays in self.second.step(rays):
+            rays.location = (self, self.second)
+            yield rays.new_with(
+                location=(self, self.second)
+            )
+
+    def adjust_z2_and_z3_from_magnification(self, magnification):
+
+        z1 = self.first.z1
+        dz = self.distance
+        z4 = self.second.z2
+        z2 = (magnification * z1 * dz) / (magnification * z1 + z4)
+        z3 = z2-dz
+
+        self.first.z2 = z2
+        self.second.z1 = z3
+        self.first.f = 1/(1/z2 - 1/z1)
+        self.second.f = 1/(1/z4 - 1/z3)
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import ProjectorLensSystemGUI
+        return ProjectorLensSystemGUI
