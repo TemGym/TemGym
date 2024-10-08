@@ -403,7 +403,7 @@ class TemGymWindow(QMainWindow):
     def update_rays(self):
         all_rays = tuple(self.model.run_iter(
             self.gui_components[0].num_rays,
-            random=True,
+            random=False,
         ))
 
         vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
@@ -1749,29 +1749,29 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         vbox.addLayout(hbox)
 
         self.display_type_group = QButtonGroup(self.box)
-        self.amplitude_radio = QRadioButton("Amplitude")
-        self.phase_radio = QRadioButton("Phase")
-        self.intensity_radio = QRadioButton("Intensity")
+        self.amplitude_button = QPushButton("Amplitude")
+        self.phase_button = QPushButton("Phase")
+        self.intensity_button = QPushButton("Intensity")
 
-        self.display_type_group.addButton(self.amplitude_radio)
-        self.display_type_group.addButton(self.phase_radio)
-        self.display_type_group.addButton(self.intensity_radio)
+        self.display_type_group.addButton(self.amplitude_button)
+        self.display_type_group.addButton(self.phase_button)
+        self.display_type_group.addButton(self.intensity_button)
 
         if self.display_type == 'amplitude':
-            self.amplitude_radio.setChecked(True)
+            self.amplitude_button.setChecked(True)
         elif self.display_type == 'phase':
-            self.phase_radio.setChecked(True)
+            self.phase_button.setChecked(True)
         else:
-            self.intensity_radio.setChecked(True)
+            self.intensity_button.setChecked(True)
 
-        self.amplitude_radio.toggled.connect(lambda: self.set_detector_display_type('amplitude'))
-        self.phase_radio.toggled.connect(lambda: self.set_detector_display_type('phase'))
-        self.intensity_radio.toggled.connect(lambda: self.set_detector_display_type('intensity'))
+        self.amplitude_button.toggled.connect(lambda: self.set_detector_display_type('amplitude'))
+        self.phase_button.toggled.connect(lambda: self.set_detector_display_type('phase'))
+        self.intensity_button.toggled.connect(lambda: self.set_detector_display_type('intensity'))
 
         hbox = QHBoxLayout()
-        hbox.addWidget(self.amplitude_radio)
-        hbox.addWidget(self.phase_radio)
-        hbox.addWidget(self.intensity_radio)
+        hbox.addWidget(self.amplitude_button)
+        hbox.addWidget(self.phase_button)
+        hbox.addWidget(self.intensity_button)
         vbox.addLayout(hbox)
         hbox = QHBoxLayout()
         self.flipy_cbox = QCheckBox("Flip-y")
@@ -1931,3 +1931,56 @@ class BiprismGUI(ComponentGUIWrapper):
             color='white',
             antialias=True,
         )
+
+
+class ProjectorLensSystemGUI(ComponentGUIWrapper):
+    @property
+    def pl_system(self) -> 'comp.ProjectorLensSystem':
+        return self.component
+
+    @Slot(float)
+    def set_m(self, val: float):
+        self.pl_system.adjust_z2_and_z3_from_magnification(val)
+        self.try_update()
+
+    def build(self) -> Self:
+        vbox = QVBoxLayout()
+
+        self.mslider, _ = labelled_slider(
+            1, -10, 10, name="Total Magnification", insert_into=vbox, decimals=2,
+        )
+        self.mslider.valueChanged.connect(self.set_m)
+        self.box = vbox
+
+        return self
+
+    def get_geom(self):
+        self.geom = []
+
+        vertices = comp_geom.lens(
+            0.2,
+            Z_ORIENT * self.component.entrance_z,
+            64,
+        )
+        self.geom.append(
+            gl.GLLinePlotItem(
+                pos=vertices.T,
+                color="white",
+                width=5
+            )
+        )
+
+        vertices = comp_geom.lens(
+            0.2,
+            Z_ORIENT * self.component.exit_z,
+            64,
+        )
+        self.geom.append(
+            gl.GLLinePlotItem(
+                pos=vertices.T,
+                color="white",
+                width=5
+            )
+        )
+
+        return self.geom
