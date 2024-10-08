@@ -1165,6 +1165,10 @@ class GaussBeamGUI(SourceGUI):
 
         vbox = QVBoxLayout()
 
+        random_cbox = QCheckBox("Random rays")
+        random_cbox.setChecked(self.beam.random)
+        random_cbox.stateChanged.connect(self.set_random)
+
         beam_parallel = QPushButton("Parallel")
         beam_parallel.setCheckable(True)
         beam_parallel.setChecked(True)
@@ -1179,6 +1183,7 @@ class GaussBeamGUI(SourceGUI):
         btn_layout = QHBoxLayout()
         btn_layout.addWidget(beam_parallel)
         btn_layout.addWidget(beam_point)
+        btn_layout.addWidget(random_cbox)
         vbox.addLayout(
            btn_layout
         )
@@ -1220,10 +1225,6 @@ class GaussBeamGUI(SourceGUI):
         vbox.addLayout(hbox0)
         vbox.addLayout(hbox1)
 
-        random_cbox = QCheckBox("Random rays")
-        random_cbox.setChecked(self.beam.random)
-        random_cbox.stateChanged.connect(self.set_random)
-        vbox.addWidget(random_cbox)
 
         self.modeselect.idPressed.connect(self.change_mode)
         self.change_mode(0, update=False)
