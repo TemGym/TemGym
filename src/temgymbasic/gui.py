@@ -271,16 +271,18 @@ class TemGymWindow(QMainWindow):
         label = MyDockLabel("3D View")
         self.tem_dock = Dock("3D View", size=(4, 10), label=label)
         label = MyDockLabel("Detector")
-        self.detector_dock = Dock("Detector", size=(4, 10), label=label)
+        self.detector_dock = Dock("Detector", size=(4, 6), label=label)
         label = MyDockLabel("Controls")
         self.gui_dock = Dock("Controls", size=(3.5, 10), label=label)
+        label = MyDockLabel("Detector controls")
+        self.det_control_dock = Dock("Detector controls", size=(4, 4), label=label)
         # self.table_dock = Dock("Parameter Table", size=(5, 5))
         self.centralWidget = DockArea()
         self.setCentralWidget(self.centralWidget)
         self.centralWidget.addDock(self.tem_dock, "left")
-        # self.centralWidget.addDock(self.table_dock, "bottom", self.tem_dock)
         self.centralWidget.addDock(self.detector_dock, "right")
         self.centralWidget.addDock(self.gui_dock, "right")
+        self.centralWidget.addDock(self.det_control_dock, "bottom", self.detector_dock)
 
         # Create the display and the buttons
         self.create3DDisplay()
@@ -382,7 +384,7 @@ class TemGymWindow(QMainWindow):
 
         # Layout is a VBox with stretch after
         layout = QVBoxLayout()
-        for idx, gui_component in enumerate(self.gui_components):
+        for idx, gui_component in enumerate(self.gui_components[:-1]):
             # Controls are held in accordion list-like collapsible stack
             frame = QCollapsible(
                 gui_component.component.name,
@@ -412,6 +414,12 @@ class TemGymWindow(QMainWindow):
         scroll.setWidget(wgt)
         scroll.setWidgetResizable(1)
         self.gui_dock.addWidget(scroll)
+
+        wgt = QWidget()
+        layout = self.gui_components[-1].box
+        layout.addStretch()
+        wgt.setLayout(layout)
+        self.det_control_dock.addWidget(wgt)
 
     @Slot()
     def update_rays(self):
