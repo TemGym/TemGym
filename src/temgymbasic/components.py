@@ -2,8 +2,9 @@ import abc
 import warnings
 from typing import (
     Generator, Tuple, Optional, Type,
-    TYPE_CHECKING
+    TYPE_CHECKING,
 )
+from dataclasses import dataclass, astuple
 
 
 import numpy as np
@@ -93,13 +94,25 @@ class Component(abc.ABC):
         return None
 
 
+@dataclass
+class LensAberrations:
+    spherical: float
+    coma: float
+    astigmatism: float
+    field_curvature: float
+    distortion: float
+
+    def __iter__(self):
+        return iter(astuple(self))
+
+
 class Lens(Component):
     def __init__(self, z: float,
                  f: Optional[float] = None,
                  m: Optional[float] = None,
                  z1: Optional[Tuple[float]] = None,
                  z2: Optional[Tuple[float]] = None,
-                 aber_coeffs: Optional[Tuple[float]] = None,
+                 aber_coeffs: Optional[LensAberrations] = None,
                  name: Optional[str] = None):
         super().__init__(z=z, name=name)
 
@@ -178,11 +191,13 @@ class Lens(Component):
         # 0.0, which is neccessary for later
         if xp.abs(z1) >= 1e10:
             z1 = 1e10 * (z1 / xp.abs(z1))
-            self.NA1 = 0.0  # collimated input - only neccessary for the perfect, fourier and aberrated lens
+            # collimated input - only neccessary for the perfect, fourier and aberrated lens
+            self.NA1 = 0.0
 
         if xp.abs(z2) >= 1e10:
             z2 = 1e10 * (z2 / xp.abs(z2))
-            self.NA2 = 0.0  # collimated input - only neccessary for the perfect, fourier and aberrated lens
+            # collimated input - only neccessary for the perfect, fourier and aberrated lens
+            self.NA2 = 0.0
 
         m = z2 / z1
 
@@ -220,14 +235,14 @@ class Lens(Component):
         M = self._m
         z2 = self._z2
 
-        #Rays at lens plane
+        # Rays at lens plane
         u1 = rays.x_central
         v1 = rays.y_central
 
         du1 = rays.dx_central
         dv1 = rays.dy_central
 
-        #Rays at object plane
+        # Rays at object plane
         x1 = u1 + du1 * self._z1
         y1 = v1 + dv1 * self._z1
 
@@ -236,13 +251,14 @@ class Lens(Component):
         psi = psi_a - psi_o
 
         rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
-        rays.path_length =  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
+        rays.path_length = -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
 
-        if self.aber_coeffs:
+        if self.aber_coeffs is not None:
 
             coeffs = self.aber_coeffs
 
-            # Calculate the aberration in x and y (Approximate R' as the reference sphere radius at image side)
+            # Calculate the aberration in x and y (Approximate R'
+            # as the reference sphere radius at image side)
             eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
 
             x2 = u1 + rays.dx_central * z2
@@ -262,7 +278,6 @@ class Lens(Component):
                 rays.dx += nx / nz
                 rays.dy += ny / nz
                 rays.path_length += W
-
 
         # Just straightforward matrix multiplication
         yield rays.new_with(
@@ -546,12 +561,12 @@ class AberratedLens(PerfectLens):
                                                  u1, v1, z2_circle, xp=xp)
 
         # Calculate the new aberrated ray coordinates in the image plane
-        x2_aber = x2 + eps_x
-        y2_aber = y2 + eps_y
+        # x2_aber = x2 + eps_x
+        # y2_aber = y2 + eps_y
 
         # Calculate the new aberrated ray coordinates in the exit pupil plane
-        u2_aber = u1 #x2_aber - nx / nz * (z2)
-        v2_aber = v1 #y2_aber - ny / nz * (z2)
+        u2_aber = u1  # x2_aber - nx / nz * (z2)
+        v2_aber = v1  # y2_aber - ny / nz * (z2)
 
         # u2_aber = -nx / nz * (phi_zn) + phi_xn
         # v2_aber = -ny / nz * (phi_zn) + phi_yn
