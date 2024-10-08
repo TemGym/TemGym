@@ -178,11 +178,13 @@ class Lens(Component):
         # 0.0, which is neccessary for later
         if xp.abs(z1) >= 1e10:
             z1 = 1e10 * (z1 / xp.abs(z1))
-            self.NA1 = 0.0  # collimated input - only neccessary for the perfect, fourier and aberrated lens
+            self.NA1 = 0.0  # collimated input - only neccessary for the perfect,
+            # fourier and aberrated lens
 
         if xp.abs(z2) >= 1e10:
             z2 = 1e10 * (z2 / xp.abs(z2))
-            self.NA2 = 0.0  # collimated input - only neccessary for the perfect, fourier and aberrated lens
+            self.NA2 = 0.0  # collimated input - only neccessary for the perfect,
+            # fourier and aberrated lens
 
         m = z2 / z1
 
@@ -546,12 +548,12 @@ class AberratedLens(PerfectLens):
                                                  u1, v1, z2_circle, xp=xp)
 
         # Calculate the new aberrated ray coordinates in the image plane
-        x2_aber = x2 + eps_x
-        y2_aber = y2 + eps_y
+        # x2_aber = x2 + eps_x
+        # y2_aber = y2 + eps_y
 
         # Calculate the new aberrated ray coordinates in the exit pupil plane
-        u2_aber = u1 #x2_aber - nx / nz * (z2)
-        v2_aber = v1 #y2_aber - ny / nz * (z2)
+        u2_aber = u1  # x2_aber - nx / nz * (z2)
+        v2_aber = v1  # y2_aber - ny / nz * (z2)
 
         # u2_aber = -nx / nz * (phi_zn) + phi_xn
         # v2_aber = -ny / nz * (phi_zn) + phi_yn
@@ -1614,7 +1616,7 @@ class ProjectorLensSystem(Component):
 
         self._first = first
         self._second = second
-        
+
         self._validate_component()
 
         self.adjust_z2_and_z3_from_magnification(self.magnification)
