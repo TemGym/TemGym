@@ -12,7 +12,6 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QIntValidator,
-    QMouseEvent,
 )
 
 from superqt import QLabeledDoubleSlider, QLabeledSlider
@@ -126,7 +125,7 @@ def labelled_slider(
 class LabelledIntField(QWidget):
     def __init__(self, title, initial_value=None):
         QWidget.__init__(self)
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
         self.setLayout(layout)
 
         self.label = QLabel()
@@ -134,18 +133,10 @@ class LabelledIntField(QWidget):
         layout.addWidget(self.label)
 
         self.lineEdit = QLineEdit(self)
-        self.lineEdit.setFixedWidth(40)
         self.lineEdit.setValidator(QIntValidator())
         if initial_value is not None:
             self.lineEdit.setText(str(initial_value))
         layout.addWidget(self.lineEdit)
-        layout.addStretch()
-
-    def setLabelWidth(self, width):
-        self.label.setFixedWidth(width)
-
-    def setInputWidth(self, width):
-        self.lineEdit.setFixedWidth(width)
 
     def getValue(self, default: int = 1):
         try:
