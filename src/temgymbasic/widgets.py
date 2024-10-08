@@ -111,8 +111,23 @@ def labelled_slider(
 QSlider::groove:horizontal {
     border: 1px solid #999999;
     height: 10px;
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #B1B1B1, stop:1 #c4c4c4);
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66b2ff, stop:1 #cce5ff);
     margin: 4px 0;
+}
+
+QSlider::groove:horizontal:disabled {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    margin: 4px 0;
+}
+
+QSlider::handle:horizontal:disabled {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
 }
 
 QSlider::handle:horizontal {
