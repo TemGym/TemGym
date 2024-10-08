@@ -1172,6 +1172,9 @@ class AccumulatingDetector(Detector):
             return
         return self.buffer.shape[1:]
 
+    def delete_buffer(self):
+        self.buffer = None
+
     def reset_buffer(self, rays: Rays):
         xp = rays.xp
         self.buffer = xp.zeros(
@@ -1195,6 +1198,11 @@ class AccumulatingDetector(Detector):
         self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
         # Convert always to array on cpu device.
         return get_array_from_device(self.buffer.sum(axis=0))
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import AccumulatingDetectorGUI
+        return AccumulatingDetectorGUI
 
 
 class Deflector(Component):
