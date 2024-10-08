@@ -386,6 +386,12 @@ class TemGymWindow(QMainWindow):
                 gui_component.component.name,
                 collapsedIcon="▶",
             )
+            frame._toggle_btn.setStyleSheet(
+                "text-align: left;"
+                "border: none;"
+                "outline: none;"
+                "font: bold 16px;"
+            )
             frame.setDuration(0)
             wgt = QWidget()
             wgt.setLayout(gui_component.box)
