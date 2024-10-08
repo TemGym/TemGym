@@ -613,42 +613,27 @@ class LensGUI(ComponentGUIWrapper):
 
     @Slot(float)
     def set_spherical_aberration(self, val):
-        self.lens.spherical = (
-            self.sphericalslider.value(),
-        )
-        self.lens.aber_coeffs[0] = val
+        self.lens.aber_coeffs.spherical = val
         self.try_update()
 
     @Slot(float)
     def set_coma_aberration(self, val):
-        self.lens.coma = (
-            self.comaslider.value(),
-        )
-        self.lens.aber_coeffs[1] = val
+        self.lens.aber_coeffs.coma = val
         self.try_update()
 
     @Slot(float)
     def set_astigmatism_aberration(self, val):
-        self.lens.astigmatism = (
-            self.astigmatismslider.value(),
-        )
-        self.lens.aber_coeffs[2] = val
+        self.lens.aber_coeffs.astigmatism = val
         self.try_update()
 
     @Slot(float)
     def set_field_curvature_aberration(self, val):
-        self.lens.field_curvature = (
-            self.fieldcurvatureslider.value(),
-        )
-        self.lens.aber_coeffs[3] = val
+        self.lens.aber_coeffs.field_curvature = val
         self.try_update()
 
     @Slot(float)
     def set_distortion_aberration(self, val):
-        self.lens.distortion = (
-            self.distortionslider.value(),
-        )
-        self.lens.aber_coeffs[4] = val
+        self.lens.aber_coeffs.distortion = val
         self.try_update()
 
     def sync(self, block: bool = True):
@@ -660,52 +645,48 @@ class LensGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
 
         self.fslider, _ = labelled_slider(
-            self.lens.f, -5., 5., name="Focal Length", insert_into=vbox, decimals=2,
+            self.lens.f, -0.1, 0.1, name="Focal Length",
+            insert_into=vbox, decimals=2, tick_interval=0.02,
         )
         self.fslider.valueChanged.connect(self.set_f)
-        self.box = vbox
-
-        self.flabel_table = QLabel('Focal Length = ' + f"{self.lens.f:.2f}")
-        self.flabel_table.setMinimumWidth(80)
 
         if self.lens.aber_coeffs:
+            common_args = dict(
+                 vmin=-1000, vmax=1000, decimals=0,
+                 insert_into=vbox, tick_interval=100,
+            )
+
             self.sphericalslider, _ = labelled_slider(
-                self.lens.aber_coeffs[0], -1000, 1000, name="Spherical Aberration",
-                insert_into=vbox, decimals=2,
+                value=self.lens.aber_coeffs.spherical, name="Spherical Aberration",
+                **common_args,
             )
             self.sphericalslider.valueChanged.connect(self.set_spherical_aberration)
 
             self.comaslider, _ = labelled_slider(
-                self.lens.aber_coeffs[1], -1000, 1000, name="Coma",
-                insert_into=vbox, decimals=2,
+                value=self.lens.aber_coeffs.coma, name="Coma",
+                **common_args,
             )
             self.comaslider.valueChanged.connect(self.set_coma_aberration)
 
             self.astigmatismslider, _ = labelled_slider(
-                self.lens.aber_coeffs[2], -1000, 1000, name="Astigmatism",
-                insert_into=vbox, decimals=2,
+                value=self.lens.aber_coeffs.astigmatism, name="Astigmatism",
+                **common_args,
             )
             self.astigmatismslider.valueChanged.connect(self.set_astigmatism_aberration)
 
             self.fieldcurvatureslider, _ = labelled_slider(
-                self.lens.aber_coeffs[3], -1000, 1000, name="Field Curvature",
-                insert_into=vbox, decimals=2,
+                value=self.lens.aber_coeffs.field_curvature, name="Field Curvature",
+                **common_args,
             )
             self.fieldcurvatureslider.valueChanged.connect(self.set_field_curvature_aberration)
 
             self.distortionslider, _ = labelled_slider(
-                self.lens.aber_coeffs[4], -1000, 1000, name="Distortion",
-                insert_into=vbox, decimals=2,
+                value=self.lens.aber_coeffs.distortion, name="Distortion",
+                **common_args,
             )
             self.distortionslider.valueChanged.connect(self.set_distortion_aberration)
 
         self.box = vbox
-        vbox = self.box.layout()
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.flabel_table)
-        vbox = QVBoxLayout()
-        vbox.addLayout(hbox)
-        self.table.setLayout(vbox)
 
         return self
 

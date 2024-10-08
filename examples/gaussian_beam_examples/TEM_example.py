@@ -25,7 +25,7 @@ prop_dist = 5
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
 f = (1 / z_i - 1 / z_o) ** -1
-coeffs = [0., 0., 0., 0., 0.]
+coeffs = comp.LensAberrations(0., 0., 0., 0., 0.)
 
 components = (
     comp.GaussBeam(
