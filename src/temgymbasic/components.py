@@ -114,6 +114,9 @@ class LensAberrations:
             self.distortion,
         )
 
+    def nonzero(self):
+        return any(s != 0 for s in self)
+
 
 class Lens(Component):
     def __init__(self, z: float,
@@ -262,7 +265,7 @@ class Lens(Component):
         rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
         rays.path_length = -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
 
-        if self.aber_coeffs is not None:
+        if self.aber_coeffs is not None and self.aber_coeffs.nonzero():
 
             coeffs = self.aber_coeffs
 
