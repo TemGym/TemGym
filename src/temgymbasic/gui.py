@@ -46,7 +46,9 @@ if TYPE_CHECKING:
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
 RAY_COLOR = (0., 0.8, 0.)
-XYZ_SCALING = np.asarray((1., 1., 1.))
+XYZ_SCALING = np.asarray((1e2, 1e2, 1.))
+LENGTHSCALING = 1e-6
+MRAD = 1e-3
 
 
 class GridGeomParams(NamedTuple):
@@ -104,6 +106,7 @@ class GridGeomMixin:
 
     def get_geom(self):
         vertices = self._get_mesh()
+        vertices *= XYZ_SCALING
         self.geom_border = gl.GLLinePlotItem(
             pos=np.concatenate((vertices, vertices[:1, :]), axis=0),
             color=(0., 0., 0., 8.),
@@ -112,6 +115,7 @@ class GridGeomMixin:
         )
         grid_verts = self._get_grid_verts()
         if grid_verts is not None:
+            grid_verts *= XYZ_SCALING
             self.geom_grid = gl.GLLinePlotItem(
                 pos=grid_verts,
                 color=(0., 0., 0., 0.2),
@@ -126,11 +130,13 @@ class GridGeomMixin:
 
     def update_geometry(self):
         vertices = self._get_mesh()
+        vertices *= XYZ_SCALING
         self.geom_image.setVertices(
             vertices,
         )
         grid_verts = self._get_grid_verts()
         if grid_verts is not None:
+            grid_verts *= XYZ_SCALING
             self.geom_grid.setData(
                 pos=grid_verts,
                 color=(0., 0., 0., 0.3),
@@ -402,10 +408,13 @@ class TemGymWindow(QMainWindow):
 
     @Slot()
     def update_rays(self):
-        all_rays = tuple(self.model.run_iter(
-            self.gui_components[0].num_rays,
-            random=True,
-        ))
+        try:
+            all_rays = tuple(self.model.run_iter(
+                self.gui_components[0].num_rays,
+                random=True,
+            ))
+        except IndexError:
+            return
 
         vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
         self.ray_geometry.setData(
@@ -433,15 +442,10 @@ class TemGymWindow(QMainWindow):
         # FIXME Add in reverse to simulate better depth stacking
         for component in reversed(self.gui_components):
             for geometry in component.get_geom():
-                try:
-                    geometry.pos *= XYZ_SCALING
-                except AttributeError:
-                    geometry.vertices *= XYZ_SCALING
                 self.tem_window.addItem(geometry)
         # Add labels next so they appear above geometry
         for component in reversed(self.gui_components):
             label = component.get_label()
-            label.pos *= XYZ_SCALING
             self.tem_window.addItem(label)
         # Add the ray geometry last so it is always on top
         self.tem_window.addItem(self.ray_geometry)
@@ -959,18 +963,18 @@ class SourceGUI(ComponentGUIWrapper):
     @Slot(float)
     def set_tilt(self, val):
         self.beam.tilt_yx = (
-            self.yangleslider.value(),
-            self.xangleslider.value(),
+            self.yangleslider.value() * MRAD,
+            self.xangleslider.value() * MRAD,
         )
         self.try_update()
 
     @Slot(float)
     def set_centre(self, val):
         self.beam.centre_yx = (
-            self.ycentreslider.value(),
-            self.xcentreslider.value(),
+            self.ycentreslider.value() * LENGTHSCALING,
+            self.xcentreslider.value() * LENGTHSCALING,
         )
-        self.try_update()
+        self.try_update(geom=True)
 
     def _build(self):
         self._build_rayslider()
@@ -978,7 +982,7 @@ class SourceGUI(ComponentGUIWrapper):
         self._build_shiftsliders()
 
     def _build_rayslider(self, into=None):
-        num_rays = 64
+        num_rays = 256
 
         self.rayslider, self.raysliderbox = labelled_slider(
             num_rays, 1, 4096, name="Number of Rays", tick_interval=64,
@@ -987,33 +991,44 @@ class SourceGUI(ComponentGUIWrapper):
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
     def _build_tiltsliders(self, into=None):
-        max_tilt = np.pi / 32
+        if not isinstance(into, tuple):
+            into = (into, into)
+        max_tilt = 2
         common_args = dict(
-            vmin=-max_tilt, vmax=max_tilt, decimals=2,
-            insert_into=into, tick_interval=max_tilt / 8,
+            vmin=-max_tilt, vmax=max_tilt, decimals=1,
+            tick_interval=max_tilt / 8,
         )
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
         self.xangleslider, _ = labelled_slider(
-            value=beam_tilt_x, name="Beam Tilt X (rad)", **common_args
+            value=beam_tilt_x / MRAD, name="Beam Tilt X (mrad)",
+            insert_into=into[0], **common_args
         )
         self.yangleslider, _ = labelled_slider(
-            value=beam_tilt_y, name="Beam Tilt Y (rad)", **common_args,
+            value=beam_tilt_y / MRAD, name="Beam Tilt Y (mrad)",
+            insert_into=into[1], **common_args,
         )
 
         self.xangleslider.valueChanged.connect(self.set_tilt)
         self.yangleslider.valueChanged.connect(self.set_tilt)
 
     def _build_shiftsliders(self, into=None):
+        if not isinstance(into, tuple):
+            into = (into, into)
+        max_shift = 100
         common_args = dict(
-            vmin=-0.1, vmax=0.1, decimals=2,
-            insert_into=into,
+            vmin=-max_shift, vmax=max_shift, decimals=1,
+            tick_interval=max_shift / 10,
         )
         beam_centre_y, beam_centre_x = self.beam.centre_yx
+        beam_centre_y = beam_centre_y / LENGTHSCALING
+        beam_centre_x = beam_centre_x / LENGTHSCALING
         self.xcentreslider, _ = labelled_slider(
-            value=beam_centre_x, name="Beam Centre X", **common_args
+            value=beam_centre_x, name="Beam Centre X (µm)",
+            insert_into=into[0], **common_args
         )
         self.ycentreslider, _ = labelled_slider(
-            value=beam_centre_y, name="Beam Centre Y", **common_args,
+            value=beam_centre_y, name="Beam Centre Y (µm)",
+            insert_into=into[1], **common_args,
         )
 
         self.xcentreslider.valueChanged.connect(self.set_centre)
@@ -1024,7 +1039,7 @@ class SourceGUI(ComponentGUIWrapper):
 
     def get_geom(self):
         self.geom = gl.GLLinePlotItem(
-            pos=self._get_geom(),
+            pos=self._get_geom() * XYZ_SCALING,
             color=RAY_COLOR + (0.9,),
             width=2,
             antialias=True,
@@ -1033,7 +1048,7 @@ class SourceGUI(ComponentGUIWrapper):
 
     def update_geometry(self):
         self.geom.setData(
-            pos=self._get_geom(),
+            pos=self._get_geom() * XYZ_SCALING,
             color=RAY_COLOR + (0.9,),
             antialias=True,
         )
@@ -1097,17 +1112,17 @@ class GaussBeamGUI(SourceGUI):
 
     @Slot(float)
     def set_radius(self, val):
-        self.beam.radius = val
+        self.beam.radius = val * LENGTHSCALING
         self.try_update(geom=True)
 
     @Slot(float)
     def set_semi_angle(self, val):
-        self.beam.semi_angle = val
+        self.beam.semi_angle = val * MRAD
         self.try_update(geom=True)
 
     @Slot(float)
     def set_wo(self, val):
-        self.beam.wo = val
+        self.beam.wo = val * LENGTHSCALING
         self.try_update(geom=True)
 
     @Slot(int)
@@ -1115,13 +1130,13 @@ class GaussBeamGUI(SourceGUI):
         if btn_id == 0:  # parallel
             self.beamwidthslider.setDisabled(False)
             self.beamsemiangleslider.setDisabled(True)
-            self.beam.semi_angle = 0.
-            self.beam.radius = self.beamwidthslider.value()
+            self.set_radius(self.beamwidthslider.value())
+            self.set_semi_angle(0.)
         else:
             self.beamwidthslider.setDisabled(True)
             self.beamsemiangleslider.setDisabled(False)
-            self.beam.semi_angle = self.beamsemiangleslider.value()
-            self.beam.radius = 0.
+            self.set_radius(0.)
+            self.set_semi_angle(self.beamsemiangleslider.value())
         if update:
             self.try_update(geom=True)
 
@@ -1168,27 +1183,38 @@ class GaussBeamGUI(SourceGUI):
 
         beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
-            beam_radius, 0.001, 1., name='Beam Radius', insert_into=vbox,
-            decimals=3, tick_interval=0.1
+            beam_radius / LENGTHSCALING, 0., 200.,
+            name='Beam Radius (µm)', insert_into=vbox,
+            decimals=1, tick_interval=10.
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
         beamsemiangle = self.beam.semi_angle
         self.beamsemiangleslider, _ = labelled_slider(
-            beamsemiangle, 0.001, 1., name='Beam Semi Angle', insert_into=vbox,
-            decimals=3, tick_interval=0.1,
+            beamsemiangle / MRAD, 0., 1.,
+            name='Beam Semi Angle (mrad)', insert_into=vbox,
+            decimals=1, tick_interval=0.1,
         )
         self.beamsemiangleslider.valueChanged.connect(self.set_semi_angle)
 
         wo = self.beam.wo
         self.woslider, _ = labelled_slider(
-            wo, 0.001, 1, name='Beamlet std.-dev.', insert_into=vbox,
-            decimals=3, tick_interval=0.1
+            wo / LENGTHSCALING, 1, 500,
+            name='Beamlet std.-dev. (µm)', insert_into=vbox,
+            decimals=1, tick_interval=10.
         )
         self.woslider.valueChanged.connect(self.set_wo)
 
-        self._build_tiltsliders(into=vbox)
-        self._build_shiftsliders(into=vbox)
+        hbox0 = QHBoxLayout()
+        hbox1 = QHBoxLayout()
+        self._build_tiltsliders(into=(hbox0, hbox1))
+        vbox.addLayout(hbox0)
+        vbox.addLayout(hbox1)
+        hbox0 = QHBoxLayout()
+        hbox1 = QHBoxLayout()
+        self._build_shiftsliders(into=(hbox0, hbox1))
+        vbox.addLayout(hbox0)
+        vbox.addLayout(hbox1)
 
         self.modeselect.idPressed.connect(self.change_mode)
         self.change_mode(0, update=False)
@@ -1201,6 +1227,7 @@ class GaussBeamGUI(SourceGUI):
             self.beam.radius,
             Z_ORIENT * self.component.z,
             64,
+            cxy=self.beam.centre_yx[::-1]
         ).T
 
 
@@ -1703,6 +1730,54 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         return self.geom
 
 
+class SimpleDoubleDeflectorGUI(DoubleDeflectorGUI):
+    def sync(self, block: bool = True):
+        pass
+
+    @Slot(float)
+    def set_defy(self, val):
+        zref = self.d_deflector.exit_z
+        ypos = val * LENGTHSCALING
+        xpos = self.defxslider.value() * LENGTHSCALING
+        self.d_deflector.send_ray_through_points(
+            in_ray=(0., 0.),
+            pt1=(zref + 0.1, ypos, xpos),
+            pt2=(zref + 0.2, ypos, xpos),
+        )
+        self.try_update()
+
+    @Slot(float)
+    def set_defx(self, val):
+        zref = self.d_deflector.exit_z
+        ypos = self.defyslider.value() * LENGTHSCALING
+        xpos = val * LENGTHSCALING
+        self.d_deflector.send_ray_through_points(
+            in_ray=(0., 0.),
+            pt1=(zref + 0.1, ypos, xpos),
+            pt2=(zref + 0.2, ypos, xpos),
+        )
+        self.try_update()
+
+    def build(self) -> Self:
+        vbox = QVBoxLayout()
+
+        common_args = dict(
+            vmin=-300, vmax=300, decimals=1,
+            tick_interval=50, insert_into=vbox,
+        )
+        self.defxslider, _ = labelled_slider(
+            value=0., name="X-Deflection (µm)", **common_args
+        )
+        self.defyslider, _ = labelled_slider(
+            value=0., name="Y-Deflection (µm)", **common_args,
+        )
+
+        self.defxslider.valueChanged.connect(self.set_defx)
+        self.defyslider.valueChanged.connect(self.set_defy)
+        self.box = vbox
+        return self
+
+
 class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
 
     def __init__(self, *args, **kwargs):
@@ -1715,7 +1790,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
 
     @Slot(float)
     def set_pixelsize(self, val: float):
-        self.detector.pixel_size = val
+        self.detector.pixel_size = val * LENGTHSCALING
         self.try_update(geom=True)
 
     @Slot(float)
@@ -1748,8 +1823,10 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
     def set_interference(self, val: str):
         if val:
             self.detector.interference = 'gauss'
+            self.detector.buffer = None
         else:
             self.detector.interference = None
+            self.detector.buffer = None
         self.try_update()
 
     @Slot(str)
@@ -1778,19 +1855,20 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
     def build(self) -> Self:
         vbox = QVBoxLayout()
 
-        hbox = QHBoxLayout()
         self.xsize = LabelledIntField("X-dim", initial_value=self.detector.shape[1])
+        vbox.addWidget(self.xsize)
         self.ysize = LabelledIntField("Y-dim", initial_value=self.detector.shape[0])
-        self.xsize.insert_into(hbox)
-        self.ysize.insert_into(hbox)
+        vbox.addWidget(self.ysize)
         self.xsize.lineEdit.textChanged.connect(self.set_shape)
         self.ysize.lineEdit.textChanged.connect(self.set_shape)
+
         self.pixelsizeslider, _ = labelled_slider(
-            self.detector.pixel_size, 0.001, 0.03, name="Pixel size",
-            insert_into=hbox, decimals=5,
+            self.detector.pixel_size / LENGTHSCALING,
+            1, 100,
+            name="Pixel size (µm)", insert_into=vbox,
+            decimals=1, tick_interval=10.,
         )
         self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
-        vbox.addLayout(hbox)
 
         self.display_type_group = QButtonGroup(self.box)
         self.amplitude_radio = QRadioButton("Amplitude")
@@ -1814,8 +1892,8 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.amplitude_radio)
-        hbox.addWidget(self.phase_radio)
         hbox.addWidget(self.intensity_radio)
+        hbox.addWidget(self.phase_radio)
         vbox.addLayout(hbox)
         hbox = QHBoxLayout()
         self.flipy_cbox = QCheckBox("Flip-y")
@@ -1829,11 +1907,11 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.intfrnce_cbox.stateChanged.connect(self.set_interference)
         hbox.addWidget(self.intfrnce_cbox)
 
-        self.rotationslider, _ = labelled_slider(
-            self.detector.rotation, -180., 180., name="Rotation",
-            insert_into=hbox, decimals=1, tick_interval=10.,
-        )
-        self.rotationslider.valueChanged.connect(self.set_rotation)
+        # self.rotationslider, _ = labelled_slider(
+        #     self.detector.rotation, -180., 180., name="Rotation",
+        #     insert_into=hbox, decimals=1, tick_interval=10.,
+        # )
+        # self.rotationslider.valueChanged.connect(self.set_rotation)
         vbox.addLayout(hbox)
 
         self.box = vbox

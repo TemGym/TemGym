@@ -214,19 +214,19 @@ class Lens(Component):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        
+
         xp = rays.xp
 
         M = self._m
         z2 = self._z2
-        
+
         #Rays at lens plane
         u1 = rays.x_central
         v1 = rays.y_central
-        
+
         du1 = rays.dx_central
         dv1 = rays.dy_central
-        
+
         #Rays at object plane
         x1 = u1 + du1 * self._z1
         y1 = v1 + dv1 * self._z1
@@ -237,23 +237,23 @@ class Lens(Component):
 
         rays.data = xp.matmul(self.lens_matrix(xp.float64(self._f), xp=xp), rays.data)
         rays.path_length =  -(rays.x ** 2 + rays.y ** 2) / (2 * xp.float64(self._f))
-        
+
         if self.aber_coeffs:
 
             coeffs = self.aber_coeffs
-            
+
             # Calculate the aberration in x and y (Approximate R' as the reference sphere radius at image side)
             eps_x, eps_y = aber_x_aber_y(u1, v1, x1, y1, coeffs, z2, M, xp=xp)
-            
+
             x2 = u1 + rays.dx_central * z2
             y2 = v1 + rays.dy_central * z2
-            
+
             x2_aber = x2 + eps_x
             y2_aber = y2 + eps_y
-            
+
             nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
             W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
-            
+
             if isinstance(rays, GaussianRays):
                 rays.dx += xp.repeat(nx / nz, 5)
                 rays.dy += xp.repeat(ny / nz, 5)
@@ -262,7 +262,7 @@ class Lens(Component):
                 rays.dx += nx / nz
                 rays.dy += ny / nz
                 rays.path_length += W
-            
+
 
         # Just straightforward matrix multiplication
         yield rays.new_with(
@@ -320,7 +320,7 @@ class PerfectLens(Lens):
     @m.setter
     def m(self, m: float):
         self._m = m
-        
+
     @property
     def ffp(self) -> float:
         return self.z - abs(self._f)
@@ -511,11 +511,11 @@ class AberratedLens(PerfectLens):
     def step(self, rays: Rays) -> Generator[Rays, None, None]:
         # # Call the step function of the parent class
         # yield from super().step(rays)
-        
+
         M = self._m
-        
+
         xp = rays.xp
-        
+
         z2 = self._z2
         x1, y1, u1, v1, u2, v2, x2, y2, L2, M2, N2, dopl = self.get_exit_pupil_coords(rays, xp=xp)
 
@@ -528,7 +528,7 @@ class AberratedLens(PerfectLens):
         u2_circle = x2 - L2 * R
         v2_circle = y2 - M2 * R
         z2_circle = z2 - N2 * R
-        
+
         psi_a = np.arctan2(v2_circle, u2_circle)
         psi_o = np.arctan2(y1, x1)
         psi = psi_a - psi_o
@@ -894,6 +894,7 @@ class Detector(Component):
         self.flip_y = flip_y
         self.center = center
         self.interference = interference
+        self.buffer = None
 
     @property
     def rotation(self) -> Degrees:
@@ -961,6 +962,15 @@ class Detector(Component):
         # this entire section can be optimised !!!
         return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
 
+    @property
+    def image_dtype(self):
+        if self.interference is None:
+            return np.int32
+        # Setting this next line reduces the bitdepth
+        # of the image computation which can improve the speed
+        # quite substantially
+        return np.complex128
+
     def get_image(
         self,
         rays: Rays,
@@ -983,15 +993,17 @@ class Detector(Component):
             )
         )
 
+        image_dtype = self.image_dtype
         if self.interference == 'ray':
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
             wavefronts = 1.0 * xp.exp(-1j * (2 * xp.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
-            image_dtype = valid_wavefronts.dtype
+            # image_dtype = valid_wavefronts.dtype
         elif self.interference == 'gauss':
-            image_dtype = xp.complex128
+            pass
+            # image_dtype = xp.complex128
             # Setting this next line reduces the bitdepth
             # of the image computation which can improve the speed
             # quite substantially
@@ -999,7 +1011,7 @@ class Detector(Component):
         elif self.interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
-            image_dtype = xp.int32
+            # image_dtype = xp.int32
 
         if out is None:
             out = xp.zeros(
@@ -1161,13 +1173,13 @@ class AccumulatingDetector(Detector):
         xp = rays.xp
         self.buffer = xp.zeros(
             (self.buffer_length, *self.shape),
-            dtype=xp.complex128,
+            dtype=self.image_dtype,
         )
         # the next index to write into
         self.buffer_idx = 0
 
     def get_image(self, rays: Rays) -> NDArray:
-        if self.buffer_frame_shape != self.shape:
+        if self.buffer is None or self.buffer_frame_shape != self.shape:
             self.reset_buffer(rays)
         else:
             self.buffer[self.buffer_idx] = 0.
@@ -1178,8 +1190,7 @@ class AccumulatingDetector(Detector):
         )
 
         self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
-        
-        #Convert always to array on cpu device. 
+        # Convert always to array on cpu device.
         return get_array_from_device(self.buffer.sum(axis=0))
 
 
@@ -1342,7 +1353,7 @@ class DoubleDeflector(Component):
         at (in_zp) with slope (in_slope), will leave at (z_out, ...) and
         pass through (pt1_zp) then (pt2_zp)
         """
-        
+
         in_zp = np.asarray(in_zp)
         pt1_zp = np.asarray(pt1_zp)
         pt2_zp = np.asarray(pt2_zp)
@@ -1389,8 +1400,8 @@ class DoubleDeflector(Component):
 
     @staticmethod
     def gui_wrapper():
-        from .gui import DoubleDeflectorGUI
-        return DoubleDeflectorGUI
+        from .gui import SimpleDoubleDeflectorGUI
+        return SimpleDoubleDeflectorGUI
 
 
 class Biprism(Component):
@@ -1441,7 +1452,7 @@ class Biprism(Component):
     def step(
         self, rays: Rays,
     ) -> Generator[Rays, None, None]:
-        
+
         xp = rays.xp
         deflection = xp.array(self.deflection)
         offset = xp.array(self.offset)
@@ -1535,8 +1546,8 @@ class Aperture(Component):
     def gui_wrapper():
         from .gui import ApertureGUI
         return ApertureGUI
-    
-    
+
+
 class PotentialSample(Sample):
     def __init__(
         self,
@@ -1557,7 +1568,7 @@ class PotentialSample(Sample):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        
+
         xp = rays.xp
         # See Chapter 2 & 3 of principles of electron optics 2017 Vol 1 for more info
         rho = xp.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)  # Equation 3.16

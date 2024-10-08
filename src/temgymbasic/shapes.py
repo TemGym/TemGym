@@ -74,7 +74,7 @@ def deflector(r, phi, z, n_arc):
     return points_arc_1, points_arc_2
 
 
-def lens(r, z, n_arc):
+def lens(r, z, n_arc, cxy=(0., 0.)):
     '''Wire model geometry of lens
 
     Parameters
@@ -94,8 +94,9 @@ def lens(r, z, n_arc):
     THETA = xp.linspace(0, 2*xp.pi, n_arc, endpoint=True)
     R = r*xp.ones(xp.size(THETA))
     Z = z*xp.ones(xp.size(THETA))
+    cx, cy = cxy
 
-    points_circle = xp.array([R*xp.cos(THETA), R*xp.sin(THETA), Z])
+    points_circle = xp.array([R*xp.cos(THETA) + cx, R*xp.sin(THETA) + cy, Z])
 
     return points_circle
 
