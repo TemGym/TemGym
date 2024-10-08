@@ -49,6 +49,7 @@ RAY_COLOR = (0., 0.8, 0.)
 XYZ_SCALING = np.asarray((1e2, 1e2, 1.))
 LENGTHSCALING = 1e-6
 MRAD = 1e-3
+UPDATE_RATE = 50
 
 
 class GridGeomParams(NamedTuple):
@@ -295,7 +296,7 @@ class TemGymWindow(QMainWindow):
         # Update rays timer
         self.rays_timer = QTimer(parent=self)
         self.rays_timer.timeout.connect(self.update_rays)
-        self.rays_timer.start(30)
+        self.rays_timer.start(UPDATE_RATE)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Escape, Qt.Key_Q):
@@ -1121,6 +1122,13 @@ class GaussBeamGUI(SourceGUI):
 
     @Slot(bool)
     def set_random(self, val):
+        window = self.window()
+        if window is not None:
+            timer = window.rays_timer
+            if timer.isActive() and not val:
+                timer.stop()
+            elif not timer.isActive() and val:
+                timer.start(UPDATE_RATE)
         self.beam.random = val
         self.try_update(geom=False)
 
