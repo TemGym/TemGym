@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
     QComboBox,
     QButtonGroup,
     QRadioButton,
-    QToolBox,
 )
 from PySide6.QtGui import (
     QKeyEvent,
@@ -30,6 +29,7 @@ from PySide6.QtGui import (
 from pyqtgraph.dockarea import Dock, DockArea
 import pyqtgraph.opengl as gl
 import pyqtgraph as pg
+from superqt import QCollapsible
 
 import numpy as np
 
@@ -377,22 +377,28 @@ class TemGymWindow(QMainWindow):
         '''
         self.model_gui = self.model.gui_wrapper()(window=self).build()
 
-        # Controls are held in accordion list-like stack
-        tab_widget = QToolBox()
-        for gui_component in self.gui_components:
-            wgt = QWidget()
-            gui_component.box.addStretch()
-            wgt.setLayout(gui_component.box)
-            tab_widget.addItem(wgt, gui_component.component.name)
-
         # Layout is a VBox with stretch after
         layout = QVBoxLayout()
-        layout.addWidget(tab_widget)
+        for gui_component in self.gui_components:
+            # Controls are held in accordion list-like collapsible stack
+            frame = QCollapsible(
+                gui_component.component.name,
+                collapsedIcon="▶",
+            )
+            frame.setDuration(0)
+            wgt = QWidget()
+            wgt.setLayout(gui_component.box)
+            frame.setContent(wgt)
+            frame.collapse(animate=False)
+            layout.addWidget(frame)
         layout.addStretch()
 
         # Wrap the VLayout in a scroll area and set it in the Dock
         scroll = QScrollArea()
-        scroll.setLayout(layout)
+        wgt = QWidget()
+        wgt.setLayout(layout)
+        scroll.setWidget(wgt)
+        scroll.setWidgetResizable(1)
         self.gui_dock.addWidget(scroll)
 
     @Slot()
