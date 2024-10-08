@@ -50,6 +50,7 @@ XYZ_SCALING = np.asarray((1e2, 1e2, 1.))
 LENGTHSCALING = 1e-6
 MRAD = 1e-3
 UPDATE_RATE = 50
+BKG_COLOR_3D = (150, 150, 150, 255)
 
 
 class GridGeomParams(NamedTuple):
@@ -307,7 +308,7 @@ class TemGymWindow(QMainWindow):
         '''
         # Create the 3D TEM Widnow, and plot the components in 3D
         self.tem_window = gl.GLViewWidget()
-        self.tem_window.setBackgroundColor((150, 150, 150, 255))
+        self.tem_window.setBackgroundColor(BKG_COLOR_3D)
 
         # Get the model mean height to centre the camera origin
         mean_z = sum(c.z for c in self.model.components) / len(self.model.components)
@@ -362,8 +363,9 @@ class TemGymWindow(QMainWindow):
         '''
         # Create the detector window, which shows where rays land at the bottom
         self.detector_window = pg.GraphicsLayoutWidget()
+        self.detector_window.setBackground(BKG_COLOR_3D)
         self.detector_window.setAspectLocked(1.0)
-        self.spot_img = pg.ImageItem(border="k")
+        self.spot_img = pg.ImageItem(border=None)
         v2 = self.detector_window.addViewBox()
         v2.setAspectLocked()
 
