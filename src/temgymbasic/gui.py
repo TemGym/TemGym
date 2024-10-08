@@ -1130,6 +1130,12 @@ class GaussBeamGUI(SourceGUI):
         self.try_update(geom=False)
 
     @Slot(int)
+    @Slot(float)
+    def set_voltage(self, val):
+        self.beam.phi_0 = float(val)
+        self.try_update(geom=False)
+
+    @Slot(int)
     def change_mode(self, btn_id, update=True):
         if btn_id == 0:  # parallel
             self.beamwidthslider.setDisabled(False)
@@ -1190,6 +1196,13 @@ class GaussBeamGUI(SourceGUI):
 
         self._build_rayslider(into=vbox)
 
+        self.voltageslider, _ = labelled_slider(
+            int(self.beam.phi_0 / 1000), 1, 200,
+            name='Voltage (kV)', insert_into=vbox,
+            decimals=0, tick_interval=10,
+        )
+        self.voltageslider.valueChanged.connect(self.set_voltage)
+
         beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
             beam_radius / LENGTHSCALING, 0., 200.,
@@ -1224,7 +1237,6 @@ class GaussBeamGUI(SourceGUI):
         self._build_shiftsliders(into=(hbox0, hbox1))
         vbox.addLayout(hbox0)
         vbox.addLayout(hbox1)
-
 
         self.modeselect.idPressed.connect(self.change_mode)
         self.change_mode(0, update=False)
