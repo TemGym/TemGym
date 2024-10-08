@@ -665,13 +665,14 @@ class Source(Component):
         self.tilt_yx = tilt_yx
         self.centre_yx = centre_yx
         self.phi_0 = voltage
+        self.random = False
 
     @property
     def voltage(self):
         return self.phi_0
 
     @abc.abstractmethod
-    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
+    def get_rays(self, num_rays: int, random: Optional[bool] = None, backend='cpu') -> Rays:
         raise NotImplementedError
 
     def set_centre(self, centre_yx: tuple[float, float]):
@@ -729,8 +730,9 @@ class ParallelBeam(Source):
         super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage, centre_yx=centre_yx)
         self.radius = radius
 
-    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
-        r = circular_beam(num_rays, self.radius, random=random)
+    def get_rays(self, num_rays: int, random: Optional[bool] = None, backend='cpu') -> Rays:
+        r = circular_beam(num_rays, self.radius,
+                          random=random if random is not None else self.random)
         return self._make_rays(r, backend=backend)
 
     @staticmethod
@@ -783,8 +785,9 @@ class PointBeam(Source):
         self.tilt_yx = tilt_yx
         self.centre_yx = centre_yx
 
-    def get_rays(self, num_rays: int, random: bool = False, backend='cpu') -> Rays:
-        r = point_beam(num_rays, self.semi_angle, random=random)
+    def get_rays(self, num_rays: int, random: Optional[bool] = None, backend='cpu') -> Rays:
+        r = point_beam(num_rays, self.semi_angle,
+                       random=random if random is not None else self.random)
         return self._make_rays(r, backend=backend)
 
     @staticmethod
@@ -827,7 +830,7 @@ class GaussBeam(Source):
     def get_rays(
         self,
         num_rays: int,
-        random: bool = False,
+        random: Optional[bool] = None,
         backend='cpu',
     ) -> Rays:
         wavelength = calculate_wavelength(self.voltage)
@@ -842,7 +845,7 @@ class GaussBeam(Source):
             self.semi_angle,
             self.wo,
             wavelength,
-            random=random,
+            random=random if random is not None else self.random,
             xp=xp,
         )
 

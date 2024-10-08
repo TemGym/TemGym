@@ -411,7 +411,6 @@ class TemGymWindow(QMainWindow):
         try:
             all_rays = tuple(self.model.run_iter(
                 self.gui_components[0].num_rays,
-                random=True,
             ))
         except IndexError:
             return
@@ -1118,12 +1117,17 @@ class GaussBeamGUI(SourceGUI):
     @Slot(float)
     def set_semi_angle(self, val):
         self.beam.semi_angle = val * MRAD
-        self.try_update(geom=True)
+        self.try_update(geom=False)
 
     @Slot(float)
     def set_wo(self, val):
         self.beam.wo = val * LENGTHSCALING
-        self.try_update(geom=True)
+        self.try_update(geom=False)
+
+    @Slot(bool)
+    def set_random(self, val):
+        self.beam.random = val
+        self.try_update(geom=False)
 
     @Slot(int)
     def change_mode(self, btn_id, update=True):
@@ -1215,6 +1219,11 @@ class GaussBeamGUI(SourceGUI):
         self._build_shiftsliders(into=(hbox0, hbox1))
         vbox.addLayout(hbox0)
         vbox.addLayout(hbox1)
+
+        random_cbox = QCheckBox("Random rays")
+        random_cbox.setChecked(self.beam.random)
+        random_cbox.stateChanged.connect(self.set_random)
+        vbox.addWidget(random_cbox)
 
         self.modeselect.idPressed.connect(self.change_mode)
         self.change_mode(0, update=False)

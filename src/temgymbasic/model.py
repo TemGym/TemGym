@@ -117,7 +117,7 @@ class Model:
         )
 
     def run_iter(
-        self, num_rays: int, random: bool = False, backend: Optional[BackendT] = None,
+        self, num_rays: int, random: Optional[bool] = None, backend: Optional[BackendT] = None,
     ) -> Generator[Rays, None, None]:
         source: comp.Source = self.components[0]
         rays = source.get_rays(num_rays, random=random, backend=backend or self.backend)
