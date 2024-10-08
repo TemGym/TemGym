@@ -106,6 +106,24 @@ def labelled_slider(
     else:
         slider = QLabeledSlider(QtCore.Qt.Orientation.Horizontal)
     slider_config(slider, value, vmin, vmax, tick_interval)
+    slider._slider.setStyleSheet(
+        R"""
+QSlider::groove:horizontal {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #B1B1B1, stop:1 #c4c4c4);
+    margin: 4px 0;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #b4b4b4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+"""
+    )
 
     if isinstance(insert_into, QHBoxLayout):
         hbox = insert_into
