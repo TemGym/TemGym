@@ -105,6 +105,15 @@ class LensAberrations:
     def __iter__(self):
         return iter(astuple(self))
 
+    def BFCDE(self):
+        return (
+            self.spherical,
+            self.coma,
+            self.astigmatism,
+            self.field_curvature,
+            self.distortion,
+        )
+
 
 class Lens(Component):
     def __init__(self, z: float,
