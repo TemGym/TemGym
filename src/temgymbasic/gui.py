@@ -1189,7 +1189,7 @@ class GaussBeamGUI(SourceGUI):
         self.beamwidthslider, _ = labelled_slider(
             beam_radius / LENGTHSCALING, 0., 200.,
             name='Beam Radius (µm)', insert_into=vbox,
-            decimals=1, tick_interval=10.
+            decimals=1, tick_interval=10.,
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
@@ -1205,7 +1205,7 @@ class GaussBeamGUI(SourceGUI):
         self.woslider, _ = labelled_slider(
             wo / LENGTHSCALING, 1, 500,
             name='Beamlet std.-dev. (µm)', insert_into=vbox,
-            decimals=1, tick_interval=10.
+            decimals=1, tick_interval=10.,
         )
         self.woslider.valueChanged.connect(self.set_wo)
 

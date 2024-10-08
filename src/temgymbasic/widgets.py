@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from PySide6 import QtCore
 from PySide6.QtWidgets import (
@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLineEdit,
+    QPushButton,
+    QSizePolicy,
 )
 from PySide6.QtGui import (
     QIntValidator,
@@ -98,6 +100,7 @@ def labelled_slider(
     insert_into: Optional[QLayout] = None,
     decimals: int = 0,
     tick_interval: Optional[int] = None,
+    reset_to: Optional[Union[int, bool]] = True,
 ):
     if decimals > 0:
         slider = QLabeledDoubleSlider(QtCore.Qt.Orientation.Horizontal)
@@ -111,8 +114,28 @@ def labelled_slider(
         hbox = QVBoxLayout()
 
     if name is not None:
-        slider_namelabel = QLabel(name)
-        hbox.addWidget(slider_namelabel)
+        if reset_to is not None:
+
+            @QtCore.Slot()
+            def reset():
+                if reset_to is True:
+                    slider.setValue(value)
+                else:
+                    slider.setValue(reset_to)
+
+            button = QPushButton(name)
+            button.setFlat(True)
+            button.setMaximumWidth(175)
+            button.setStyleSheet("text-align:left;")
+            # button.setSizePolicy(
+            #     QSizePolicy.Policy.Minimum,
+            #     QSizePolicy.Policy.Minimum,
+            # )
+            button.clicked.connect(reset)
+            hbox.addWidget(button)
+        else:
+            slider_namelabel = QLabel(name)
+            hbox.addWidget(slider_namelabel)
 
     hbox.addWidget(slider)
 
