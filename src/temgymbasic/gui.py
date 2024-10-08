@@ -264,7 +264,7 @@ class TemGymWindow(QMainWindow):
 
         # Set some main window's properties
         self.setWindowTitle("TemGymBasic")
-        self.resize(1600, 1200)
+        self.resize(1600, 950)
 
         # Create Docks
         label = MyDockLabel("3D View")
@@ -380,7 +380,7 @@ class TemGymWindow(QMainWindow):
 
         # Layout is a VBox with stretch after
         layout = QVBoxLayout()
-        for gui_component in self.gui_components:
+        for idx, gui_component in enumerate(self.gui_components):
             # Controls are held in accordion list-like collapsible stack
             frame = QCollapsible(
                 gui_component.component.name,
@@ -396,7 +396,10 @@ class TemGymWindow(QMainWindow):
             wgt = QWidget()
             wgt.setLayout(gui_component.box)
             frame.setContent(wgt)
-            frame.collapse(animate=False)
+            if idx > 0:
+                frame.collapse(animate=False)
+            else:
+                frame.expand(animate=False)
             layout.addWidget(frame)
         layout.addStretch()
 
