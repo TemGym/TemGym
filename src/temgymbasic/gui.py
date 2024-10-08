@@ -375,36 +375,25 @@ class TemGymWindow(QMainWindow):
     def createGUI(self):
         '''Create the gui display
         '''
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(1)
-        content = QWidget()
-        scroll.setWidget(content)
-        # self.table_layout = QVBoxLayout(content)
-        # self.table_dock.addWidget(scroll, 1, 0)
-
-        # Create the window which houses the GUI
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(1)
-        content = QWidget()
-        scroll.setWidget(content)
-        self.gui_dock.addWidget(scroll, 1, 0)
-
-        self.gui_layout = QVBoxLayout(content)
         self.model_gui = self.model.gui_wrapper()(window=self).build()
-        # self.gui_layout.addWidget(self.model_gui.box)
 
+        # Controls are held in accordion list-like stack
         tab_widget = QToolBox()
-        # tab_widget.setUsesScrollButtons(False)
-        self.gui_layout.addWidget(tab_widget)
-
         for gui_component in self.gui_components:
             wgt = QWidget()
+            gui_component.box.addStretch()
             wgt.setLayout(gui_component.box)
             tab_widget.addItem(wgt, gui_component.component.name)
-            # self.gui_layout.addWidget(gui_component.box)
-            # self.table_layout.addWidget(gui_component.table)
 
-        self.gui_layout.addStretch()
+        # Layout is a VBox with stretch after
+        layout = QVBoxLayout()
+        layout.addWidget(tab_widget)
+        layout.addStretch()
+
+        # Wrap the VLayout in a scroll area and set it in the Dock
+        scroll = QScrollArea()
+        scroll.setLayout(layout)
+        self.gui_dock.addWidget(scroll)
 
     @Slot()
     def update_rays(self):
