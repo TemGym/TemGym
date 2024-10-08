@@ -21,7 +21,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QComboBox,
     QButtonGroup,
-    QRadioButton,
 )
 from PySide6.QtGui import (
     QKeyEvent,
@@ -1839,6 +1838,11 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self._display_type = val
         self.try_update()
 
+    @Slot(int)
+    def change_mode(self, btn_id):
+        names = ('amplitude', 'phase', 'intensity')
+        self.set_detector_display_type(names[btn_id])
+
     @Slot(str)
     def set_interference(self, val: str):
         if val:
@@ -1890,44 +1894,46 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         )
         self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
 
-        self.display_type_group = QButtonGroup(self.box)
-        self.amplitude_button = QPushButton("Amplitude")
-        self.phase_button = QPushButton("Phase")
-        self.intensity_button = QPushButton("Intensity")
-
-        self.display_type_group.addButton(self.amplitude_button)
-        self.display_type_group.addButton(self.phase_button)
-        self.display_type_group.addButton(self.intensity_button)
+        amplitude_button = QPushButton("Amplitude")
+        amplitude_button.setCheckable(True)
+        phase_button = QPushButton("Phase")
+        phase_button.setCheckable(True)
+        intensity_button = QPushButton("Intensity")
+        intensity_button.setCheckable(True)
 
         if self.display_type == 'amplitude':
-            self.amplitude_button.setChecked(True)
+            amplitude_button.setChecked(True)
         elif self.display_type == 'phase':
-            self.phase_button.setChecked(True)
+            phase_button.setChecked(True)
         else:
-            self.intensity_button.setChecked(True)
+            intensity_button.setChecked(True)
 
-        self.amplitude_button.toggled.connect(lambda: self.set_detector_display_type('amplitude'))
-        self.phase_button.toggled.connect(lambda: self.set_detector_display_type('phase'))
-        self.intensity_button.toggled.connect(lambda: self.set_detector_display_type('intensity'))
+        self.display_type_group = QButtonGroup()
+        self.display_type_group.setExclusive(True)
+        self.display_type_group.addButton(amplitude_button)
+        self.display_type_group.setId(amplitude_button, 0)
+        self.display_type_group.addButton(phase_button)
+        self.display_type_group.setId(phase_button, 1)
+        self.display_type_group.addButton(intensity_button)
+        self.display_type_group.setId(intensity_button, 2)
+        self.display_type_group.idPressed.connect(self.change_mode)
 
         hbox = QHBoxLayout()
-        hbox.addWidget(self.amplitude_radio)
-        hbox.addWidget(self.intensity_radio)
-        hbox.addWidget(self.phase_radio)
+        hbox.addWidget(amplitude_button)
+        hbox.addWidget(intensity_button)
+        hbox.addWidget(phase_button)
         vbox.addLayout(hbox)
 
-        hbox = QHBoxLayout()
         self.intfrnce_cbox = QCheckBox("Turn on Gauss Beam Interference")
         self.intfrnce_cbox.setChecked(self.detector.interference == 'gauss')
         self.intfrnce_cbox.stateChanged.connect(self.set_interference)
-        hbox.addWidget(self.intfrnce_cbox)
+        vbox.addWidget(self.intfrnce_cbox)
 
         # self.rotationslider, _ = labelled_slider(
         #     self.detector.rotation, -180., 180., name="Rotation",
         #     insert_into=hbox, decimals=1, tick_interval=10.,
         # )
         # self.rotationslider.valueChanged.connect(self.set_rotation)
-        vbox.addLayout(hbox)
 
         self.box = vbox
         return self
