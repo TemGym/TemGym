@@ -449,6 +449,12 @@ class TemGymWindow(QMainWindow):
                 elif detector_gui.display_type == 'intensity':
                     self.spot_img.setImage(np.abs(image.T) ** 2)
 
+        try:
+            mempool = all_rays[-1].xp.get_default_memory_pool()
+            mempool.free_all_blocks()
+        except AttributeError:
+            pass
+
     def add_geometry(self):
         self.tem_window.clear()
         # Loop through all of the model components
