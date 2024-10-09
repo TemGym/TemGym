@@ -279,16 +279,21 @@ class Lens(Component):
             x2_aber = x2 + eps_x
             y2_aber = y2 + eps_y
 
-            nx, ny, nz = calculate_direction_cosines(x2_aber, y2_aber, z2, u1, v1, 0.0, xp=xp)
+            nx, ny, nz = calculate_direction_cosines(x2, y2, z2, u1, v1, 0.0, xp=xp)
+            nx_aber, ny_aber, nz_aber = calculate_direction_cosines(x2_aber, y2_aber, z2,
+                                                                    u1, v1, 0.0, xp=xp)
             W = opd(u1, v1, x1, y1, psi, coeffs, z2, M, xp=xp)
 
+            dx_slope = nx_aber / nz_aber - nx / nz
+            dy_slope = ny_aber / nz_aber - ny / nz
+
             if isinstance(rays, GaussianRays):
-                rays.dx += xp.repeat(nx / nz, 5)
-                rays.dy += xp.repeat(ny / nz, 5)
+                rays.dx += xp.repeat(dx_slope, 5)
+                rays.dy += xp.repeat(dy_slope, 5)
                 rays.path_length += xp.repeat(W, 5)
             else:
-                rays.dx += nx / nz
-                rays.dy += ny / nz
+                rays.dx += dx_slope
+                rays.dy += dy_slope
                 rays.path_length += W
 
         # Just straightforward matrix multiplication
@@ -1053,6 +1058,7 @@ class Detector(Component):
             assert out.shape == self.shape
 
         if self.interference == 'gauss':
+
             self.get_gauss_image(rays, out)
         else:
             flat_icds = xp.ravel_multi_index(
@@ -1103,7 +1109,7 @@ class Detector(Component):
         wavelength = rays.wavelength
 
         # import pdb
-        # pdb.set_trace()
+
         div = rays.wavelength / (xp.pi * wo)
         k = float_dtype(2 * xp.pi / wavelength)
         z_r = float_dtype(xp.pi * wo ** 2 / wavelength)
@@ -1137,6 +1143,7 @@ class Detector(Component):
         # [5g, (x, dx, y, dy), n_gauss]
 
         # rayset1 = cp.array(rayset1)
+
         A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy, xp=xp)
         # A, B, C, D all have shape (n_gauss, 2, 2)
         Qinv = calculate_Qinv(z_r, n_gauss, xp=xp)
@@ -1524,6 +1531,7 @@ class Biprism(Component):
 
         rays.dx += xdeflection_mag * deflection
         rays.dy += ydeflection_mag * deflection
+
         rays.path_length += (
             xdeflection_mag * deflection * rays.x
             + ydeflection_mag * deflection * rays.y

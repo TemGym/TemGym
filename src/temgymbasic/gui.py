@@ -436,6 +436,7 @@ class TemGymWindow(QMainWindow):
         )
 
         if self.model.detector is not None:
+
             image = self.model.detector.get_image(
                 all_rays[-1]
             )
@@ -670,7 +671,7 @@ class LensGUI(ComponentGUIWrapper):
 
         if self.lens.aber_coeffs:
             common_args = dict(
-                 vmin=-1000, vmax=1000, decimals=0,
+                 vmin=-100000000, vmax=100000000, decimals=0,
                  insert_into=vbox, tick_interval=100,
             )
 
@@ -2049,7 +2050,7 @@ class BiprismGUI(ComponentGUIWrapper):
 
         hbox = QHBoxLayout()
         common_args = dict(
-            vmin=-0.5, vmax=0.5, decimals=2,
+            vmin=-1e-4, vmax=1e-4, decimals=5,
         )
         self.deflection_slider, hbox = labelled_slider(
             value=deflection, name="Deflection", **common_args
@@ -2075,7 +2076,7 @@ class BiprismGUI(ComponentGUIWrapper):
     def _get_geom(self):
         return comp_geom.biprism(
             Z_ORIENT*self.biprism.z,
-            1,
+            0.5,
             self.biprism.rotation_rad,
             self.biprism.offset,
         )

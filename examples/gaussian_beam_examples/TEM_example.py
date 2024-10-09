@@ -25,7 +25,7 @@ prop_dist = 5
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
 f = (1 / z_i - 1 / z_o) ** -1
-coeffs = comp.LensAberrations(0., 0., 0., 0., 0.)
+coeffs = comp.LensAberrations(1e5, 0., 0., 0., 0.)
 
 components = (
     comp.GaussBeam(
@@ -41,7 +41,7 @@ components = (
         second=comp.Deflector(z=0.2, name='Lower OBJ Deflector'),
     ),
     comp.Lens(
-        z=0.4,
+        z=0.3,
         z1=-0.05,
         z2=0.15,
         aber_coeffs=coeffs,
