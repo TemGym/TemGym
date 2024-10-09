@@ -273,6 +273,7 @@ def propagate_misaligned_gaussian(
     misaligned_phase = misalign_phase_plane_wave(r, p2m, k, xp=xp)
     # (n_px, n_gauss): complex
     # Phase and Amplitude at transversal plane to beam dir
+
     aligned = transversal_phase(Qpinv, r, k, xp=xp)
     # (n_px, n_gauss): complex
     # opl = xp.exp(1j * k * path_length)  # Optical path length phase
