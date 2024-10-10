@@ -1307,6 +1307,11 @@ class Deflector(Component):
             location=self,
         )
 
+    @staticmethod
+    def gui_wrapper():
+        from .gui import DeflectorGUI
+        return DeflectorGUI
+
 
 class DoubleDeflector(Component):
     def __init__(
