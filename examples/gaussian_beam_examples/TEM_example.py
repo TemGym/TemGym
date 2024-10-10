@@ -25,14 +25,14 @@ prop_dist = 5
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
 f = (1 / z_i - 1 / z_o) ** -1
-coeffs = comp.LensAberrations(1e5, 0., 0., 0., 0.)
+coeffs = comp.LensAberrations(100000000, 100000000, 0., 0., 0.)
 
 components = (
     comp.GaussBeam(
         z=0.0,
         voltage=voltage,
-        radius=50e-6,
-        wo=200e-6,
+        radius=10e-6,
+        wo=50e-6,
         tilt_yx=tilt_yx,
         semi_angle=0.0005,
     ),
@@ -54,13 +54,13 @@ components = (
     comp.Lens(
         z=0.7,
         z1=-0.15,
-        f=0.12,
+        f=0.1,
         name='Projector Lens 1',
     ),
     comp.Lens(
         z=1.0,
         z1=-0.1,
-        f=0.07,
+        f=0.1,
         name='Projector Lens 2',
     ),
     comp.AccumulatingDetector(
@@ -73,7 +73,7 @@ components = (
 )
 
 
-components[0].random = True
+components[0].random = False
 model = Model(components, backend='gpu')
 # rays = tuple(model.run_iter(num_rays=n_rays, random = False))
 # image = model.detector.get_image(rays[-1])
