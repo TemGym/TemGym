@@ -15,7 +15,7 @@ from PySide6.QtGui import (
     QIntValidator,
 )
 
-from superqt import QLabeledDoubleSlider, QLabeledSlider
+from superqt import QLabeledDoubleSlider, QLabeledSlider, QDoubleSlider
 import OpenGL.GL as gl
 from OpenGL.GL import (
     GL_PROXY_TEXTURE_2D,
@@ -107,6 +107,90 @@ def labelled_slider(
         slider = QLabeledSlider(QtCore.Qt.Orientation.Horizontal)
     slider_config(slider, value, vmin, vmax, tick_interval)
     slider._slider.setStyleSheet(
+        R"""
+QSlider::groove:horizontal {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66b2ff, stop:1 #cce5ff);
+    margin: 4px 0;
+}
+
+QSlider::groove:horizontal:disabled {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    margin: 4px 0;
+}
+
+QSlider::handle:horizontal:disabled {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #b4b4b4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+"""
+    )
+
+    if isinstance(insert_into, QHBoxLayout):
+        hbox = insert_into
+    else:
+        hbox = QVBoxLayout()
+
+    if name is not None:
+        if reset_to is not None:
+
+            @QtCore.Slot()
+            def reset():
+                if reset_to is True:
+                    slider.setValue(value)
+                else:
+                    slider.setValue(reset_to)
+
+            button = QPushButton(name)
+            button.setFlat(True)
+            button.setMaximumWidth(175)
+            button.setStyleSheet("text-align:left;")
+            # button.setSizePolicy(
+            #     QSizePolicy.Policy.Minimum,
+            #     QSizePolicy.Policy.Minimum,
+            # )
+            button.clicked.connect(reset)
+            hbox.addWidget(button)
+        else:
+            slider_namelabel = QLabel(name)
+            hbox.addWidget(slider_namelabel)
+
+    hbox.addWidget(slider)
+
+    if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
+        insert_into.addLayout(hbox)
+
+    return slider, hbox
+
+
+def slider(
+    value: int,
+    vmin: int,
+    vmax: int,
+    name: Optional[str] = None,
+    insert_into: Optional[QLayout] = None,
+    decimals: int = 0,
+    tick_interval: Optional[int] = None,
+    reset_to: Optional[Union[int, bool]] = True,
+):
+
+    slider = QDoubleSlider(QtCore.Qt.Orientation.Horizontal)
+    slider_config(slider, value, vmin, vmax, tick_interval)
+    slider.setStyleSheet(
         R"""
 QSlider::groove:horizontal {
     border: 1px solid #999999;
