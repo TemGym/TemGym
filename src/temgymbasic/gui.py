@@ -983,10 +983,10 @@ class SourceGUI(ComponentGUIWrapper):
         self._build_shiftsliders()
 
     def _build_rayslider(self, into=None):
-        num_rays = 256
+        num_rays = 1000
 
         self.rayslider, self.raysliderbox = labelled_slider(
-            num_rays, 1, 4096, name="Number of Rays", tick_interval=64,
+            num_rays, 1, 4000, name="Number of Rays", tick_interval=64,
             insert_into=into,
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
@@ -1545,6 +1545,76 @@ class STEMSampleGUI(SampleGUI):
             z=self.component.z,
             shape=self.sample.scan_shape,
         )
+
+
+class DeflectorGUI(ComponentGUIWrapper):
+    @property
+    def deflector(self) -> 'comp.Deflector':
+        return self.component
+
+    @Slot(float)
+    def set_defx(self, val: float):
+        self.deflector.defx = val
+        self.try_update()
+
+    @Slot(float)
+    def set_defy(self, val: float):
+        self.deflector.defy = val
+        self.try_update()
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.defxslider):
+            self.defxslider.setValue(self.deflector.defx)
+        with blocker(self.updefyslider):
+            self.defyslider.setValue(self.deflector.defy)
+
+    def build(self) -> Self:
+        defx = self.deflector.defx
+        defy = self.deflector.defy
+
+        vbox = QVBoxLayout()
+
+        common_args = dict(
+            vmin=-0.1, vmax=0.1, decimals=2,
+        )
+        self.defxslider, hbox = labelled_slider(
+            value=defx, name="X Deflection", **common_args
+        )
+        self.defyslider, _ = labelled_slider(
+            value=defy, name="Y Deflection", **common_args,
+            insert_into=hbox
+        )
+        vbox.addLayout(hbox)
+        self.defxslider.valueChanged.connect(self.set_defx)
+        self.defyslider.valueChanged.connect(self.set_defy)
+        self.box = vbox
+
+        return self
+
+    def get_geom(self):
+        self.geom = []
+        phi = np.pi / 2
+        radius = 0.25
+        n_arc = 64
+
+        arc1, arc2 = comp_geom.deflector(
+            r=radius,
+            phi=phi,
+            z=Z_ORIENT * self.component.entrance_z,
+            n_arc=n_arc,
+        )
+        self.geom.append(
+            gl.GLLinePlotItem(
+                pos=arc1.T, color="r", width=5
+            )
+        )
+        self.geom.append(
+            gl.GLLinePlotItem(
+                pos=arc2.T, color="b", width=5
+            )
+        )
+        return self.geom
 
 
 class DoubleDeflectorGUI(ComponentGUIWrapper):
