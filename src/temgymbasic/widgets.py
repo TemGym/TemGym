@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import (
     QIntValidator,
+    QDoubleValidator,
 )
 
 from superqt import QLabeledDoubleSlider, QLabeledSlider, QDoubleSlider
@@ -175,6 +176,71 @@ QSlider::handle:horizontal {
         insert_into.addLayout(hbox)
 
     return slider, hbox
+
+
+def arrow_slider(
+    value: int,
+    vmin: int,
+    vmax: int,
+    name: Optional[str] = None,
+    insert_into: Optional[QLayout] = None,
+    increment: int = 1,
+    reset_to: Optional[Union[int, bool]] = True,
+    decimals: int = 0,
+):
+
+    # widget = QWidget()
+    hbox = QHBoxLayout()
+    # widget.setLayout(hbox)
+
+    button = QPushButton(name)
+    insert_into.addWidget(button)
+
+    left_button = QPushButton("<")
+    right_button = QPushButton(">")
+    value_box = QLineEdit(str(value))
+    increment_box = QLineEdit(str(increment))
+
+    from PySide6.QtCore import QLocale
+    locale = QLocale(QLocale.C)
+    value_validator = QDoubleValidator(-999999, 999999, 8)
+    value_validator.setLocale(locale)
+    value_box.setValidator(value_validator)
+    increment_validator = QDoubleValidator(-999999, 999999, 8)
+    increment_validator.setLocale(locale)
+    increment_box.setValidator(increment_validator)
+
+    if name is not None:
+        if reset_to is not None:
+
+            @QtCore.Slot()
+            def reset():
+                if reset_to is True:
+                    slider.setValue(value)
+                else:
+                    slider.setValue(reset_to)
+
+    def update_value(delta):
+        current_value = float(value_box.text())
+        new_value = current_value + delta
+        # Validate the new value to ensure it does not exceed the number of decimals
+        if decimals > 0:
+            new_value = round(new_value, decimals)
+        value_box.setText(str(new_value))
+
+    left_button.clicked.connect(lambda: update_value(-float(increment_box.text())))
+    right_button.clicked.connect(lambda: update_value(float(increment_box.text())))
+
+    hbox.addWidget(left_button)
+    hbox.addWidget(value_box)
+    hbox.addWidget(right_button)
+    hbox.addWidget(QLabel("Increment:"))
+    hbox.addWidget(increment_box)
+
+    if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
+        insert_into.addLayout(hbox)
+
+    return button, hbox
 
 
 def slider(
