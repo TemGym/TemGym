@@ -635,7 +635,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens._calculate_lens_paremeters(None, None, float(val), self.lens.m)
         )
         self.update_line_edits()
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_m_and_f(self, val: float):
@@ -643,7 +643,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens._calculate_lens_paremeters(None, None, self.lens.f, float(val))
         )
         self.update_line_edits()
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_z1_and_z2(self, val: float):
@@ -651,7 +651,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens._calculate_lens_paremeters(float(val), self.lens.z2, None, None)
         )
         self.update_line_edits()
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_z2_and_z1(self, val: float):
@@ -659,7 +659,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens._calculate_lens_paremeters(self.lens.z1, float(val), None, None)
         )
         self.update_line_edits()
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_z1_and_f(self, val: float):
@@ -667,7 +667,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens._calculate_lens_paremeters(float(val), None, self.lens.f, None)
         )
         self.update_line_edits()
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_f_and_z1(self, val: float):
@@ -675,7 +675,7 @@ class LensGUI(ComponentGUIWrapper):
             self.lens._calculate_lens_paremeters(self.lens.z1, None, float(val), None)
         )
         self.update_line_edits()
-        self.try_update()
+        self.try_update(geom=True)
 
     @Slot(float)
     def set_spherical_aberration(self, val):
@@ -734,19 +734,18 @@ class LensGUI(ComponentGUIWrapper):
         if update:
             self.try_update(geom=True)
 
-    def sync(self, block: bool = True):
-        blocker = self._get_blocker(block)
-        with blocker(self.fslider):
-            self.fslider.setValue(self.lens.f)
-
     def build(self) -> Self:
         vbox = QVBoxLayout()
 
         linear_params_vbox = QVBoxLayout()
-        linear_params_vbox.addWidget(QLabel("Linear Parameters"))
+        linear_params_label = QLabel("Linear Parameters")
+        linear_params_label.setStyleSheet("font-size: 16px, font-weight: bold, text-decoration: underline;")
+        linear_params_vbox.addWidget(linear_params_label)
 
         aberrations_vbox = QVBoxLayout()
-        aberrations_vbox.addWidget(QLabel("Aberrations"))
+        aberrations_label = QLabel("Aberrations")
+        aberrations_label.setStyleSheet("font-size: 16px; font-weight: bold; text-decoration: underline;")
+        aberrations_vbox.addWidget(aberrations_label)
 
         f_and_m = QPushButton("Set Focal (f) and Mag (m)")
         f_and_m.setCheckable(True)
@@ -771,6 +770,13 @@ class LensGUI(ComponentGUIWrapper):
         linear_params_vbox.addLayout(
            btn_layout
         )
+
+        # Add the toggle button
+        self.toggle_button = QPushButton("Toggle z1, z2, and f visualisation")
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(False)
+        self.toggle_button.clicked.connect(self.toggle_display)
+        linear_params_vbox.addWidget(self.toggle_button)
 
         self.fwidget, _ = arrow_slider(
             self.lens.f, -0.1, 0.1, name="Focal Length",
@@ -855,7 +861,7 @@ class LensGUI(ComponentGUIWrapper):
             Z_ORIENT * self.component.z,
             64,
         )
-        lens_geom = [
+        self.geom = [
             gl.GLLinePlotItem(
                 pos=vertices.T,
                 color="white",
@@ -863,7 +869,90 @@ class LensGUI(ComponentGUIWrapper):
             )
         ]
 
-        return lens_geom
+        # Add spherical dots for z1 and z2 planes
+        f = Z_ORIENT * self.lens.f
+        z = Z_ORIENT * self.lens.z
+        z1 = Z_ORIENT * self.lens.z1
+        z2 = Z_ORIENT * self.lens.z2
+        dot_size = 10  # Adjust the size of the dot as needed
+        z1_color = (1, 0, 0, 1)
+        z2_color = (1, 0, 1, 1)
+        f_color = (0, 1, 0, 1)
+
+        self.z1_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, z + z1]]),
+            size=dot_size,
+            color=z1_color,
+        )
+        self.z2_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, z + z2]]),
+            size=dot_size,
+            color=z2_color,
+        )
+        self.f_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, z + f]]),
+            size=dot_size,
+            color=f_color,
+        )
+
+        # Add text items for z1 and z2 dots
+        self.z1_text = gl.GLTextItem(
+            pos=np.array([0, 0, z + z1]),
+            text=f"z1 {self.component.name}",
+            color='w',
+        )
+        self.z2_text = gl.GLTextItem(
+            pos=np.array([0, 0, z + z2]),
+            text=f"z2 {self.component.name}",
+            color='w',
+        )
+        self.f_text = gl.GLTextItem(
+            pos=np.array([0, 0, z + f]),
+            text=f"f {self.component.name}",
+            color='w',
+        )
+
+        self.z1_dot.setVisible(False)
+        self.z2_dot.setVisible(False)
+        self.f_dot.setVisible(False)
+        self.z1_text.setVisible(False)
+        self.z2_text.setVisible(False)
+        self.f_text.setVisible(False)
+
+        self.geom.extend([self.z1_dot, self.z2_dot, self.f_dot,
+                          self.z1_text, self.z2_text, self.f_text])
+
+        return self.geom
+
+    def toggle_display(self):
+        visible = self.toggle_button.isChecked()
+        self.z1_dot.setVisible(visible)
+        self.z2_dot.setVisible(visible)
+        self.f_dot.setVisible(visible)
+        self.z1_text.setVisible(visible)
+        self.z2_text.setVisible(visible)
+        self.f_text.setVisible(visible)
+
+    def update_geometry(self):
+        z = Z_ORIENT * self.lens.z
+        z1 = Z_ORIENT * self.lens.z1
+        z2 = Z_ORIENT * self.lens.z2
+        f = Z_ORIENT * self.lens.f
+
+        z1_dot = self.geom[1]
+        z2_dot = self.geom[2]
+        f_dot = self.geom[3]
+        z1_text = self.geom[4]
+        z2_text = self.geom[5]
+        f_text = self.geom[6]
+
+        z1_dot.setData(pos=np.array([[0, 0, z + z1]]))
+        z2_dot.setData(pos=np.array([[0, 0, z + z2]]))
+        f_dot.setData(pos=np.array([[0, 0, z + f]]))
+
+        z1_text.setData(pos=np.array([0, 0, z + z1]))
+        z2_text.setData(pos=np.array([0, 0, z + z2]))
+        f_text.setData(pos=np.array([0, 0, z + f]))
 
 
 class PerfectLensGUI(LensGUI):
