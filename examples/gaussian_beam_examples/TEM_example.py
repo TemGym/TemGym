@@ -25,7 +25,7 @@ prop_dist = 5
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
 f = (1 / z_i - 1 / z_o) ** -1
-coeffs = comp.LensAberrations(100000000, 100000000, 0., 0., 0.)
+coeffs = comp.LensAberrations(0, 0, 0., 0., 0.)
 
 components = (
     comp.GaussBeam(
@@ -51,17 +51,10 @@ components = (
         first=comp.Deflector(z=0.45, name='Upper Image Deflector'),
         second=comp.Deflector(z=0.5, name='Lower Image Deflector'),
     ),
-    comp.Lens(
-        z=0.7,
-        z1=-0.15,
-        f=0.1,
-        name='Projector Lens 1',
-    ),
-    comp.Lens(
-        z=1.0,
-        z1=-0.1,
-        f=0.1,
-        name='Projector Lens 2',
+    comp.ProjectorLensSystem(
+        first=comp.Lens(z=0.6, z1=-0.15, z2=0.75),
+        second=comp.Lens(z=1.0, z1=-0.2, z2=0.5),
+        name='Projector Lens System',
     ),
     comp.AccumulatingDetector(
         z=1.5,
@@ -74,8 +67,8 @@ components = (
 
 
 components[0].random = False
-model = Model(components, backend='gpu')
-# rays = tuple(model.run_iter(num_rays=n_rays, random = False))
+model = Model(components, backend='cpu')
+# rays = tuple(model.run_iter(num_rays=1000, random=False))
 # image = model.detector.get_image(rays[-1])
 AppWindow = QApplication(sys.argv)
 viewer = TemGymWindow(model)

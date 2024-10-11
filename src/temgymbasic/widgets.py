@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
 )
+
 from PySide6.QtGui import (
     QIntValidator,
     QDoubleValidator,
@@ -37,6 +38,9 @@ import numpy as np
 
 from pyqtgraph.dockarea import DockLabel
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
+
+# Set the locale to "C" to enable . as decimal separator.
+QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.C))
 
 
 class MyDockLabel(DockLabel):
@@ -193,21 +197,16 @@ def arrow_slider(
     hbox = QHBoxLayout()
     # widget.setLayout(hbox)
 
-    button = QPushButton(name)
-    insert_into.addWidget(button)
-
     left_button = QPushButton("<")
     right_button = QPushButton(">")
     value_box = QLineEdit(str(value))
     increment_box = QLineEdit(str(increment))
 
-    from PySide6.QtCore import QLocale
-    locale = QLocale(QLocale.C)
-    value_validator = QDoubleValidator(-999999, 999999, 8)
-    value_validator.setLocale(locale)
+    value_validator = QDoubleValidator(-999999, 999999, decimals)
     value_box.setValidator(value_validator)
-    increment_validator = QDoubleValidator(-999999, 999999, 8)
-    increment_validator.setLocale(locale)
+    value_box.setText(str(round(value, decimals)))
+
+    increment_validator = QDoubleValidator(-999999, 999999, decimals)
     increment_box.setValidator(increment_validator)
 
     if name is not None:
@@ -216,9 +215,17 @@ def arrow_slider(
             @QtCore.Slot()
             def reset():
                 if reset_to is True:
-                    slider.setValue(value)
+                    value_box.setText(str(value))
                 else:
-                    slider.setValue(reset_to)
+                    value_box.setText(str(reset_to))
+
+            button = QPushButton(name)
+            button.setFlat(True)
+            button.setMaximumWidth(175)
+            button.setStyleSheet("text-align:left;")
+            button.clicked.connect(reset)
+
+    insert_into.addWidget(button)
 
     def update_value(delta):
         current_value = float(value_box.text())
@@ -227,6 +234,7 @@ def arrow_slider(
         if decimals > 0:
             new_value = round(new_value, decimals)
         value_box.setText(str(new_value))
+
 
     left_button.clicked.connect(lambda: update_value(-float(increment_box.text())))
     right_button.clicked.connect(lambda: update_value(float(increment_box.text())))
@@ -237,10 +245,11 @@ def arrow_slider(
     hbox.addWidget(QLabel("Increment:"))
     hbox.addWidget(increment_box)
 
+
     if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
         insert_into.addLayout(hbox)
 
-    return button, hbox
+    return value_box, hbox
 
 
 def slider(
