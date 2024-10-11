@@ -34,7 +34,7 @@ import numpy as np
 
 from . import shapes as comp_geom
 from .utils import as_gl_lines, P2R, R2P
-from .widgets import labelled_slider, LabelledIntField, GLImageItem, MyDockLabel
+from .widgets import labelled_slider, arrow_slider, LabelledIntField, GLImageItem, MyDockLabel
 
 if TYPE_CHECKING:
     from .model import Model, STEMModel
@@ -630,10 +630,51 @@ class LensGUI(ComponentGUIWrapper):
         return self.component
 
     @Slot(float)
-    def set_f(self, val: float):
-        if abs(val) < 1e-6:
-            return
-        self.lens.f = val
+    def set_f_and_m(self, val: float):
+        self.lens._z1, self.lens._z2, self.lens._f, self.lens._m = (
+            self.lens._calculate_lens_paremeters(None, None, float(val), self.lens.m)
+        )
+        self.update_line_edits()
+        self.try_update()
+
+    @Slot(float)
+    def set_m_and_f(self, val: float):
+        self.lens._z1, self.lens._z2, self.lens._f, self.lens._m = (
+            self.lens._calculate_lens_paremeters(None, None, self.lens.f, float(val))
+        )
+        self.update_line_edits()
+        self.try_update()
+
+    @Slot(float)
+    def set_z1_and_z2(self, val: float):
+        self.lens._z1, self.lens._z2, self.lens._f, self.lens._m = (
+            self.lens._calculate_lens_paremeters(float(val), self.lens.z2, None, None)
+        )
+        self.update_line_edits()
+        self.try_update()
+
+    @Slot(float)
+    def set_z2_and_z1(self, val: float):
+        self.lens._z1, self.lens._z2, self.lens._f, self.lens._m = (
+            self.lens._calculate_lens_paremeters(self.lens.z1, float(val), None, None)
+        )
+        self.update_line_edits()
+        self.try_update()
+
+    @Slot(float)
+    def set_z1_and_f(self, val: float):
+        self.lens._z1, self.lens._z2, self.lens._f, self.lens._m = (
+            self.lens._calculate_lens_paremeters(float(val), None, self.lens.f, None)
+        )
+        self.update_line_edits()
+        self.try_update()
+
+    @Slot(float)
+    def set_f_and_z1(self, val: float):
+        self.lens._z1, self.lens._z2, self.lens._f, self.lens._m = (
+            self.lens._calculate_lens_paremeters(self.lens.z1, None, float(val), None)
+        )
+        self.update_line_edits()
         self.try_update()
 
     @Slot(float)
@@ -661,6 +702,38 @@ class LensGUI(ComponentGUIWrapper):
         self.lens.aber_coeffs.distortion = val
         self.try_update()
 
+    @Slot(int)
+    def change_mode(self, btn_id, update=True):
+        if btn_id == 0:  # focal and magnification values
+            self.fwidget.setDisabled(False)
+            self.mwidget.setDisabled(False)
+            self.z1widget.setDisabled(True)
+            self.z2widget.setDisabled(True)
+            self.fwidget.textChanged.disconnect()
+            self.fwidget.textChanged.connect(self.set_f_and_m)
+            self.mwidget.textChanged.disconnect()
+            self.mwidget.textChanged.connect(self.set_m_and_f)
+        elif btn_id == 1:  # object and image plane values
+            self.z1widget.setDisabled(False)
+            self.z2widget.setDisabled(False)
+            self.fwidget.setDisabled(True)
+            self.mwidget.setDisabled(True)
+            self.z1widget.textChanged.disconnect()
+            self.z1widget.textChanged.connect(self.set_z1_and_z2)
+            self.z2widget.textChanged.disconnect()
+            self.z2widget.textChanged.connect(self.set_z2_and_z1)
+        elif btn_id == 2:  # object and focal length values
+            self.fwidget.setDisabled(False)
+            self.z1widget.setDisabled(False)
+            self.z2widget.setDisabled(True)
+            self.mwidget.setDisabled(True)
+            self.z1widget.textChanged.disconnect()
+            self.z1widget.textChanged.connect(self.set_z1_and_f)
+            self.fwidget.textChanged.disconnect()
+            self.fwidget.textChanged.connect(self.set_f_and_z1)
+        if update:
+            self.try_update(geom=True)
+
     def sync(self, block: bool = True):
         blocker = self._get_blocker(block)
         with blocker(self.fslider):
@@ -669,16 +742,64 @@ class LensGUI(ComponentGUIWrapper):
     def build(self) -> Self:
         vbox = QVBoxLayout()
 
-        self.fslider, _ = labelled_slider(
-            self.lens.f, -0.1, 0.1, name="Focal Length",
-            insert_into=vbox, decimals=2, tick_interval=0.02,
+        linear_params_vbox = QVBoxLayout()
+        linear_params_vbox.addWidget(QLabel("Linear Parameters"))
+
+        aberrations_vbox = QVBoxLayout()
+        aberrations_vbox.addWidget(QLabel("Aberrations"))
+
+        f_and_m = QPushButton("Set Focal (f) and Mag (m)")
+        f_and_m.setCheckable(True)
+        f_and_m.setChecked(True)
+        z1_and_z2 = QPushButton("Set Object (z1) and Image (z2)")
+        z1_and_z2.setCheckable(True)
+        z1_and_f = QPushButton("Set Object (z1) and Focal (f)")
+        z1_and_f.setCheckable(True)
+
+        self.modeselect = QButtonGroup()
+        self.modeselect.setExclusive(True)
+        self.modeselect.addButton(f_and_m)
+        self.modeselect.setId(f_and_m, 0)
+        self.modeselect.addButton(z1_and_z2)
+        self.modeselect.setId(z1_and_z2, 1)
+        self.modeselect.addButton(z1_and_f)
+        self.modeselect.setId(z1_and_f, 2)
+        btn_layout = QHBoxLayout()
+        btn_layout.addWidget(f_and_m)
+        btn_layout.addWidget(z1_and_z2)
+        btn_layout.addWidget(z1_and_f)
+        linear_params_vbox.addLayout(
+           btn_layout
         )
-        self.fslider.valueChanged.connect(self.set_f)
+
+        self.fwidget, _ = arrow_slider(
+            self.lens.f, -0.1, 0.1, name="Focal Length",
+            insert_into=linear_params_vbox, increment=0.001, decimals=8,
+        )
+        self.fwidget.textChanged.connect(self.set_f_and_m)
+
+        self.mwidget, _ = arrow_slider(
+            self.lens.m, -1, 0.1, name="Magnification",
+            insert_into=linear_params_vbox, increment=0.001, decimals=8,
+        )
+        self.mwidget.textChanged.connect(self.set_m_and_f)
+
+        self.z1widget, _ = arrow_slider(
+            self.lens.z1, -0.1, 0.1, name="Object Plane",
+            insert_into=linear_params_vbox, increment=0.001, decimals=8,
+        )
+        self.z1widget.textChanged.connect(self.set_z1_and_z2)
+
+        self.z2widget, _ = arrow_slider(
+            self.lens.z2, -1, 0.1, name="Image Plane",
+            insert_into=linear_params_vbox, increment=0.001, decimals=8,
+        )
+        self.z2widget.textChanged.connect(self.set_z2_and_z1)
 
         if self.lens.aber_coeffs:
             common_args = dict(
-                 vmin=-100000000, vmax=100000000, decimals=0,
-                 insert_into=vbox, tick_interval=100,
+             vmin=-100000000, vmax=100000000, decimals=0,
+             insert_into=aberrations_vbox, tick_interval=100,
             )
 
             self.sphericalslider, _ = labelled_slider(
@@ -711,9 +832,22 @@ class LensGUI(ComponentGUIWrapper):
             )
             self.distortionslider.valueChanged.connect(self.set_distortion_aberration)
 
+        self.modeselect.idPressed.connect(self.change_mode)
+        self.change_mode(0, update=False)
+
+        vbox.addLayout(linear_params_vbox)
+        vbox.addLayout(aberrations_vbox)
+
         self.box = vbox
 
         return self
+
+    def update_line_edits(self):
+
+        self.fwidget.setText(str(round(self.lens.f, self.fwidget.validator().decimals())))
+        self.mwidget.setText(str(round(self.lens.m, self.mwidget.validator().decimals())))
+        self.z1widget.setText(str(round(self.lens.z1, self.z1widget.validator().decimals())))
+        self.z2widget.setText(str(round(self.lens.z2, self.z2widget.validator().decimals())))
 
     def get_geom(self):
         vertices = comp_geom.lens(
@@ -728,40 +862,6 @@ class LensGUI(ComponentGUIWrapper):
                 width=5
             )
         ]
-
-        # # Add spherical dots for z1 and z2 planes
-        # z = Z_ORIENT * self.lens.z
-        # z1 = Z_ORIENT * self.lens.z1
-        # z2 = Z_ORIENT * self.lens.z2
-        # dot_size = 10  # Adjust the size of the dot as needed
-        # z1_color = (1, 0, 0, 1)
-        # z2_color = (1, 0, 1, 0)
-
-        # z1_dot = gl.GLScatterPlotItem(
-        #     pos=np.array([[0, 0, z + z1]]),
-        #     size=dot_size,
-        #     color=z1_color,
-        # )
-        # z2_dot = gl.GLScatterPlotItem(
-        #     pos=np.array([[0, 0, z + z2]]),
-        #     size=dot_size,
-        #     color=z2_color,
-        # )
-
-        # # Add text items for z1 and z2 dots
-        # z1_text = gl.GLTextItem(
-        #     pos=np.array([0, 0, z + z1]),
-        #     text=f"z1 {self.component.name}",
-        #     color='w',
-        # )
-        # z2_text = gl.GLTextItem(
-        #     pos=np.array([0, 0, z + z2]),
-        #     text=f"z2 {self.component.name}",
-        #     color='w',
-        # )
-
-        # lens_geom.extend([z1_dot, z2_dot, z1_text, z2_text])
-        # lens_geom.extend([z1_dot, z2_dot])
 
         return lens_geom
 
@@ -904,7 +1004,7 @@ class AberratedLensGUI(PerfectLensGUI):
 
         vbox = QVBoxLayout()
 
-        self.fslider, _ = labelled_slider(
+        self.fslider, _ = arrow_slider(
             self.aberratedlens.f, -5., 5., name="Focal Length",
             insert_into=vbox, decimals=2)
 
@@ -983,7 +1083,7 @@ class SourceGUI(ComponentGUIWrapper):
         self._build_shiftsliders()
 
     def _build_rayslider(self, into=None):
-        num_rays = 1000
+        num_rays = 1
 
         self.rayslider, self.raysliderbox = labelled_slider(
             num_rays, 1, 4000, name="Number of Rays", tick_interval=64,
@@ -1696,7 +1796,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         # self.defxratiolineedit.setValidator(qdoublevalidator)
         # self.defxratiolineeditstep.setValidator(qdoublevalidator)
 
-        # self.defxratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        # self.defxratioslider = QSlider(QtCore.Qt.Orientation.Horiz1ntal)
         # self.defxratioslider.setMinimum(-10)
         # self.defxratioslider.setMaximum(10)
         # self.defxratioslider.setValue(1)
@@ -1731,7 +1831,7 @@ class DoubleDeflectorGUI(ComponentGUIWrapper):
         # self.defyratiolineedit.setValidator(qdoublevalidator)
         # self.defyratiolineeditstep.setValidator(qdoublevalidator)
 
-        # self.defyratioslider = QSlider(QtCore.Qt.Orientation.Horizontal)
+        # self.defyratioslider = QSlider(QtCore.Qt.Orientation.Horiz1ntal)
         # self.defyratioslider.setMinimum(-10)
         # self.defyratioslider.setMaximum(10)
         # self.defyratioslider.setValue(1)
@@ -2188,7 +2288,7 @@ class ProjectorLensSystemGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
 
         self.mslider, _ = labelled_slider(
-            1, -10, 10, name="Total Magnification", insert_into=vbox, decimals=2,
+            -1, -1, -10000, name="Total Magnification", insert_into=vbox, decimals=2,
         )
         self.mslider.valueChanged.connect(self.set_m)
         self.box = vbox
