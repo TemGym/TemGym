@@ -128,7 +128,7 @@ class Lens(Component):
         super().__init__(z=z, name=name)
 
         self.aber_coeffs = aber_coeffs
-        self._z1, self._z2, self._m, self._f = self._calculate_lens_paremeters(z1, z2, m, f)
+        self._z1, self._z2, self._f, self._m = self._calculate_lens_paremeters(z1, z2, f, m)
 
     @property
     def f(self) -> float:
@@ -137,6 +137,14 @@ class Lens(Component):
     @f.setter
     def f(self, f: float):
         self._f = f
+
+    @property
+    def m(self) -> float:
+        return self._m
+
+    @m.setter
+    def m(self, m: float):
+        self._m = m
 
     @property
     def z1(self) -> float:
@@ -158,7 +166,7 @@ class Lens(Component):
     def ffp(self) -> float:
         return self.z - abs(self._f)
 
-    def _calculate_lens_paremeters(self, z1, z2, m, f, xp=np):
+    def _calculate_lens_paremeters(self, z1, z2, f, m, xp=np):
 
         if f and m and not (z1 or z2):
             # m <1e-10 means that the object is very far away, the lens focuses the beam to a point.
@@ -180,7 +188,8 @@ class Lens(Component):
             m = z2 / z1
         else:
             raise InvalidModelError("Lens must have defined: f and m, or z1 and z2, or f and z2")
-        return z1, z2, m, f
+
+        return z1, z2, f, m
 
     @staticmethod
     def lens_matrix(f, xp=np):
