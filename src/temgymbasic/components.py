@@ -1,5 +1,4 @@
 import abc
-import warnings
 from typing import (
     Generator, Tuple, Optional, Type,
     TYPE_CHECKING,
@@ -129,7 +128,7 @@ class Lens(Component):
         super().__init__(z=z, name=name)
 
         self.aber_coeffs = aber_coeffs
-        self._z1, self._z2, self._m, self._f = self.initialise_m_and_image_planes(z1, z2, m, f)
+        self._z1, self._z2, self._m, self._f = self._calculate_lens_paremeters(z1, z2, m, f)
 
     @property
     def f(self) -> float:
@@ -159,60 +158,28 @@ class Lens(Component):
     def ffp(self) -> float:
         return self.z - abs(self._f)
 
-    def initialise_m_and_image_planes(self, z1, z2, m, f, xp=np):
+    def _calculate_lens_paremeters(self, z1, z2, m, f, xp=np):
 
-        # Initialise numerical aperture - mostly used for perfect and fourier lens
-        self.NA1 = 0.2
-        self.NA2 = 0.2
-
-        # If statements to decide how to define z1, z2 and magnification.
-        # We check if magnification is too small or large,
-        # and thus a finite-long conjugate approximation is applied
-        if ((z1 and z2) is None) and (m is None):
-            assert ('Should have either m defined, or both z1 and z2 - choosing z1=-1.0 as default')
-            z1 = -1.0
-
-        if ((z1 and z2) is None) and (m is not None):
-            if xp.abs(m) <= 1e-10:
+        if f and m and not (z1 or z2):
+            # m <1e-10 means that the object is very far away, the lens focuses the beam to a point.
+            if np.abs(m) <= 1e-10:
                 z1 = -1e10
                 z2 = f
-            elif xp.abs(m) > 1e10:
+            # m >1e-10 means that the image is formed very far away, the lens collimates the beam.
+            elif np.abs(m) > 1e10:
                 z1 = -f
                 z2 = 1e10
             else:
                 z1 = f * (1/m - 1)
                 z2 = f * (1 - m)
-        elif (m is None) and ((z1 and z2) is not None):
-            if xp.abs(z1) > 1e-10:
-                m = z2 / z1
-            elif z1 <= 1e-10:
-                m = 1e10
+        elif z1 and z2 and not (f or m):
             f = (1 / z2 - 1 / z1) ** -1
-
-        elif (m is None) and (z1 is not None) and (z2 is None) and (f is not None):
+            m = z2 / z1
+        elif f and z1 and not (z2 or m):
             z2 = (1 / f + 1 / z1) ** -1
-        elif (
-            (m is not None)
-            and ((z1 and z2) is not None)
-        ):
-            warnings.warn("Overspecified magnification (m) and image and object planes (z1 and z2),\
-                        the provided magnification is ignored")
-
-        # If finite long conjugate approximation,
-        # we need to set the signal that the numerical aperture is
-        # 0.0, which is neccessary for later
-        if xp.abs(z1) >= 1e10:
-            z1 = 1e10 * (z1 / xp.abs(z1))
-            self.NA1 = 0.0  # collimated input - only neccessary for the perfect,
-            # fourier and aberrated lens
-
-        if xp.abs(z2) >= 1e10:
-            z2 = 1e10 * (z2 / xp.abs(z2))
-            self.NA2 = 0.0  # collimated input - only neccessary for the perfect,
-            # fourier and aberrated lens
-
-        m = z2 / z1
-
+            m = z2 / z1
+        else:
+            raise InvalidModelError("Lens must have defined: f and m, or z1 and z2, or f and z2")
         return z1, z2, m, f
 
     @staticmethod
