@@ -107,7 +107,7 @@ def daber_dpsi(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     C = C * (M ** 2) / (R ** 2)
     D = D * (M ** 2) / (R ** 2)
     E = E * M / R
-    
+
     dComa = - F * r_aperture ** 3 * r_object * xp.sin(psi)
     dAstig = - C * r_aperture ** 2 * r_object ** 2 * xp.cos(psi) * xp.sin(psi)
     dDist = - E * r_aperture * r_object ** 3 * xp.sin(psi)
@@ -124,7 +124,7 @@ def grad_r_a(X, Y, xp=np):
     Parameters:
     X, Y (float or ndarray): Coordinates.
     xp (module): Numerical library, default is numpy.
-    
+
     Returns:
     tuple: Gradients (dr_a_dx, dr_a_dy).
     """
@@ -142,7 +142,7 @@ def grad_psi(X, Y, xp=np):
     Parameters:
     X, Y (float or ndarray): Coordinates.
     xp (module): Numerical library, default is numpy.
-    
+
     Returns:
     tuple: Gradients (dpsi_dx, dpsi_dy).
     """
@@ -169,32 +169,28 @@ def opd(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     """
     r_a = xp.sqrt(x_a**2 + y_a**2)
     r_o = xp.sqrt(x_o**2 + y_o**2)
-    
+
     return aber(r_a, r_o, psi, coeffs, R, M, xp=xp)
+
 
 def aber_x_aber_y(x_a, y_a, x_o, y_o, coeffs, R, M, xp=np):
     B, F, C, D, E = coeffs
 
-    B = B
-    F = F
-    C = C
-    D = D
-    E = E
-    
-    dx = -R*(1.0*B*x_a*(x_a**2 + y_a**2) + 
-             1.0*C*x_o*(x_a*x_o + y_a*y_o) + 
-             1.0*D*x_a*(x_o**2 + y_o**2) + 
-             E*x_o*(x_o**2 + y_o**2) + 
-             2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2))
-    dy = -R*(1.0*B*y_a*(x_a**2 + y_a**2)
-             + 1.0*C*y_o*(x_a*x_o + y_a*y_o)
-             + 1.0*D*y_a*(x_o**2 + y_o**2)
-             + E*y_o*(x_o**2 + y_o**2)
-             + 2*F*y_a*(x_a*x_o + y_a*y_o)
-             + F*y_o*(x_a**2 + y_a**2))
-    
+    dx = -R*(B*x_a*(x_a**2 + y_a**2)  # Spherical 
+             + 2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2)  # Coma
+             + C*x_o*(x_a*x_o + y_a*y_o)  # Astigmatism
+             + D*x_a*(x_o**2 + y_o**2)  # Field Curvature
+             + E*x_o*(x_o**2 + y_o**2))  # Distortion
+
+    dy = -R*(B*y_a*(x_a**2 + y_a**2)  # Spherical
+             + 2*F*y_a*(x_a*x_o + y_a*y_o) + F*y_o*(x_a**2 + y_a**2)  # Coma
+             + C*y_o*(x_a*x_o + y_a*y_o)  # Astigmatism
+             + D*y_a*(x_o**2 + y_o**2)  # Field Curvature
+             + E*y_o*(x_o**2 + y_o**2))  # Distortion
+
     return dx, dy
-    
+
+
 def dopd_dx(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     """
     Evaluate the derivative of the optical path difference (OPD) with respect to x.

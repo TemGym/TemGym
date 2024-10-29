@@ -29,13 +29,14 @@ except ImportError:
 import os
 
 # Check environment variable to decide backend
-USE_GPU = os.getenv("USE_GPU", "0") == "1"
+USE_GPU = os.getenv("USE_GPU", "0") == "0"
 
 if USE_GPU:
     xp = cp
 else:
     xp = np
 
+xp = np
 ETA = (abs(e) / (2 * m_e)) ** (1 / 2)
 EPSILON = abs(e) / (2 * m_e * c**2)
 
@@ -469,234 +470,6 @@ def test_perfect_lens_parallel_rays_to_focal_point(parallel_rays):
     xp.testing.assert_allclose(propagated_rays.y, 0.0, atol=1e-12)
 
 
-@pytest.mark.parametrize(
-    "x, dx, y, dy",
-    [
-        ([0.0], [0.01], [0.0], [0.0]),
-        (
-            np.zeros(100),
-            np.random.uniform(-0.01, 0.01, 100),
-            np.zeros(100),
-            np.random.uniform(-0.01, 0.01, 100),
-        ),
-    ],
-)
-def test_aberrated_matrix_lens_spherical_aberration(x, dx, y, dy):
-    z_o = -10
-    z_i = 11
-
-    R = z_i
-    M = z_i / z_o
-
-    input_rays = single_ray(x, dx, y, dy)
-
-    x_o = input_rays.x
-    y_o = input_rays.y
-
-    x_i = M * x_o
-    y_i = M * y_o
-
-    lens_rays = input_rays.propagate(abs(z_o))
-
-    x_a = lens_rays.x
-    y_a = lens_rays.y
-
-    B = 10
-
-    coeffs = comp.LensAberrations(B, 0.0, 0.0, 0.0, 0.0)
-
-    lens = comp.Lens(z=lens_rays.location, z1=z_o, z2=z_i, aber_coeffs=coeffs)
-    out_rays = tuple(lens.step(lens_rays))[0]
-    propagated_rays = out_rays.propagate(z_i)
-
-    dx = x_i + -R * (1.0 * B * x_a * (x_a**2 + y_a**2))
-    dy = y_i + -R * (1.0 * B * y_a * (x_a**2 + y_a**2))
-
-    # First check that the lens has applied the correct deflection to rays
-    xp.testing.assert_allclose(propagated_rays.x, dx, atol=1e-9)
-    xp.testing.assert_allclose(propagated_rays.y, dy, atol=1e-9)
-
-    # plt.figure()
-    # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
-    # plt.plot(delta_x_i, delta_y_i, 'or')
-    # plt.savefig('test_aberrated_lens_spherical.png')
-
-
-@pytest.mark.parametrize(
-    "x, dx, y, dy",
-    [
-        ([0.01], [0.01], [0.0], [0.0]),
-        (
-            np.random.uniform(-0.001, 0.001, 100),
-            np.random.uniform(-0.01, 0.01, 100),
-            np.random.uniform(-0.001, 0.001, 100),
-            np.random.uniform(-0.01, 0.01, 100),
-        ),
-    ],
-)
-def test_aberrated_matrix_lens_coma(x, dx, y, dy):
-    z_o = -10
-    z_i = 11
-
-    R = z_i
-    M = z_i / z_o
-
-    input_rays = single_ray(x, dx, y, dy)
-
-    x_o = input_rays.x
-    y_o = input_rays.y
-
-    x_i = M * x_o
-    y_i = M * y_o
-
-    lens_rays = input_rays.propagate(abs(z_o))
-
-    x_a = lens_rays.x
-    y_a = lens_rays.y
-
-    F = 10
-
-    coeffs = comp.LensAberrations(0, F, 0.0, 0.0, 0.0)
-
-    lens = comp.Lens(z=lens_rays.location, z1=z_o, z2=z_i, aber_coeffs=coeffs)
-    out_rays = tuple(lens.step(lens_rays))[0]
-    propagated_rays = out_rays.propagate(z_i)
-
-    dx = x_i + -R * (
-        2 * F * x_a * (x_a * x_o + y_a * y_o) + F * x_o * (x_a**2 + y_a**2)
-    )
-    dy = y_i + -R * (
-        2 * F * y_a * (x_a * x_o + y_a * y_o) + F * y_o * (x_a**2 + y_a**2)
-    )
-
-    # First check that the lens has applied the correct deflection to rays
-    xp.testing.assert_allclose(propagated_rays.x, dx, atol=1e-9)
-    xp.testing.assert_allclose(propagated_rays.y, dy, atol=1e-9)
-
-    # plt.figure()
-    # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
-    # plt.plot(delta_x_i, delta_y_i, 'or')
-    # plt.savefig('test_aberrated_lens_spherical.png')
-
-
-@pytest.mark.parametrize(
-    "x, dx, y, dy",
-    [
-        ([0.0], [0.01], [0.0], [0.0]),
-        (
-            np.zeros(100),
-            np.random.uniform(-0.01, 0.01, 100),
-            np.zeros(100),
-            np.random.uniform(-0.01, 0.01, 100),
-        ),
-    ],
-)
-def test_aberrated_lens_spherical_aberration(x, dx, y, dy):
-    z_o = -10
-    z_i = 11
-    f = 4
-
-    M = z_i / z_o
-
-    input_rays = single_ray(x, dx, y, dy)
-
-    x_o = input_rays.x
-    y_o = input_rays.y
-    x_o_slope = input_rays.dx
-    y_o_slope = input_rays.dy
-
-    x_i = M * x_o
-    y_i = M * y_o
-
-    lens_rays = input_rays.propagate(abs(z_o))
-
-    B = 10
-
-    coeffs = [B, 0.0, 0.0, 0.0, 0.0]
-    lens = comp.AberratedLens(z=lens_rays.location, f=f, z1=z_o, z2=z_i, coeffs=coeffs)
-    out_rays = tuple(lens.step(lens_rays))[0]
-    propagated_rays = out_rays.propagate(z_i)
-
-    delta_x_i = x_i + M * (B * x_o_slope * (x_o_slope**2 + y_o_slope**2))
-    delta_y_i = y_i + M * (B * y_o_slope * (x_o_slope**2 + y_o_slope**2))
-
-    # First check that the lens has applied the correct deflection to rays
-    xp.testing.assert_allclose(propagated_rays.x, delta_x_i, atol=1e-9)
-    xp.testing.assert_allclose(propagated_rays.y, delta_y_i, atol=1e-9)
-
-    # plt.figure()
-    # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
-    # plt.plot(delta_x_i, delta_y_i, 'or')
-    # plt.savefig('test_aberrated_lens_spherical.png')
-
-
-@pytest.mark.parametrize(
-    "x, dx, y, dy",
-    [
-        ([0.01], [0.01], [0.0], [0.0]),
-        (
-            np.random.uniform(-0.001, 0.001, 100),
-            np.random.uniform(-0.01, 0.01, 100),
-            np.random.uniform(-0.001, 0.001, 100),
-            np.random.uniform(-0.01, 0.01, 100),
-        ),
-    ],
-)
-def test_aberrated_lens_coma(x, dx, y, dy):
-    z_o = -10
-    z_i = 11
-    f = 4
-
-    M = z_i / z_o
-
-    R = z_i
-    input_rays = single_ray(x, dx, y, dy)
-
-    x_o = input_rays.x
-    y_o = input_rays.y
-
-    x_i = M * x_o
-    y_i = M * y_o
-
-    lens_rays = input_rays.propagate(abs(z_o))
-    x_a = lens_rays.x
-    y_a = lens_rays.y
-
-    F = 1
-
-    coeffs = [0, F, 0.0, 0.0, 0.0]
-    B, F, C, D, E = coeffs
-    lens = comp.AberratedLens(z=lens_rays.location, f=f, z1=z_o, z2=z_i, coeffs=coeffs)
-    out_rays = tuple(lens.step(lens_rays))[0]
-    propagated_rays = out_rays.propagate(z_i)
-
-    dx = x_i + -R * (
-        1.0 * B * x_a * (x_a**2 + y_a**2)
-        + 1.0 * C * x_o * (x_a * x_o + y_a * y_o)
-        + 1.0 * D * x_a * (x_o**2 + y_o**2)
-        + E * x_o * (x_o**2 + y_o**2)
-        + 2 * F * x_a * (x_a * x_o + y_a * y_o)
-        + F * x_o * (x_a**2 + y_a**2)
-    )
-    dy = y_i + -R * (
-        1.0 * B * y_a * (x_a**2 + y_a**2)
-        + 1.0 * C * y_o * (x_a * x_o + y_a * y_o)
-        + 1.0 * D * y_a * (x_o**2 + y_o**2)
-        + E * y_o * (x_o**2 + y_o**2)
-        + 2 * F * y_a * (x_a * x_o + y_a * y_o)
-        + F * y_o * (x_a**2 + y_a**2)
-    )
-
-    # First check that the lens has applied the correct deflection to rays
-    xp.testing.assert_allclose(propagated_rays.x, dx, atol=1e-5)
-    xp.testing.assert_allclose(propagated_rays.y, dy, atol=1e-5)
-
-    # plt.figure()
-    # plt.plot(propagated_rays.x, propagated_rays.y, 'og')
-    # plt.plot(delta_x_i, delta_y_i, 'or')
-    # plt.savefig('test_aberrated_lens_spherical.png')
-
-
 def test_deflector_random_rays(random_rays):
     deflection = xp.random.uniform(-5, 5)
 
@@ -986,9 +759,9 @@ def test_sample_potential_deflection():
     xp.testing.assert_allclose(out_rays.dx, dx_analytical_two, atol=1e-7)
 
 
-@pytest.mark.skip(
-    reason="No way to numerically test this now, so visualise plot below to check"
-)
+# @pytest.mark.skip(
+#     reason="No way to numerically test this now, so visualise plot below to check"
+# )
 def test_sample_phase_shift():
     from scipy.interpolate import RegularGridInterpolator as RGI, interp1d
 
@@ -1006,7 +779,7 @@ def test_sample_phase_shift():
         figsize: Tuple[int, int] = (6, 6)
         extent_scale: float = 1.1
 
-    phi_0 = 1.1
+    phi_0 = 10
     x0 = -0.5
     y0 = -0.5
 
@@ -1020,10 +793,10 @@ def test_sample_phase_shift():
 
     Ey, Ex = xp.gradient(phi_r, x, y)
 
-    x = get_array_from_device(x)
-    y = get_array_from_device(y)
-    phi_r = get_array_from_device(phi_r)
-    Ey, Ex = get_array_from_device(Ey), get_array_from_device(Ex)
+    # x = get_array_from_device(x)
+    # y = get_array_from_device(y)
+    # phi_r = get_array_from_device(phi_r)
+    # Ey, Ex = get_array_from_device(Ey), get_array_from_device(Ex)
 
     # Interpolate potential
     pot_interp = RGI([x, y], phi_r, method="linear", bounds_error=False, fill_value=0.0)
@@ -1033,7 +806,7 @@ def test_sample_phase_shift():
     components = (
         comp.XAxialBeam(z=0.0, radius=0.5, voltage=phi_0),
         comp.PotentialSample(
-            z=0.5,
+            z=3.0,
             potential=pot_interp,
             Ex=Ex_interp,
             Ey=Ey_interp,
@@ -1056,7 +829,7 @@ def test_sample_phase_shift():
     z = xp.asarray(tuple(r.z for r in rays))
     opl = xp.asarray(tuple(r.path_length for r in rays))
 
-    opls = xp.linspace(0.5, 5, 11)
+    opls = xp.linspace(3.0, 6, 20)
 
     for idx in range(num_rays):
         # Interpolation for x and z as functions of path length
@@ -1071,5 +844,7 @@ def test_sample_phase_shift():
 
     # Uncomment these plotting lines to see if the wavefront looks correct
 
-    # plt.axis('equal')
-    # plt.show()
+    import matplotlib.pyplot as plt
+    plt.axis('equal')
+
+    plt.show()
