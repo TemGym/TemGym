@@ -219,6 +219,7 @@ class STEMSample(Sample):
         scan_shape: Tuple[int, int] = (8, 8),
         scan_step_yx: Tuple[float, float] = (0.01, 0.01),
         scan_rotation: Degrees = 0.,
+        descan_error: Optional[np.ndarray] = None,
         name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
@@ -227,6 +228,7 @@ class STEMSample(Sample):
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
         self.scan_rotation = scan_rotation  # converts to radians in setter
+        self.descan_error = descan_error
 
     @property
     def scan_rotation(self) -> Degrees:

@@ -345,6 +345,10 @@ class STEMModel(Model):
         self._scan_pixel_yx = scan_pixel_yx
         scan_position = self.sample.scan_position(scan_pixel_yx)
         centerline = (0., 0.)
+        if self.sample.descan_error is not None:
+            descan = self.sample.descan_error
+            center_px = (np.asarray([1, *scan_pixel_yx]) @ descan).ravel()
+            self.detector.set_center_px(center_px)
         exit_axis = self.detector.center
 
         self.scan_coils.send_ray_through_points(
