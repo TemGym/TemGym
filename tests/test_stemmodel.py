@@ -4,6 +4,7 @@ import pytest
 import numpy as np
 
 from temgymbasic.model import STEMModel
+from scipy.ndimage import center_of_mass
 
 
 def rotate(radians):
@@ -212,3 +213,42 @@ def test_rays(params_update, nav_shape, sig_shape, fail) -> np.ndarray:
             else:
                 np.testing.assert_allclose(image_px_y, spec_y, rtol=1e-3, atol=1e-3)
                 np.testing.assert_allclose(image_px_x, spec_x, rtol=1e-3, atol=1e-3)
+
+
+@pytest.mark.parametrize(
+    'det_coordinate', [(8, 8), (11, 13), (7, 31)]
+)
+def test_descan_error_simple_offset(det_coordinate):
+    model = STEMModel()
+    model.sample.descan_error = np.asarray(
+        [[det_coordinate, [0, 0], [0, 0]]]
+    ).astype(np.float32)
+    model.sample.scan_shape = (24, 42)
+    model.detector.shape = (48, 46)
+    scan_point = tuple(np.random.randint(s) for s in model.detector.shape)
+    model.move_to(scan_point)
+    rays = model.run_to_end(256)
+    image = model.detector.get_image(rays)
+    com = center_of_mass(image)
+    np.testing.assert_allclose(com, det_coordinate, atol=0.1)
+
+
+@pytest.mark.parametrize(
+    'repeat', range(5)
+)
+def test_descan_error(repeat):
+    model = STEMModel()
+    model.sample.descan_error = np.asarray(
+        [[[17, 30], [-0.2, 0.5], [0.3, -0.4]]]
+    ).astype(np.float32)
+    model.sample.scan_shape = (24, 42)
+    model.detector.shape = (48, 46)
+    max_coord = ((1, *model.detector.shape) @ model.sample.descan_error).ravel()
+    assert (m <= s for m, s in zip(max_coord, model.detector.shape))
+    scan_point = tuple(np.random.randint(s) for s in model.detector.shape)
+    ideal_coord = (np.asarray((1, *scan_point)) @ model.sample.descan_error).ravel()
+    model.move_to(scan_point)
+    rays = model.run_to_end(256)
+    image = model.detector.get_image(rays)
+    com = center_of_mass(image)
+    np.testing.assert_allclose(com, ideal_coord, atol=0.1)
