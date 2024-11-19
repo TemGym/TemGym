@@ -228,6 +228,14 @@ class STEMSample(Sample):
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
         self.scan_rotation = scan_rotation  # converts to radians in setter
+        # descan_error is a LiberTEM-style "fit" to the central beam position
+        # as provided by CoMUDF, for example. It has a form :
+        #     [[y,    x   ],
+        #      [dydy, dxdy],
+        #      [dydx, dxdx]]
+        # in units of pixels, with [y, x] the beam position on the detector
+        # at the (0, 0) coordinate of the STEM scan. The error is applied
+        # *after* any flip/rotation is applied to the detector geometry.
         self.descan_error = descan_error
 
     @property
