@@ -239,13 +239,17 @@ def test_descan_error_simple_offset(det_coordinate):
 def test_descan_error(repeat):
     model = STEMModel()
     model.sample.descan_error = np.asarray(
-        [[[17, 30], [-0.2, 0.5], [0.3, -0.4]]]
+        [[[17, 30], [-0.33, 0.75], [0.4, -0.8]]]
     ).astype(np.float32)
     model.sample.scan_shape = (24, 42)
     model.detector.shape = (48, 46)
-    max_coord = ((1, *model.detector.shape) @ model.sample.descan_error).ravel()
-    assert (m <= s for m, s in zip(max_coord, model.detector.shape))
-    scan_point = tuple(np.random.randint(s) for s in model.detector.shape)
+    # check beam cannot leave detector for any scan coordinate
+    # else the center_of_mass is undefined
+    max_det_coord = ((1, *model.sample.scan_shape) @ model.sample.descan_error).ravel()
+    assert all(0 < m < s for m, s in zip(max_det_coord, model.detector.shape))
+    min_det_coord = ((1, 0, 0) @ model.sample.descan_error).ravel()
+    assert all(0 < m < s for m, s in zip(min_det_coord, model.detector.shape))
+    scan_point = tuple(np.random.randint(s) for s in model.sample.scan_shape)
     ideal_coord = (np.asarray((1, *scan_point)) @ model.sample.descan_error).ravel()
     model.move_to(scan_point)
     rays = model.run_to_end(256)
