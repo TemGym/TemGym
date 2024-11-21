@@ -704,6 +704,12 @@ class DoubleDeflector(Component):
     def length(self) -> float:
         return self._second.z - self._first.z
 
+    def _set_length(self, length: float):
+        first_z = self.z - length / 2
+        second_z = self.z + length / 2
+        self.first._set_z(first_z)
+        self.second._set_z(second_z)
+
     @property
     def first(self) -> Deflector:
         return self._first
