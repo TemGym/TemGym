@@ -553,3 +553,56 @@ def test_sample_phase_shift():
 
     # plt.axis('equal')
     # plt.show()
+
+
+def test_deflecting_sample_shift():
+    # 1:1 descan shift error to scan position
+    abstract_sample = comp.DeflectingSample(
+        0., (8, 7),
+        descan_error_shift=np.asarray([
+            [0., 0.],   # [Δy,   Δx]
+            [1., 0.],   # [ΔyΔy, ΔxΔy]
+            [0., 1.],   # [Δydx, ΔxΔx]
+        ]),
+    )
+    initial_rays = np.asarray([
+        [1., 2., 3., 4.],  # x
+        [0., 0., 0., 0.],  # dx
+        [4., 3., 2., 1.],  # y
+        [0., 0., 0., 0.],  # dy
+        [0., 0., 0., 0.],  # _
+    ])
+    rays = Rays(
+        initial_rays.copy(),
+        location=0.,
+        path_length=0.,
+    )
+    after_rays = tuple(abstract_sample.step(rays))[0]
+    np.testing.assert_allclose(initial_rays, after_rays.data)
+
+
+def test_deflecting_sample_tilt():
+    # 1:1 descan tilt error to scan position
+    abstract_sample = comp.DeflectingSample(
+        0., (8, 7),
+        descan_error_tilt=np.asarray([
+            [0., 0.],   # [Δdy,   Δdx]
+            [1., 0.],   # [ΔdyΔy, ΔdxΔy]
+            [0., 1.],   # [Δdydx, ΔdxΔx]
+        ]),
+    )
+    initial_rays = np.asarray([
+        [1., 2., 3., 4.],  # x
+        [0., 0., 0., 0.],  # dx
+        [4., 3., 2., 1.],  # y
+        [0.1, 0.2, 0.3, 0.4],  # dy
+        [0., 0., 0., 0.],  # _
+    ])
+    rays = Rays(
+        initial_rays.copy(),
+        location=0.,
+        path_length=0.,
+    )
+    after_rays = tuple(abstract_sample.step(rays))[0]
+    np.testing.assert_allclose(rays.x, after_rays.dx)
+    np.testing.assert_allclose(rays.y + rays.dy, after_rays.dy)

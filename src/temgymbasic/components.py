@@ -282,6 +282,48 @@ class STEMSample(Sample):
         return STEMSampleGUI
 
 
+class DeflectingSample(STEMSample):
+    def __init__(
+        self,
+        z: float,
+        scan_shape: Tuple[int, int] = (8, 8),
+        scan_step_yx: Tuple[float, float] = (0.01, 0.01),
+        scan_rotation: Degrees = 0.,
+        descan_error_shift: Optional[np.ndarray] = None,
+        descan_error_tilt: Optional[np.ndarray] = None,
+        name: Optional[str] = None,
+    ):
+        Sample.__init__(self, name=name, z=z)
+        self.scan_shape = scan_shape
+        self.scan_step_yx = scan_step_yx
+        self.scan_rotation = scan_rotation  # converts to radians in setter
+        # [3, 2] - [[Δy, Δx], [ΔyΔy, ΔxΔy], [Δydx, ΔxΔx]]
+        self.descan_error_shift = descan_error_shift
+        # [3, 2] - [[Δdy, Δdx], [ΔdyΔy, ΔdxΔy], [Δdydx, ΔdxΔx]]
+        self.descan_error_tilt = descan_error_tilt
+
+    def step(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        rays.location = self
+        if self.descan_error_shift is not None:
+            # Neutral position is optical axis so replace totally
+            rays.y = self.descan_error_shift[0, 0] + rays.yx.T @ self.descan_error_shift[1:, 0]
+            rays.x = self.descan_error_shift[0, 1] + rays.yx.T @ self.descan_error_shift[1:, 1]
+        else:
+            rays.y[:] = 0
+            rays.x[:] = 0
+        if self.descan_error_tilt is not None:
+            # Adjusts existing tilts so inplace add onto dy/dx
+            rays.dy += self.descan_error_tilt[0, 0] + rays.yx.T @ self.descan_error_tilt[1:, 0]
+            rays.dx += self.descan_error_tilt[0, 1] + rays.yx.T @ self.descan_error_tilt[1:, 1]
+        yield rays
+
+    @staticmethod
+    def gui_wrapper():
+        raise NotImplementedError
+
+
 class Source(Component):
     def __init__(
         self, z: float,
