@@ -299,13 +299,22 @@ class DeflectingSample(STEMSample):
         self.scan_rotation = scan_rotation  # converts to radians in setter
         # [3, 2] - [[Δy, Δx], [ΔyΔy, ΔxΔy], [Δydx, ΔxΔx]]
         self.descan_error_shift = descan_error_shift
-        # [3, 2] - [[Δdy, Δdx], [ΔdyΔy, ΔdxΔy], [Δdydx, ΔdxΔx]]
+        # [3, 2] - [[Δrad-y, Δrad-x], [Δrad-yΔy, Δrad-xΔy], [Δrad-ydx, Δrad-xΔx]]
         self.descan_error_tilt = descan_error_tilt
+
+    @property
+    def descan_error_tilt_slope(self) -> np.ndarray:
+        return np.tan(self.descan_error_tilt)
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         rays.location = self
+        if self.descan_error_tilt is not None:
+            # Adjusts existing tilts so inplace add onto dy/dx
+            slope_matrix = self.descan_error_tilt_slope
+            rays.dy += slope_matrix[0, 0] + rays.yx.T @ slope_matrix[1:, 0]
+            rays.dx += slope_matrix[0, 1] + rays.yx.T @ slope_matrix[1:, 1]
         if self.descan_error_shift is not None:
             # Neutral position is optical axis so replace totally
             rays.y = self.descan_error_shift[0, 0] + rays.yx.T @ self.descan_error_shift[1:, 0]
@@ -313,10 +322,6 @@ class DeflectingSample(STEMSample):
         else:
             rays.y[:] = 0
             rays.x[:] = 0
-        if self.descan_error_tilt is not None:
-            # Adjusts existing tilts so inplace add onto dy/dx
-            rays.dy += self.descan_error_tilt[0, 0] + rays.yx.T @ self.descan_error_tilt[1:, 0]
-            rays.dx += self.descan_error_tilt[0, 1] + rays.yx.T @ self.descan_error_tilt[1:, 1]
         yield rays
 
     @staticmethod
