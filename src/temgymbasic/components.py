@@ -219,6 +219,7 @@ class STEMSample(Sample):
         scan_shape: Tuple[int, int] = (8, 8),
         scan_step_yx: Tuple[float, float] = (0.01, 0.01),
         scan_rotation: Degrees = 0.,
+        descan_error: Optional[np.ndarray] = None,
         name: Optional[str] = None,
     ):
         super().__init__(name=name, z=z)
@@ -227,6 +228,15 @@ class STEMSample(Sample):
         self.scan_shape = scan_shape
         self.scan_step_yx = scan_step_yx
         self.scan_rotation = scan_rotation  # converts to radians in setter
+        # descan_error is a LiberTEM-style "fit" to the central beam position
+        # as provided by CoMUDF, for example. It has a form :
+        #     [[y,    x   ] - [[detector offset_x, detector offset_y],
+        #      [dydy, dxdy], - [multiplies y scan coord by it's value, adds error to x scan coord]
+        #      [dydx, dxdx]] - [adds error to y scan coord, multiplies x scan coord by it's value]]
+        # in units of pixels, with [y, x] the beam position on the detector
+        # at the (0, 0) coordinate of the STEM scan. The error is applied
+        # *after* any flip/rotation is applied to the detector geometry.
+        self.descan_error = descan_error
 
     @property
     def scan_rotation(self) -> Degrees:
@@ -270,6 +280,53 @@ class STEMSample(Sample):
     def gui_wrapper():
         from .gui import STEMSampleGUI
         return STEMSampleGUI
+
+
+class DeflectingSample(STEMSample):
+    def __init__(
+        self,
+        z: float,
+        scan_shape: Tuple[int, int] = (8, 8),
+        scan_step_yx: Tuple[float, float] = (0.01, 0.01),
+        scan_rotation: Degrees = 0.,
+        descan_error_shift: Optional[np.ndarray] = None,
+        descan_error_tilt: Optional[np.ndarray] = None,
+        name: Optional[str] = None,
+    ):
+        Sample.__init__(self, name=name, z=z)
+        self.scan_shape = scan_shape
+        self.scan_step_yx = scan_step_yx
+        self.scan_rotation = scan_rotation  # converts to radians in setter
+        # [3, 2] - [[Δy, Δx], [ΔyΔy, ΔxΔy], [Δydx, ΔxΔx]]
+        self.descan_error_shift = descan_error_shift
+        # [3, 2] - [[Δrad-y, Δrad-x], [Δrad-yΔy, Δrad-xΔy], [Δrad-ydx, Δrad-xΔx]]
+        self.descan_error_tilt = descan_error_tilt
+
+    @property
+    def descan_error_tilt_slope(self) -> np.ndarray:
+        return np.tan(self.descan_error_tilt)
+
+    def step(
+        self, rays: Rays
+    ) -> Generator[Rays, None, None]:
+        rays.location = self
+        if self.descan_error_tilt is not None:
+            # Adjusts existing tilts so inplace add onto dy/dx
+            slope_matrix = self.descan_error_tilt_slope
+            rays.dy += slope_matrix[0, 0] + rays.yx.T @ slope_matrix[1:, 0]
+            rays.dx += slope_matrix[0, 1] + rays.yx.T @ slope_matrix[1:, 1]
+        if self.descan_error_shift is not None:
+            # Neutral position is optical axis so replace totally
+            rays.y = self.descan_error_shift[0, 0] + rays.yx.T @ self.descan_error_shift[1:, 0]
+            rays.x = self.descan_error_shift[0, 1] + rays.yx.T @ self.descan_error_shift[1:, 1]
+        else:
+            rays.y[:] = 0
+            rays.x[:] = 0
+        yield rays
+
+    @staticmethod
+    def gui_wrapper():
+        raise NotImplementedError
 
 
 class Source(Component):
