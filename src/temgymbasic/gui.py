@@ -45,8 +45,8 @@ if TYPE_CHECKING:
 LABEL_RADIUS = 0.3
 Z_ORIENT = -1
 RAY_COLOR = (0., 0.8, 0.)
-XYZ_SCALING = np.asarray((1e2, 1e2, 1.))
-LENGTHSCALING = 1e-6
+XYZ_SCALING = np.asarray((1, 1, 1.))
+LENGTHSCALING = 1
 MRAD = 1e-3
 UPDATE_RATE = 50
 BKG_COLOR_3D = (150, 150, 150, 255)
@@ -1024,14 +1024,14 @@ class SourceGUI(ComponentGUIWrapper):
             tick_interval=max_shift / 10,
         )
         beam_centre_y, beam_centre_x = self.beam.centre_yx
-        beam_centre_y = beam_centre_y / LENGTHSCALING
-        beam_centre_x = beam_centre_x / LENGTHSCALING
+        beam_centre_y = beam_centre_y
+        beam_centre_x = beam_centre_x
         self.xcentreslider, _ = labelled_slider(
-            value=beam_centre_x, name="Beam Centre X (µm)",
+            value=beam_centre_x, name="Beam Centre X",
             insert_into=into[0], **common_args
         )
         self.ycentreslider, _ = labelled_slider(
-            value=beam_centre_y, name="Beam Centre Y (µm)",
+            value=beam_centre_y, name="Beam Centre Y",
             insert_into=into[1], **common_args,
         )
 
@@ -1217,8 +1217,8 @@ class GaussBeamGUI(SourceGUI):
 
         beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
-            beam_radius / LENGTHSCALING, 0., 200.,
-            name='Beam Radius (µm)', insert_into=vbox,
+            beam_radius, 0., 200.,
+            name='Beam Radius', insert_into=vbox,
             decimals=1, tick_interval=10.,
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
@@ -1233,8 +1233,8 @@ class GaussBeamGUI(SourceGUI):
 
         wo = self.beam.wo
         self.woslider, _ = labelled_slider(
-            wo / LENGTHSCALING, 1, 500,
-            name='Beamlet std.-dev. (µm)', insert_into=vbox,
+            wo, 1, 500,
+            name='Beamlet std.-dev.', insert_into=vbox,
             decimals=1, tick_interval=10.,
         )
         self.woslider.valueChanged.connect(self.set_wo)
@@ -1537,7 +1537,8 @@ class STEMSampleGUI(SampleGUI):
         )
 
     def _get_extents(self):
-        sy, sx = self.sample.scan_shape
+        sy = self.sample.scan_shape[0]
+        sx = self.sample.scan_shape[1]
         py, px = self.sample.scan_step_yx
         return GridGeomParams(
             cx=-1 * px / 2.,
@@ -1870,10 +1871,10 @@ class SimpleDoubleDeflectorGUI(DoubleDeflectorGUI):
             tick_interval=50, insert_into=vbox,
         )
         self.defxslider, _ = labelled_slider(
-            value=0., name="X-Deflection (µm)", **common_args
+            value=0., name="X-Deflection", **common_args
         )
         self.defyslider, _ = labelled_slider(
-            value=0., name="Y-Deflection (µm)", **common_args,
+            value=0., name="Y-Deflection", **common_args,
         )
 
         self.defxslider.valueChanged.connect(self.set_defx)
@@ -1967,9 +1968,9 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         self.ysize.lineEdit.textChanged.connect(self.set_shape)
 
         self.pixelsizeslider, _ = labelled_slider(
-            self.detector.pixel_size / LENGTHSCALING,
-            1, 100,
-            name="Pixel size (µm)", insert_into=vbox,
+            self.detector.pixel_size,
+            0.001, 1,
+            name="Pixel size", insert_into=vbox,
             decimals=1, tick_interval=10.,
         )
         self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
