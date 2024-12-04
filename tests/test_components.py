@@ -844,7 +844,6 @@ def test_sample_phase_shift():
 
     # Uncomment these plotting lines to see if the wavefront looks correct
 
-    import matplotlib.pyplot as plt
-    plt.axis('equal')
-
-    plt.show()
+    # import matplotlib.pyplot as plt
+    # plt.axis('equal')
+    # plt.show()

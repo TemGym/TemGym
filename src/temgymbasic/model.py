@@ -213,8 +213,6 @@ class STEMModel(Model):
             comp.Lens(
                 z=0.3,
                 f=0.1,
-                z1=-0.3,
-                z2=0.7
             ),
             comp.STEMSample(
                 z=0.5,
