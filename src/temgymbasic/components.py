@@ -132,13 +132,10 @@ class Lens(Component):
 
         self.aber_coeffs = aber_coeffs
 
-        self._z1 = self._z2 = self._m = None
-        self._f = f
+        if f is not None and (m is None and z1 is None and z2 is None):
+            m = -1.0
+        self._z1, self._z2, self._f, self._m = self._calculate_lens_parameters(z1, z2, f, m)
 
-        if (m is not None or z1 is not None or z2 is not None):
-            self._z1, self._z2, self._f, self._m = self._calculate_lens_parameters(z1, z2, f, m)
-        elif self._f is None:
-            raise InvalidModelError("Lens must have defined: f, f and m, or z1 and z2, or f and z1")
 
     @property
     def f(self) -> float:
