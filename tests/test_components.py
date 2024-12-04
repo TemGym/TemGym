@@ -321,7 +321,7 @@ def test_lens_focusing_to_infinity(point_rays):
 
 def test_lens_path_length_parallel_incoming_rays_to_focal_plane(paraxial_parallel_rays):
     f = 0.5
-    lens = comp.Lens(paraxial_parallel_rays.location, f, z1=-1e11, z2=f)
+    lens = comp.Lens(paraxial_parallel_rays.location, z1=-1e11, z2=f)
     out_rays = tuple(lens.step(paraxial_parallel_rays))[0]
     rays_at_focal = out_rays.propagate(f)
 
@@ -362,7 +362,10 @@ def test_lens_path_length_point_rays_object_to_image_plane(paraxial_point_rays):
     )  # Get the path length before the lens from temgym
 
     # Make lens and propagate rays through lens to image plane
-    lens = comp.Lens(z=abs(object_plane), f=f, z1=object_plane, z2=image_plane)
+    lens = comp.Lens(z=abs(object_plane), z1=object_plane, z2=image_plane)
+
+    xp.testing.assert_allclose(lens.f, f, atol=1e-6)
+
     out_rays = tuple(lens.step(lens_rays))[0]
     opl_after_lens_temgym = out_rays.path_length
     rays_at_image = out_rays.propagate(image_plane)
@@ -444,7 +447,7 @@ def test_lens_path_length_point_rays_from_focal_plane_to_veryfaraway(
     lens_rays = input_rays.propagate(abs(object_plane))
 
     # Make lens and propagate rays through lens to image plane
-    lens = comp.Lens(z=abs(object_plane), f=f, z1=object_plane, z2=image_plane)
+    lens = comp.Lens(z=abs(object_plane), z1=object_plane, z2=image_plane)
     out_rays = tuple(lens.step(lens_rays))[0]
     opl_after_lens_temgym = out_rays.path_length
     rays_at_image = out_rays.propagate(image_plane)
