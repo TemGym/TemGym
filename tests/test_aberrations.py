@@ -10,11 +10,11 @@ from temgymbasic.utils import (
 from scipy.constants import e, m_e, c
 import os
 
-import cupy as cp
 # Check environment variable to decide backend
-USE_GPU = os.getenv("USE_GPU", "0") == "0"
+USE_GPU = os.getenv("USE_GPU", "0") == "1"
 
 if USE_GPU:
+    import cupy as cp
     xp = cp
 else:
     xp = np
