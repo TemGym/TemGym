@@ -1154,8 +1154,8 @@ class DoubleDeflector(Component):
 
     @staticmethod
     def gui_wrapper():
-        from .gui import SimpleDoubleDeflectorGUI
-        return SimpleDoubleDeflectorGUI
+        from .gui import DoubleDeflectorGUI
+        return DoubleDeflectorGUI
 
 
 class Biprism(Component):

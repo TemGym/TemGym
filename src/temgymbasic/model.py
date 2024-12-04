@@ -204,6 +204,7 @@ class STEMModel(Model):
             comp.ParallelBeam(
                 z=0.0,
                 radius=0.01,
+                voltage=1.0,
             ),
             comp.DoubleDeflector(
                 first=comp.Deflector(z=0.1, name='Upper'),
