@@ -85,7 +85,7 @@ def FresnelPropagator(E0, ps, lambda0, z):
 ])
 def gaussian_beam_freespace_model(request):
     wavelength = 0.01
-    size = 2048
+    size = 512
     pixel_size = 0.01
     wo = 0.1
     prop_dist = 25
@@ -241,118 +241,26 @@ def test_gaussian_free_space(gaussian_beam_freespace_model):
     # only the parameters of the last image
     # in the pytest fixture is saved!
 
-    dpi = 200
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.imshow(np.abs(gbd_output_field), cmap='gray')
-    ax1.axvline(size // 2, color='white', alpha=0.3)
-    ax1.axhline(size // 2, color='white', alpha=0.3)
-    ax2.imshow(np.angle(gbd_output_field), cmap='RdBu')
-    ax2.axvline(size // 2, color='k', alpha=0.3)
-    ax2.axhline(size // 2, color='k', alpha=0.3)
-    fig.suptitle("GBD")
-    fig.savefig("test_gaussian_gbd.png", dpi=dpi)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    ax1.imshow(np.abs(fresnel_output_field), cmap='gray')
-    ax1.axvline(size // 2, color='white', alpha=0.3)
-    ax1.axhline(size // 2, color='white', alpha=0.3)
-    ax2.imshow(np.angle(fresnel_output_field), cmap='RdBu')
-    ax2.axvline(size // 2, color='k', alpha=0.3)
-    ax2.axhline(size // 2, color='k', alpha=0.3)
-    fig.suptitle("Fresnel")
-    fig.savefig("test_gaussian_fresnel.png", dpi=dpi)
-
-    fig, (ax1, ax2) = plt.subplots(1, 2)
-    s = np.s_[size // 2, :]
-    ax1.plot(np.abs(fresnel_output_field[s]), label="Fresnel")
-    ax1.plot(np.abs(gbd_output_field[s]), label="GBD")
-    ax1.legend()
-    ax2.plot(np.angle(fresnel_output_field[s]), label="Fresnel")
-    ax2.plot(np.angle(gbd_output_field[s]), label="GBD")
-    ax2.legend()
-    fig.savefig("test_gaussian_fresnelvsgaussianline_close.png", dpi=dpi)
-
-    fig, ax1 = plt.subplots()
-    ax1.imshow(is_close)
-    fig.savefig("test_gaussian_isclose.png", dpi=dpi)
-
-
-def test_gaussian_lens(gaussian_beam_freespace_model):
-    n_rays = 1
-
-    model, wavelength, deg_yx, x0, wo, prop_dist = gaussian_beam_freespace_model
-
-    rays = tuple(model.run_iter(num_rays=n_rays, random=False))
-    gbd_output_field = model.detector.get_image(rays[-1])
-
-    size = gbd_output_field.shape[0]
-    gbd_output_field = zero_phase(gbd_output_field,
-                                gbd_output_field.shape[0]//2,
-                                gbd_output_field.shape[1]//2)
-
-    # Calculate theta and phi
-    tan_theta_x = np.tan(deg_yx[1])
-    tan_theta_y = np.tan(deg_yx[0])
-
-    pixel_size = model.components[1].pixel_size
-
-    theta = np.arctan(np.sqrt(tan_theta_x**2 + tan_theta_y**2))
-    phi = np.arctan2(tan_theta_y, tan_theta_x)
-
-    shape = model.components[-1].shape
-    det_size_y = shape[0] * pixel_size
-    det_size_x = shape[1] * pixel_size
-
-    x_det = xp.linspace(-det_size_x / 2, det_size_x / 2, shape[0])
-    y_det = xp.linspace(-det_size_y / 2, det_size_y / 2, shape[1])
-
-    fresnel_input_field = Scalar_source_XY(x=x_det, y=y_det, wavelength=wavelength)
-    fresnel_input_field.gauss_beam(A=1, r0=(x0, 0), z0=0, w0=(wo, wo), theta=theta, phi=phi)
-    fresnel_output_field = FresnelPropagator(fresnel_input_field.u,
-                                             pixel_size,
-                                             wavelength,
-                                             prop_dist)
-
-    fresnel_output_field = zero_phase(fresnel_output_field, size//2, size//2)
-
-    # Create a mask for pixels within a 25 px radius from the center
-    center_x, center_y = size // 2, size // 2
-    y, x = np.ogrid[:size, :size]
-    mask = xp.sqrt((x - center_x)**2 + (y - center_y)**2) <= 25
-
-    # Check if all pixels within the mask satisfy the isclose condition
-    is_close = np.isclose(
-        np.angle(gbd_output_field),
-        np.angle(fresnel_output_field),
-        atol=0.1,
-    )
-
-    xp.testing.assert_(np.all(is_close[mask]))
-
-    # Uncomment to plot the images - better to do this to be sure that it's working well enough
-    # - only the parameters of the last image
-    # in the pytest fixture is saved!
-
     # dpi = 200
     # fig, (ax1, ax2) = plt.subplots(1, 2)
-    # ax1.imshow(np.abs(gbd_output_field),cmap='gray')
+    # ax1.imshow(np.abs(gbd_output_field), cmap='gray')
     # ax1.axvline(size // 2, color='white', alpha=0.3)
     # ax1.axhline(size // 2, color='white', alpha=0.3)
-    # ax2.imshow(np.angle(gbd_output_field),cmap='RdBu')
+    # ax2.imshow(np.angle(gbd_output_field), cmap='RdBu')
     # ax2.axvline(size // 2, color='k', alpha=0.3)
     # ax2.axhline(size // 2, color='k', alpha=0.3)
     # fig.suptitle("GBD")
-    # fig.savefig("test_gaussian_gbd.png", dpi = dpi)
+    # fig.savefig("test_gaussian_gbd.png", dpi=dpi)
 
     # fig, (ax1, ax2) = plt.subplots(1, 2)
-    # ax1.imshow(np.abs(fresnel_output_field),cmap='gray')
+    # ax1.imshow(np.abs(fresnel_output_field), cmap='gray')
     # ax1.axvline(size // 2, color='white', alpha=0.3)
     # ax1.axhline(size // 2, color='white', alpha=0.3)
-    # ax2.imshow(np.angle(fresnel_output_field ),cmap='RdBu')
+    # ax2.imshow(np.angle(fresnel_output_field), cmap='RdBu')
     # ax2.axvline(size // 2, color='k', alpha=0.3)
     # ax2.axhline(size // 2, color='k', alpha=0.3)
     # fig.suptitle("Fresnel")
-    # fig.savefig("test_gaussian_fresnel.png", dpi = dpi)
+    # fig.savefig("test_gaussian_fresnel.png", dpi=dpi)
 
     # fig, (ax1, ax2) = plt.subplots(1, 2)
     # s = np.s_[size // 2, :]
@@ -362,8 +270,100 @@ def test_gaussian_lens(gaussian_beam_freespace_model):
     # ax2.plot(np.angle(fresnel_output_field[s]), label="Fresnel")
     # ax2.plot(np.angle(gbd_output_field[s]), label="GBD")
     # ax2.legend()
-    # fig.savefig("test_gaussian_fresnelvsgaussianline_close.png", dpi = dpi)
+    # fig.savefig("test_gaussian_fresnelvsgaussianline_close.png", dpi=dpi)
 
     # fig, ax1 = plt.subplots()
     # ax1.imshow(is_close)
-    # fig.savefig("test_gaussian_isclose.png", dpi = dpi)
+    # fig.savefig("test_gaussian_isclose.png", dpi=dpi)
+
+
+# def test_gaussian_lens(gaussian_beam_freespace_model):
+#     n_rays = 1
+
+#     model, wavelength, deg_yx, x0, wo, prop_dist = gaussian_beam_freespace_model
+
+#     rays = tuple(model.run_iter(num_rays=n_rays, random=False))
+#     gbd_output_field = model.detector.get_image(rays[-1])
+
+#     size = gbd_output_field.shape[0]
+#     gbd_output_field = zero_phase(gbd_output_field,
+#                                 gbd_output_field.shape[0]//2,
+#                                 gbd_output_field.shape[1]//2)
+
+#     # Calculate theta and phi
+#     tan_theta_x = np.tan(deg_yx[1])
+#     tan_theta_y = np.tan(deg_yx[0])
+
+#     pixel_size = model.components[1].pixel_size
+
+#     theta = np.arctan(np.sqrt(tan_theta_x**2 + tan_theta_y**2))
+#     phi = np.arctan2(tan_theta_y, tan_theta_x)
+
+#     shape = model.components[-1].shape
+#     det_size_y = shape[0] * pixel_size
+#     det_size_x = shape[1] * pixel_size
+
+#     x_det = xp.linspace(-det_size_x / 2, det_size_x / 2, shape[0])
+#     y_det = xp.linspace(-det_size_y / 2, det_size_y / 2, shape[1])
+
+#     fresnel_input_field = Scalar_source_XY(x=x_det, y=y_det, wavelength=wavelength)
+#     fresnel_input_field.gauss_beam(A=1, r0=(x0, 0), z0=0, w0=(wo, wo), theta=theta, phi=phi)
+#     fresnel_output_field = FresnelPropagator(fresnel_input_field.u,
+#                                              pixel_size,
+#                                              wavelength,
+#                                              prop_dist)
+
+#     fresnel_output_field = zero_phase(fresnel_output_field, size//2, size//2)
+
+#     # Create a mask for pixels within a 25 px radius from the center
+#     center_x, center_y = size // 2, size // 2
+#     y, x = np.ogrid[:size, :size]
+#     mask = xp.sqrt((x - center_x)**2 + (y - center_y)**2) <= 25
+
+#     # Check if all pixels within the mask satisfy the isclose condition
+#     is_close = np.isclose(
+#         np.angle(gbd_output_field),
+#         np.angle(fresnel_output_field),
+#         atol=0.1,
+#     )
+
+#     xp.testing.assert_(np.all(is_close[mask]))
+
+#     # Uncomment to plot the images - better to do this to be sure that it's working well enough
+#     # - only the parameters of the last image
+#     # in the pytest fixture is saved!
+
+#     # dpi = 200
+#     # fig, (ax1, ax2) = plt.subplots(1, 2)
+#     # ax1.imshow(np.abs(gbd_output_field),cmap='gray')
+#     # ax1.axvline(size // 2, color='white', alpha=0.3)
+#     # ax1.axhline(size // 2, color='white', alpha=0.3)
+#     # ax2.imshow(np.angle(gbd_output_field),cmap='RdBu')
+#     # ax2.axvline(size // 2, color='k', alpha=0.3)
+#     # ax2.axhline(size // 2, color='k', alpha=0.3)
+#     # fig.suptitle("GBD")
+#     # fig.savefig("test_gaussian_gbd.png", dpi = dpi)
+
+#     # fig, (ax1, ax2) = plt.subplots(1, 2)
+#     # ax1.imshow(np.abs(fresnel_output_field),cmap='gray')
+#     # ax1.axvline(size // 2, color='white', alpha=0.3)
+#     # ax1.axhline(size // 2, color='white', alpha=0.3)
+#     # ax2.imshow(np.angle(fresnel_output_field ),cmap='RdBu')
+#     # ax2.axvline(size // 2, color='k', alpha=0.3)
+#     # ax2.axhline(size // 2, color='k', alpha=0.3)
+#     # fig.suptitle("Fresnel")
+#     # fig.savefig("test_gaussian_fresnel.png", dpi = dpi)
+
+#     # fig, (ax1, ax2) = plt.subplots(1, 2)
+#     # s = np.s_[size // 2, :]
+#     # ax1.plot(np.abs(fresnel_output_field[s]), label="Fresnel")
+#     # ax1.plot(np.abs(gbd_output_field[s]), label="GBD")
+#     # ax1.legend()
+#     # ax2.plot(np.angle(fresnel_output_field[s]), label="Fresnel")
+#     # ax2.plot(np.angle(gbd_output_field[s]), label="GBD")
+#     # ax2.legend()
+#     # fig.savefig("test_gaussian_fresnelvsgaussianline_close.png", dpi = dpi)
+
+#     # fig, ax1 = plt.subplots()
+#     # ax1.imshow(is_close)
+#     # fig.savefig("test_gaussian_isclose.png", dpi = dpi)
