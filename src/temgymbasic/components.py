@@ -136,7 +136,6 @@ class Lens(Component):
             m = -1.0
         self._z1, self._z2, self._f, self._m = self._calculate_lens_parameters(z1, z2, f, m)
 
-
     @property
     def f(self) -> float:
         return self._f
