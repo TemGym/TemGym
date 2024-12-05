@@ -495,3 +495,70 @@ def calculate_direction_cosines(x0, y0, z0, x1, y1, z1, xp=np):
     N = vz / v_mag
 
     return L, M, N
+
+
+def zero_phase(u, idx_x, idx_y):
+    u_centre = u[idx_x, idx_y]
+    phase_difference = 0 - np.angle(u_centre)
+    u = u * np.exp(1j * phase_difference)
+    return u
+
+
+def FresnelPropagator(E0, ps, lambda0, z):
+    """
+    Parameters:
+        E0 : 2D array
+            The initial complex field in the x-y source plane.
+        ps : float
+            Pixel size in the object plane (same units as wavelength).
+        lambda0 : float
+            Wavelength of the light (in the same units as ps).
+        z : float
+            Propagation distance (in the same units as ps).
+
+    Returns:
+        Ef : 2D array
+            The complex field after propagating a distance z.
+    """
+    n, m = E0.shape
+
+    fx = np.fft.fftfreq(n, ps)
+    fy = np.fft.fftfreq(m, ps)
+    Fx, Fy = np.meshgrid(fx, fy)
+
+    H = np.exp(-1j * (
+        2 * np.pi / lambda0) * z) * np.exp(
+        -1j * np.pi * lambda0 * z * (Fx**2 + Fy**2))
+
+    E0fft = np.fft.fft2(E0)
+    G = H * E0fft
+    Ef = np.fft.ifft2(G)
+
+    return Ef
+
+
+def lens_phase_factor(n, ps, lambda0, f):
+    """
+    Compute the phase factor introduced by an ideal lens.
+
+    Parameters:
+        n : int
+            Number of pixels (assuming square grid, n x n).
+        ps : float
+            Pixel size (in the same units as wavelength and focal length).
+        lambda0 : float
+            Wavelength of the light (in the same units as ps).
+        f : float
+            focal length of the lens (in the same units as ps).
+
+    Returns:
+        phase_factor : 2D array (n x n)
+            The phase factor to multiply with the field.
+    """
+    x = np.linspace(-n/2, n/2 - 1, n) * ps
+    y = np.linspace(-n/2, n/2 - 1, n) * ps
+    X, Y = np.meshgrid(x, y)
+
+    phase_factor = np.exp(-1j * np.pi * (X**2 + Y**2) / (lambda0 * f) + 1j * np.pi)
+
+    return phase_factor
