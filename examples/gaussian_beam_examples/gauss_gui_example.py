@@ -28,7 +28,6 @@ prop_dist = 5
 
 z_o = -lens_dist
 z_i = lens_dist + prop_dist
-#m = 1e-11
 focal = 3
 
 f = (1 / z_i - 1 / z_o) ** -1
@@ -40,17 +39,16 @@ components = (
         z=0.0,
         voltage=calculate_phi_0(wavelength),
         radius=radius,
-        #centre_yx=centre_yx,
         wo=wo,
         tilt_yx=tilt_yx,
-        semi_angle = 0.0
+        semi_angle=0.0
     ),
     comp.Lens(
         z=lens_dist,
         z1=-lens_dist,
         z2=prop_dist,
         f=focal,
-        aber_coeffs = coeffs
+        aber_coeffs=coeffs
     ),
     comp.Detector(
         z=lens_dist + prop_dist,
@@ -61,7 +59,6 @@ components = (
 )
 
 model = Model(components, backend='gpu')
-#rays = tuple(model.run_iter(num_rays=n_rays, random = False))
 AppWindow = QApplication(sys.argv)
 viewer = TemGymWindow(model)
 viewer.show()

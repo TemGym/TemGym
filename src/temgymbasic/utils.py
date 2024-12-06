@@ -497,6 +497,13 @@ def calculate_direction_cosines(x0, y0, z0, x1, y1, z1, xp=np):
     return L, M, N
 
 
+def zero_phase_1D(u, idx_x):
+    u_centre = u[idx_x]
+    phase_difference = 0 - np.angle(u_centre)
+    u = u * np.exp(1j * phase_difference)
+    return u
+
+
 def zero_phase(u, idx_x, idx_y):
     u_centre = u[idx_x, idx_y]
     phase_difference = 0 - np.angle(u_centre)
@@ -555,8 +562,8 @@ def lens_phase_factor(n, ps, lambda0, f):
         phase_factor : 2D array (n x n)
             The phase factor to multiply with the field.
     """
-    x = np.linspace(-n/2, n/2 - 1, n) * ps
-    y = np.linspace(-n/2, n/2 - 1, n) * ps
+    x = np.linspace(-n/2, n/2, n) * ps
+    y = np.linspace(-n/2, n/2, n) * ps
     X, Y = np.meshgrid(x, y)
 
     phase_factor = np.exp(-1j * np.pi * (X**2 + Y**2) / (lambda0 * f) + 1j * np.pi)
