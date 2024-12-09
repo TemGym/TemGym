@@ -1583,26 +1583,30 @@ class STEMSampleGUI(SampleGUI):
         self.scanstep_x.valueChanged.connect(self.set_scanstep)
         self.scanstep_y.valueChanged.connect(self.set_scanstep)
 
+        pos_x_hbox = QHBoxLayout()
+        pos_y_hbox = QHBoxLayout()
         ny, nx = self.sample.scan_shape
         self.scanpos_x, _ = labelled_slider(
             value=0,
             vmin=0,
             vmax=nx - 1,
             name="Pos-X",
-            insert_into=x_hbox,
+            insert_into=pos_x_hbox,
         )
         self.scanpos_y, _ = labelled_slider(
             value=0,
             vmin=0,
             vmax=ny - 1,
             name="Pos-Y",
-            insert_into=y_hbox,
+            insert_into=pos_y_hbox,
         )
         self.scanpos_x.valueChanged.connect(self.set_scanpos)
         self.scanpos_y.valueChanged.connect(self.set_scanpos)
 
         vbox.addLayout(x_hbox)
+        vbox.addLayout(pos_x_hbox)
         vbox.addLayout(y_hbox)
+        vbox.addLayout(pos_y_hbox)
 
         self.box = vbox
         return self
