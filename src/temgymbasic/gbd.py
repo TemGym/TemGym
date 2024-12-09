@@ -197,10 +197,10 @@ def calculate_Qpinv(A, B, C, D, Qinv, xp=np):
     return NUM @ DEN
 
 
-def phase_correction(r1m, p1m, r2m, p2m, k, xp=np):
+def phase_correction(r1m, p1m, r2m, theta2m, k, xp=np):
     # See https://www.tandfonline.com/doi/abs/10.1080/09500340600842237
     z1_phase = xp.sum(r1m * p1m, axis=1)
-    z2_phase = xp.sum(r2m * p2m, axis=1)
+    z2_phase = xp.sum(r2m * theta2m, axis=1)
     return xp.exp(-1j * k / 2 * (-z2_phase + z1_phase))
 
 
@@ -228,22 +228,46 @@ def guoy_phase(Qpinv, xp=np):
 
     return guoy
 
+def extra_factors(rho_1m, rho_2, B, A):
 
-def misalign_phase_plane_wave(r2, p2m, k, xp=np):
+    """compute the extra phase factor from ray data
+
+    Returns
+    -------
+    numpy.ndarray
+        phase factors from decenter
+    """
+
+    Binv = np.linalg.inv(B)
+    BA = Binv @ A
+
+
+    misalign = (rho_1m[...,0]*BA[...,0,0] + rho_1m[...,1]*BA[...,1,0])*rho_1m[...,0]
+    misalign = (misalign + (rho_1m[...,0]*BA[...,0,1] + rho_1m[...,1]*BA[...,1,1])*rho_1m[...,1])
+
+    cross = (rho_1m[...,0]*Binv[...,0,0] + rho_1m[...,1]*Binv[...,1,0])*rho_2[...,0]
+    cross = -2*(cross + (rho_1m[...,0]*Binv[...,0,1] + rho_1m[...,1]*Binv[...,1,1])*rho_2[...,1])
+
+    return misalign+cross
+
+def misalign_phase_plane_wave(r2, theta2m, k, xp=np):
     # r2: (n_px, n_gauss, 2:[x ,y])
-    # p2m: (n_gauss, 2:[x ,y])
-    # l0 = r2 * p2m
-    phi = r2[:, :, 0] * p2m[:, 0] * (1 + ((p2m[:, 0] ** 2) / 2))
-    # phi_y = l0_y * (1 + ((p2m[:, 1] ** 2) / 2))
+    # theta2m: (n_gauss, 2:[x ,y])
+    # l0 = r2 * theta2m ########!!!!!!!!#########
+    # The r2 *theta2m part below is just using the small angle approximation to calculate
+    # the l0 term in the paper "Collins integral for misalgned optical elements"
+    # See section 3.1 of that paper for more details. 
+    phi = (r2[:, :, 0]) * theta2m[:, 0] * (1 + ((theta2m[:, 0] ** 2) / 2))
+    # phi_y = l0_y * (1 + ((theta2m[:, 1] ** 2) / 2))
     # phi = phi_x + phi_y
-    phi += r2[:, :, 1] * p2m[:, 1] * (1 + ((p2m[:, 1] ** 2) / 2))
+    phi += (r2[:, :, 1]) * theta2m[:, 1] * (1 + ((theta2m[:, 1] ** 2) / 2))
     return phi
     return (
         r2
-        * p2m[xp.newaxis, ...]
+        * theta2m[xp.newaxis, ...]
         * (
             1
-            + (p2m[xp.newaxis, ...] ** 2) / 2
+            + (theta2m[xp.newaxis, ...] ** 2) / 2
         )
     ).sum(axis=-1)
     # return xp.exp(1j * k * phi)
@@ -253,7 +277,8 @@ def propagate_misaligned_gaussian(
     Qinv,
     Qpinv,
     r,
-    p2m,
+    rho_1m,
+    theta2m,
     k,
     A,
     B,
@@ -264,13 +289,14 @@ def propagate_misaligned_gaussian(
     # Qinv : (n_gauss, 2, 2), complex
     # Qpinv : (n_gauss, 2, 2), complex
     # r: (n_px, n_gauss, 2:[x ,y]), float => det coords relative to final, central pos
-    # p2m: (n_gauss, 2:[x, y]), float => slopes of arriving central ray
+    # theta2m: (n_gauss, 2:[x, y]), float => slopes of arriving central ray
     # k: scalar float
     # A: (n_gauss, 2, 2), float
     # B: (n_gauss, 2, 2), float
     # path_length: (n_gauss,), float => path length of central ray
 
-    misaligned_phase = misalign_phase_plane_wave(r, p2m, k, xp=xp)
+    misaligned_phase = misalign_phase_plane_wave(r, theta2m, k, xp=xp)
+    extra_factor = extra_factors(r, -rho_1m, B, A)
     # (n_px, n_gauss): complex
     # Phase and Amplitude at transversal plane to beam dir
 
@@ -283,6 +309,7 @@ def propagate_misaligned_gaussian(
     amplitude = gaussian_amplitude(Qinv, A, B, xp=xp)  # Complex Gaussian amplitude
     # (n_gauss,): complex
     aligned *= 1j
+    aligned += 1j / 2 * extra_factor
     aligned += 1j * misaligned_phase
     aligned += 1j * path_length[xp.newaxis, :]
     aligned *= k

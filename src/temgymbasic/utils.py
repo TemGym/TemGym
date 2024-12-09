@@ -395,6 +395,7 @@ def gauss_beam_rayset(
     wavelength: float,
     xp=np,
     random: bool = False,
+    centre_yx: Tuple[float, float] = (0., 0.),
 ) -> NDArray:
 
     div = wavelength / (np.pi * wo)
@@ -417,8 +418,8 @@ def gauss_beam_rayset(
     r = initial_r_rayset(y.shape[0], xp=xp)
 
     # Central coords
-    r[0] = xp.repeat(x, 5)
-    r[2] = xp.repeat(y, 5)
+    r[0] = xp.repeat(x, 5) + centre_yx[1]
+    r[2] = xp.repeat(y, 5) + centre_yx[0]
 
     # Semi Angle addition to each ray
     r[1] += xp.repeat(dx, 5)
