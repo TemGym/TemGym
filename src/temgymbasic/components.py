@@ -699,14 +699,14 @@ class Detector(Component):
         return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
 
     @property
-    def image_dtype(self, 
+    def image_dtype(self,
                     rays: Rays):
         if rays is GaussianRays:
             return np.complex128
             return np.complex64
-        elif rays is Rays and rays.wavelength != None:
+        elif rays is Rays and rays.wavelength:
             return np.complex128
-            return np.complex64 #Setting this line return
+            return np.complex64  # Setting this line return
         else:
             return np.int32
 
@@ -715,7 +715,7 @@ class Detector(Component):
         rays: Rays,  # Only needs the last index of the rays object.
         out: Optional[NDArray] = None,
     ) -> NDArray:
-        
+
         xp = rays.xp
 
         image_dtype = self.image_dtype
@@ -732,7 +732,7 @@ class Detector(Component):
         if Rays is GaussianRays and rays.can_interfere:
             self.get_gauss_image(rays[0], rays[-1], out=out)
             return get_array_from_device(out)
-        
+
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
@@ -747,19 +747,21 @@ class Detector(Component):
             )
         )
 
-        #Add rays as complex numbers if interference is enabled, or just add rays as counts. 
+        # Add rays as complex numbers if interference is enabled,
+        # r just add rays as counts otherwise.
         if rays.can_interfere:
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
-            # Amplitude is 1.0 for now for each complex ray. - Need to implement triangulation of wavefront 
-            # to properly track amplitude of each ray. 
+            # Amplitude is 1.0 for now for each complex ray.
+            # Need to implement triangulation of wavefront
+            # to properly track amplitude of each ray.
             wavefronts = 1.0 * xp.exp(-1j * (2 * xp.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
         else:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
 
-        #Get a flattened list pixel indices where rays have hit
+        # Get a flattened list pixel indices where rays have hit
         flat_icds = xp.ravel_multi_index(
                 [
                     pixel_coords_y[mask],
