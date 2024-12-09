@@ -1,7 +1,7 @@
 import abc
 from typing import (
     Generator, Tuple, Optional, Type,
-    TYPE_CHECKING,
+    TYPE_CHECKING, Sequence, Union
 )
 from dataclasses import dataclass, astuple
 
@@ -698,9 +698,11 @@ class Detector(Component):
         # this entire section can be optimised !!!
         return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
 
-    def image_dtype(self,
-                    can_interfere: bool):
-        if can_interfere:
+    def image_dtype(
+        self,
+        interfere: bool
+    ):
+        if interfere:
             return np.complex128
             return np.complex64
         else:
@@ -708,13 +710,18 @@ class Detector(Component):
 
     def get_image(
         self,
-        rays: Rays,
+        rays: Union[Rays, Sequence[Rays]],
+        interfere: bool = True,
         out: Optional[NDArray] = None,
     ) -> NDArray:
 
+        if not isinstance(rays, Sequence):
+            rays = [rays]
+        assert len(rays) > 0
+
         xp = rays[0].xp
 
-        image_dtype = self.image_dtype(rays[0].can_interfere)
+        image_dtype = self.image_dtype(interfere)
 
         if out is None:
             out = xp.zeros(
@@ -725,11 +732,25 @@ class Detector(Component):
             assert out.dtype == image_dtype
             assert out.shape == self.shape
 
-        if isinstance(rays[0], GaussianRays) and rays[0].can_interfere:
-            self.gaussian_beam_summation(rays[0], rays[-1], out=out)
-            return get_array_from_device(out)
+        if interfere and isinstance(rays[0], GaussianRays):
+            if len(rays) < 2:
+                raise UsageError(
+                    "GaussianRays must have two sets of rays to calculate interference"
+                )
+            self._gaussian_beam_summation(rays, out=out)
         else:
-            rays = rays[-1]  # Only need the last rays for the detector.
+            self._basic_beam_summation(rays, interfere, out=out)
+        return get_array_from_device(out)
+
+    def _basic_beam_summation(
+        self,
+        rays: tuple[Rays],
+        interfere: bool,
+        out: Optional[NDArray] = None,
+    ) -> NDArray:
+
+        rays = rays[-1]
+        xp = rays.xp
 
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
@@ -747,7 +768,7 @@ class Detector(Component):
 
         # Add rays as complex numbers if interference is enabled,
         # or just add rays as counts otherwise.
-        if rays.can_interfere:
+        if interfere:
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
@@ -770,15 +791,14 @@ class Detector(Component):
 
         self.sum_rays_on_detector(out, flat_icds, valid_wavefronts, xp=xp)
 
-        # Convert always to array on cpu device.
-        return get_array_from_device(out)
-
-    def gaussian_beam_summation(
+    def _gaussian_beam_summation(
         self,
-        rays_start: GaussianRays,
-        rays_end: GaussianRays,
+        rays: tuple[GaussianRays],
         out: Optional[NDArray] = None,
     ) -> NDArray:
+
+        rays_start = rays[0]
+        rays_end = rays[-1]
 
         xp = rays_end.xp
         float_dtype = out.real.dtype.type
@@ -839,9 +859,6 @@ class Detector(Component):
             Qinv, Qpinv, det_coords, p1m,
             theta2m, k, A, B, path_length, out.ravel(), xp=xp
         )
-
-        # Convert always to array on cpu device.
-        return get_array_from_device(out)
 
     def sum_rays_on_detector(self,
                              out: NDArray,

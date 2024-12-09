@@ -437,10 +437,11 @@ class TemGymWindow(QMainWindow):
 
         if self.model.detector is not None:
 
-            image = self.model.detector.get_image(
-                all_rays[-1]
-            )
             detector_gui = self.gui_components[-1]
+            image = self.model.detector.get_image(
+                all_rays,
+                interfere=detector_gui.interfere(),
+            )
             if detector_gui is not None:
                 if detector_gui.display_type == 'amplitude':
                     self.spot_img.setImage(np.abs(image.T))
@@ -1893,6 +1894,9 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
     def detector(self) -> 'comp.Detector':
         return self.component
 
+    def interfere(self) -> bool:
+        return self.intfrnce_cbox.isChecked()
+
     @Slot(float)
     def set_pixelsize(self, val: float):
         self.detector.pixel_size = val * LENGTHSCALING
@@ -1926,12 +1930,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
 
     @Slot(str)
     def set_interference(self, val: str):
-        if val:
-            self.detector.interference = 'gauss'
-            self.detector.buffer = None
-        else:
-            self.detector.interference = None
-            self.detector.buffer = None
+        self.detector.buffer = None
         self.try_update()
 
     @Slot(str)
@@ -2005,8 +2004,8 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         hbox.addWidget(phase_button)
         vbox.addLayout(hbox)
 
-        self.intfrnce_cbox = QCheckBox("Turn on Gauss Beam Interference")
-        self.intfrnce_cbox.setChecked(self.detector.interference == 'gauss')
+        self.intfrnce_cbox = QCheckBox("Turn on interference")
+        self.intfrnce_cbox.setChecked(True)
         self.intfrnce_cbox.stateChanged.connect(self.set_interference)
         vbox.addWidget(self.intfrnce_cbox)
 
