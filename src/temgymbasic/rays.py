@@ -45,7 +45,7 @@ class Rays:
         location: LocationT,
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
-        can_interfere: bool = False,
+        can_interfere: bool = True,
         **kwargs,
     ):
         xp = get_xp(data)
@@ -132,11 +132,11 @@ class Rays:
     @property
     def num_display(self):
         return self.num
-    
+
     @property
     def x_central(self):
         return self.x
-    
+
     @property
     def dx_central(self):
         return self.dx
@@ -144,7 +144,7 @@ class Rays:
     @property
     def y_central(self):
         return self.y
-    
+
     @property
     def dy_central(self):
         return self.dy
@@ -295,7 +295,7 @@ class GaussianRays(Rays):
     @property
     def y_central(self):
         return self.y[0::5]
-    
+
     @property
     def dy_central(self):
         return self.dy[0::5]

@@ -698,27 +698,23 @@ class Detector(Component):
         # this entire section can be optimised !!!
         return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
 
-    @property
     def image_dtype(self,
-                    rays: Rays):
-        if rays is GaussianRays:
+                    can_interfere: bool):
+        if can_interfere:
             return np.complex128
             return np.complex64
-        elif rays is Rays and rays.wavelength:
-            return np.complex128
-            return np.complex64  # Setting this line return
         else:
             return np.int32
 
     def get_image(
         self,
-        rays: Rays,  # Only needs the last index of the rays object.
+        rays: Rays,
         out: Optional[NDArray] = None,
     ) -> NDArray:
 
-        xp = rays.xp
+        xp = rays[0].xp
 
-        image_dtype = self.image_dtype
+        image_dtype = self.image_dtype(rays[0].can_interfere)
 
         if out is None:
             out = xp.zeros(
@@ -729,9 +725,11 @@ class Detector(Component):
             assert out.dtype == image_dtype
             assert out.shape == self.shape
 
-        if Rays is GaussianRays and rays.can_interfere:
-            self.get_gauss_image(rays[0], rays[-1], out=out)
+        if isinstance(rays[0], GaussianRays) and rays[0].can_interfere:
+            self.gaussian_beam_summation(rays[0], rays[-1], out=out)
             return get_array_from_device(out)
+        else:
+            rays = rays[-1]  # Only need the last rays for the detector.
 
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
@@ -748,7 +746,7 @@ class Detector(Component):
         )
 
         # Add rays as complex numbers if interference is enabled,
-        # r just add rays as counts otherwise.
+        # or just add rays as counts otherwise.
         if rays.can_interfere:
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
@@ -830,7 +828,7 @@ class Detector(Component):
         thetax2m = rays_end.data[1, 0::5]  # slope that central ray arrives at
         thetay2m = rays_end.data[3, 0::5]  # slope that central ray arrives at
 
-        p1m = xp.array([[px1m], [py1m]]).T.astype(float_dtype)
+        p1m = xp.array([px1m, py1m]).T.astype(float_dtype)
         theta2m = xp.array([thetax2m, thetay2m]).T.astype(float_dtype)
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
@@ -891,7 +889,6 @@ class AccumulatingDetector(Detector):
         flip_y: bool = False,
         center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
-        interference: Optional[str] = 'gauss'
     ):
         super().__init__(
             z=z,
@@ -901,7 +898,6 @@ class AccumulatingDetector(Detector):
             flip_y=flip_y,
             center=center,
             name=name,
-            interference=interference,
         )
         self.buffer = None
         self.buffer_length = buffer_length
@@ -919,14 +915,17 @@ class AccumulatingDetector(Detector):
         xp = rays.xp
         self.buffer = xp.zeros(
             (self.buffer_length, *self.shape),
-            dtype=self.image_dtype,
+            dtype=self.image_dtype(rays),
         )
         # the next index to write into
         self.buffer_idx = 0
 
     def get_image(self, rays: Rays) -> NDArray:
         if self.buffer is None or self.buffer_frame_shape != self.shape:
-            self.reset_buffer(rays)
+            if len(rays) > 1:
+                self.reset_buffer(rays[0])
+            else:
+                self.reset_buffer(rays)
         else:
             self.buffer[self.buffer_idx] = 0.
 
