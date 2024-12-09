@@ -608,7 +608,6 @@ class Detector(Component):
         flip_y: bool = False,
         center: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
-        interference: Optional[str] = 'ray'
     ):
         """
         The intention of rotation is to rotate the detector
@@ -631,7 +630,6 @@ class Detector(Component):
         self.rotation = rotation  # converts to radians in setter
         self.flip_y = flip_y
         self.center = center
-        self.interference = interference
         self.buffer = None
 
     @property
@@ -701,22 +699,40 @@ class Detector(Component):
         return r[:, xp.newaxis, :] - endpoints[xp.newaxis, ...]
 
     @property
-    def image_dtype(self):
-        if self.interference is None:
+    def image_dtype(self, 
+                    rays: Rays):
+        if rays is GaussianRays:
+            return np.complex128
+            return np.complex64
+        elif rays is Rays and rays.wavelength != None:
+            return np.complex128
+            return np.complex64 #Setting this line return
+        else:
             return np.int32
-        # Setting this next line reduces the bitdepth
-        # of the image computation which can improve the speed
-        # quite substantially
-        return np.complex128
 
     def get_image(
         self,
         rays: Rays,  # Only needs the last index of the rays object.
         out: Optional[NDArray] = None,
     ) -> NDArray:
-
+        
         xp = rays.xp
 
+        image_dtype = self.image_dtype
+
+        if out is None:
+            out = xp.zeros(
+                self.shape,
+                dtype=image_dtype,
+            )
+        else:
+            assert out.dtype == image_dtype
+            assert out.shape == self.shape
+
+        if Rays is GaussianRays and rays.can_interfere:
+            self.get_gauss_image(rays[0], rays[-1], out=out)
+            return get_array_from_device(out)
+        
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
         sy, sx = self.shape
@@ -731,28 +747,19 @@ class Detector(Component):
             )
         )
 
-        image_dtype = self.image_dtype
-        if self.interference == 'ray':
+        #Add rays as complex numbers if interference is enabled, or just add rays as counts. 
+        if rays.can_interfere:
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
-            # Amplitude is 1.0 for now for each complex ray.
+            # Amplitude is 1.0 for now for each complex ray. - Need to implement triangulation of wavefront 
+            # to properly track amplitude of each ray. 
             wavefronts = 1.0 * xp.exp(-1j * (2 * xp.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
-            # image_dtype = valid_wavefronts.dtype
-        elif self.interference is None:
+        else:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
-            # image_dtype = xp.int32
 
-        if out is None:
-            out = xp.zeros(
-                self.shape,
-                dtype=image_dtype,
-            )
-        else:
-            assert out.dtype == image_dtype
-            assert out.shape == self.shape
-
+        #Get a flattened list pixel indices where rays have hit
         flat_icds = xp.ravel_multi_index(
                 [
                     pixel_coords_y[mask],
@@ -761,34 +768,19 @@ class Detector(Component):
                 out.shape
             )
 
-        self.increment_rays_on_detector(out, flat_icds, valid_wavefronts, xp=xp)
+        self.sum_rays_on_detector(out, flat_icds, valid_wavefronts, xp=xp)
 
         # Convert always to array on cpu device.
         return get_array_from_device(out)
 
-    def get_gauss_image(
+    def gaussian_beam_summation(
         self,
-        rays: GaussianRays,  # The entire set of gaussian rays for each component
+        rays_start: GaussianRays,
+        rays_end: GaussianRays,
         out: Optional[NDArray] = None,
     ) -> NDArray:
 
-        rays_start = rays[0]
-        rays_end = rays[-1]
-
         xp = rays_end.xp
-
-        self.interference = 'gauss'
-        image_dtype = self.image_dtype
-
-        if out is None:
-            out = xp.zeros(
-                self.shape,
-                dtype=image_dtype,
-            )
-        else:
-            assert out.dtype == image_dtype
-            assert out.shape == self.shape
-
         float_dtype = out.real.dtype.type
 
         wo = rays_start.wo
@@ -851,11 +843,11 @@ class Detector(Component):
         # Convert always to array on cpu device.
         return get_array_from_device(out)
 
-    def increment_rays_on_detector(self,
-                                   out: NDArray,
-                                   flat_icds: NDArray,
-                                   valid_wavefronts: NDArray,
-                                   xp=np):
+    def sum_rays_on_detector(self,
+                             out: NDArray,
+                             flat_icds: NDArray,
+                             valid_wavefronts: NDArray,
+                             xp=np):
 
         # Increment at each pixel for each ray that hits
         if xp == np:
