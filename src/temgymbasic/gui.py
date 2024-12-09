@@ -554,7 +554,7 @@ class STEMModelGUI(ModelGUI):
         super().__init__(component=component, window=window)
         self.beam: ParallelBeamGUI = window.gui_components[0]
         self.scan_coils: DoubleDeflectorGUI = window.gui_components[1]
-        self.lens: LensGUI = window.gui_components[2]
+        self.lens: BasicLensGUI = window.gui_components[2]
         self.sample: STEMSampleGUI = window.gui_components[3]
         self.descan_coils: DoubleDeflectorGUI = window.gui_components[4]
 
@@ -613,7 +613,7 @@ class STEMModelGUI(ModelGUI):
             self.scan_coils.updefyslider,
             self.scan_coils.lowdefxslider,
             self.scan_coils.lowdefyslider,
-            # self.lens.fslider,
+            self.lens.fslider,
             self.descan_coils.updefxslider,
             self.descan_coils.updefyslider,
             self.descan_coils.lowdefxslider,
@@ -623,6 +623,74 @@ class STEMModelGUI(ModelGUI):
             widget.valueChanged.disconnect()
 
         self.sync(block=False)
+
+
+class BasicLensGUI(ComponentGUIWrapper):
+    @property
+    def lens(self) -> 'comp.Lens':
+        return self.component
+
+    @Slot(float)
+    def set_f(self, val: float):
+        if abs(val) < 1e-6:
+            return
+        self.lens.f = val
+        self.try_update()
+
+    def sync(self, block: bool = True):
+        blocker = self._get_blocker(block)
+        with blocker(self.fslider):
+            self.fslider.setValue(self.lens.f)
+
+    def build(self) -> Self:
+        vbox = QVBoxLayout()
+        self.fslider, _ = labelled_slider(
+            self.lens.f, -2., 2., name="Focal Length", insert_into=vbox, decimals=2,
+        )
+        self.fslider.valueChanged.connect(self.set_f)
+        self.box = vbox
+        return self
+
+    def get_geom(self):
+        vertices = comp_geom.lens(
+            0.2,
+            Z_ORIENT * self.component.z,
+            64,
+        )
+        f = Z_ORIENT * self.lens.f
+        z = Z_ORIENT * self.lens.z
+        dot_size = 10  # Adjust the size of the dot as needed
+        f_color = (0, 1, 0, 1)
+        self.f_dot = gl.GLScatterPlotItem(
+            pos=np.array([[0, 0, z + f]]),
+            size=dot_size,
+            color=f_color,
+        )
+        self.f_text = gl.GLTextItem(
+            pos=np.array([0, 0, z + f]),
+            text=f"f {self.component.name}",
+            color='w',
+        )
+        self.geom = [
+            gl.GLLinePlotItem(
+                pos=vertices.T,
+                color="white",
+                width=5
+            ),
+            self.f_dot,
+            self.f_text,
+        ]
+        return self.geom
+
+    def update_geometry(self):
+        z = Z_ORIENT * self.lens.z
+        f = Z_ORIENT * self.lens.f
+
+        f_dot = self.geom[-2]
+        f_text = self.geom[-1]
+
+        f_dot.setData(pos=np.array([[0, 0, z + f]]))
+        f_text.setData(pos=np.array([0, 0, z + f]))
 
 
 class LensGUI(ComponentGUIWrapper):
@@ -740,12 +808,16 @@ class LensGUI(ComponentGUIWrapper):
 
         linear_params_vbox = QVBoxLayout()
         linear_params_label = QLabel("Linear Parameters")
-        linear_params_label.setStyleSheet("font-size: 16px, font-weight: bold, text-decoration: underline;")
+        linear_params_label.setStyleSheet(
+            "font-size: 16px, font-weight: bold, text-decoration: underline;"
+        )
         linear_params_vbox.addWidget(linear_params_label)
 
         aberrations_vbox = QVBoxLayout()
         aberrations_label = QLabel("Aberrations")
-        aberrations_label.setStyleSheet("font-size: 16px; font-weight: bold; text-decoration: underline;")
+        aberrations_label.setStyleSheet(
+            "font-size: 16px; font-weight: bold; text-decoration: underline;"
+        )
         aberrations_vbox.addWidget(aberrations_label)
 
         f_and_m = QPushButton("Set Focal (f) and Mag (m)")
@@ -981,10 +1053,10 @@ class SourceGUI(ComponentGUIWrapper):
         )
         self.try_update(geom=True)
 
-    def _build(self):
-        self._build_rayslider()
-        self._build_tiltsliders()
-        self._build_shiftsliders()
+    def _build(self, into=None):
+        self._build_rayslider(into=into)
+        self._build_tiltsliders(into=into)
+        self._build_shiftsliders(into=into)
 
     def _build_rayslider(self, into=None):
         num_rays = 128
@@ -1086,8 +1158,8 @@ class ParallelBeamGUI(SourceGUI):
 
         vbox = QVBoxLayout()
 
-        self._build()
-        vbox.addWidget(self.rayslider)
+        self._build_rayslider(into=vbox)
+        # vbox.addWidget(self.rayslider)
 
         beam_radius = self.beam.radius
         self.beamwidthslider, _ = labelled_slider(
@@ -1095,10 +1167,14 @@ class ParallelBeamGUI(SourceGUI):
         )
         self.beamwidthslider.valueChanged.connect(self.set_radius)
 
-        hbox = QHBoxLayout()
-        hbox.addWidget(self.xangleslider)
-        hbox.addWidget(self.yangleslider)
-        vbox.addLayout(hbox)
+        hbox0 = QHBoxLayout()
+        hbox1 = QHBoxLayout()
+        self._build_tiltsliders(into=(hbox0, hbox1))
+        vbox.addLayout(hbox0)
+        vbox.addLayout(hbox1)
+
+        self._build_shiftsliders()
+
         self.box = vbox
         return self
 
