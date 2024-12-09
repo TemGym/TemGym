@@ -226,7 +226,7 @@ class STEMModel(Model):
             ),
             comp.Detector(
                 z=1.,
-                pixel_size=0.01,
+                pixel_size=0.001,
                 shape=(128, 128),
             ),
         )

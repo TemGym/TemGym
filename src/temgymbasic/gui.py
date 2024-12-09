@@ -987,7 +987,7 @@ class SourceGUI(ComponentGUIWrapper):
         self._build_shiftsliders()
 
     def _build_rayslider(self, into=None):
-        num_rays = 1
+        num_rays = 128
 
         self.rayslider, self.raysliderbox = labelled_slider(
             num_rays, 1, 4000, name="Number of Rays", tick_interval=64,
@@ -1968,9 +1968,9 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
 
         self.pixelsizeslider, _ = labelled_slider(
             self.detector.pixel_size,
-            0.001, 1,
+            0.0001, 0.003,
             name="Pixel size", insert_into=vbox,
-            decimals=1, tick_interval=10.,
+            decimals=3, tick_interval=10.,
         )
         self.pixelsizeslider.valueChanged.connect(self.set_pixelsize)
 
