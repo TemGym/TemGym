@@ -711,9 +711,8 @@ class Detector(Component):
 
     def get_image(
         self,
-        rays: Rays,
+        rays: Rays,  # Only needs the last index of the rays object.
         out: Optional[NDArray] = None,
-        x0y0: Optional[Tuple[int, int]] = None,
     ) -> NDArray:
 
         xp = rays.xp
@@ -740,13 +739,6 @@ class Detector(Component):
             wavefronts = 1.0 * xp.exp(-1j * (2 * xp.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
             # image_dtype = valid_wavefronts.dtype
-        elif self.interference == 'gauss':
-            pass
-            # image_dtype = xp.complex128
-            # Setting this next line reduces the bitdepth
-            # of the image computation which can improve the speed
-            # quite substantially
-            # image_dtype = xp.complex64
         elif self.interference is None:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
             valid_wavefronts = 1
@@ -761,61 +753,48 @@ class Detector(Component):
             assert out.dtype == image_dtype
             assert out.shape == self.shape
 
-        if self.interference == 'gauss':
+        flat_icds = xp.ravel_multi_index(
+                [
+                    pixel_coords_y[mask],
+                    pixel_coords_x[mask],
+                ],
+                out.shape
+            )
 
-            self.get_gauss_image(rays, out, x0y0)
-        else:
-            flat_icds = xp.ravel_multi_index(
-                    [
-                        pixel_coords_y[mask],
-                        pixel_coords_x[mask],
-                    ],
-                    out.shape
-                )
-
-            # Increment at each pixel for each ray that hits
-
-            if xp == np:
-                np.add.at(
-                    out.ravel(),
-                    flat_icds,
-                    valid_wavefronts,
-                )
-            else:
-                if xp.iscomplexobj(out):
-                    # Separate the real and imaginary parts
-                    real_out = out.real
-                    imag_out = out.imag
-
-                    # Perform the addition separately for real and imaginary parts
-                    xp.add.at(real_out.reshape(-1), flat_icds, valid_wavefronts.real)
-                    xp.add.at(imag_out.reshape(-1), flat_icds, valid_wavefronts.imag)
-
-                    # Combine the real and imaginary parts back into the out array
-                    out = real_out + 1j * imag_out
-                else:
-                    # Perform the addition directly for non-complex arrays
-                    xp.add.at(out.reshape(-1), flat_icds, valid_wavefronts)
+        self.increment_rays_on_detector(out, flat_icds, valid_wavefronts, xp=xp)
 
         # Convert always to array on cpu device.
         return get_array_from_device(out)
 
     def get_gauss_image(
         self,
-        rays: GaussianRays,
-        out: NDArray,
-        x0y0: Optional[Tuple[int, int]] = (0, 0)
+        rays: GaussianRays,  # The entire set of gaussian rays for each component
+        out: Optional[NDArray] = None,
     ) -> NDArray:
 
+        rays_start = rays[0]
+        rays_end = rays[-1]
+
+        xp = rays_end.xp
+
+        self.interference = 'gauss'
+        image_dtype = self.image_dtype
+
+        if out is None:
+            out = xp.zeros(
+                self.shape,
+                dtype=image_dtype,
+            )
+        else:
+            assert out.dtype == image_dtype
+            assert out.shape == self.shape
+
         float_dtype = out.real.dtype.type
-        xp = rays.xp
 
-        wo = rays.wo
-        wavelength = rays.wavelength
+        wo = rays_start.wo
+        wavelength = rays_start.wavelength
 
-        # import pdb
-
-        div = rays.wavelength / (xp.pi * wo)
+        div = rays_start.wavelength / (xp.pi * wo)
         k = float_dtype(2 * xp.pi / wavelength)
         z_r = float_dtype(xp.pi * wo ** 2 / wavelength)
 
@@ -829,16 +808,11 @@ class Detector(Component):
         # so rays.reshape(5, 5, -1)
         #  => [(x, dx, y, dy, 1), (*gauss_beams), n_gauss]
 
-        n_gauss = rays.num // 5
-
-        # end_rays = rays.data[0:4, :].T
-        path_length = rays.path_length[0::5].astype(float_dtype)
-
-        # split_end_rays = xp.split(end_rays, n_gauss, axis=0)
-        # rayset1 = xp.stack(split_end_rays, axis=-1)
+        n_gauss = rays_end.num // 5
+        path_length = rays_end.path_length[0::5].astype(float_dtype)
 
         rayset1 = xp.moveaxis(
-            rays.data[0:4, :].reshape(4, n_gauss, 5),
+            rays_end.data[0:4, :].reshape(4, n_gauss, 5),
             -1,
             0,
         )
@@ -846,8 +820,6 @@ class Detector(Component):
 
         # rayset1 layout
         # [5g, (x, dx, y, dy), n_gauss]
-
-        # rayset1 = cp.array(rayset1)
 
         A, B, C, D = differential_matrix(rayset1, dPx, dPy, dHx, dHy, xp=xp)
         # A, B, C, D all have shape (n_gauss, 2, 2)
@@ -859,26 +831,54 @@ class Detector(Component):
         # if all inputs are stacked in the first dim
         Qpinv = calculate_Qpinv(A, B, C, D, Qinv, xp=xp)
 
-        # det_coords = cp.array(det_coords)
-        # theta2m = cp.array(theta2m)
-        # path_length = cp.array(path_length)
-        # k = cp.array(k)
-
-        px1m = x0y0[0] #rays.data[0, 0::5]  # x that central ray arrives at
-        py1m = x0y0[1] #rays.data[2, 0::5]  # y that central ray arrives at
-        thetax2m = rays.data[1, 0::5]  # slope that central ray arrives at
-        thetay2m = rays.data[3, 0::5]  # slope that central ray arrives at
+        px1m = rays_start.data[0, 0::5]  # x that central ray leaves at
+        py1m = rays_start.data[2, 0::5]  # y that central ray leaves at
+        thetax2m = rays_end.data[1, 0::5]  # slope that central ray arrives at
+        thetay2m = rays_end.data[3, 0::5]  # slope that central ray arrives at
 
         p1m = xp.array([[px1m], [py1m]]).T.astype(float_dtype)
         theta2m = xp.array([thetax2m, thetay2m]).T.astype(float_dtype)
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
+
         # central beam final x , y coords
         det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd, xp=xp)
         propagate_misaligned_gaussian(
             Qinv, Qpinv, det_coords, p1m,
             theta2m, k, A, B, path_length, out.ravel(), xp=xp
         )
+
+        # Convert always to array on cpu device.
+        return get_array_from_device(out)
+
+    def increment_rays_on_detector(self,
+                                   out: NDArray,
+                                   flat_icds: NDArray,
+                                   valid_wavefronts: NDArray,
+                                   xp=np):
+
+        # Increment at each pixel for each ray that hits
+        if xp == np:
+            np.add.at(
+                out.ravel(),
+                flat_icds,
+                valid_wavefronts,
+            )
+        else:
+            if xp.iscomplexobj(out):
+                # Separate the real and imaginary parts
+                real_out = out.real
+                imag_out = out.imag
+
+                # Perform the addition separately for real and imaginary parts
+                xp.add.at(real_out.reshape(-1), flat_icds, valid_wavefronts.real)
+                xp.add.at(imag_out.reshape(-1), flat_icds, valid_wavefronts.imag)
+
+                # Combine the real and imaginary parts back into the out array
+                out = real_out + 1j * imag_out
+            else:
+                # Perform the addition directly for non-complex arrays
+                xp.add.at(out.reshape(-1), flat_icds, valid_wavefronts)
 
     @staticmethod
     def gui_wrapper():
