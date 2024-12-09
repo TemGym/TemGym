@@ -33,6 +33,7 @@ class Rays:
     wavelength: Optional[float] = None
     mask: Optional[NDArray] = None
     blocked: Optional[NDArray] = None
+    can_interfere: bool = True
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
@@ -44,6 +45,7 @@ class Rays:
         location: LocationT,
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
+        can_interfere: bool = False,
         **kwargs,
     ):
         xp = get_xp(data)
@@ -59,6 +61,7 @@ class Rays:
             location=location,
             path_length=path_length,
             wavelength=wavelength,
+            can_interfere=can_interfere,
             **kwargs,
         )
 
