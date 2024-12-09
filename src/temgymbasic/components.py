@@ -550,6 +550,7 @@ class GaussBeam(Source):
         wo: float,
         voltage: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
+        centre_yx: Tuple[float, float] = (0., 0.),
         semi_angle: Optional[float] = 0.,
         name: Optional[str] = None,
     ):
@@ -558,6 +559,7 @@ class GaussBeam(Source):
         self.radius = radius
         self.tilt_yx = tilt_yx
         self.semi_angle = semi_angle
+        self.centre_yx = centre_yx
 
     def get_rays(
         self,
@@ -579,6 +581,7 @@ class GaussBeam(Source):
             wavelength,
             random=random if random is not None else self.random,
             xp=xp,
+            centre_yx=self.centre_yx,
         )
 
         return self._make_rays(r, backend=backend)
@@ -710,6 +713,7 @@ class Detector(Component):
         self,
         rays: Rays,
         out: Optional[NDArray] = None,
+        x0y0: Optional[Tuple[int, int]] = None,
     ) -> NDArray:
 
         xp = rays.xp
@@ -759,7 +763,7 @@ class Detector(Component):
 
         if self.interference == 'gauss':
 
-            self.get_gauss_image(rays, out)
+            self.get_gauss_image(rays, out, x0y0)
         else:
             flat_icds = xp.ravel_multi_index(
                     [
@@ -800,6 +804,7 @@ class Detector(Component):
         self,
         rays: GaussianRays,
         out: NDArray,
+        x0y0: Optional[Tuple[int, int]] = (0, 0)
     ) -> NDArray:
 
         float_dtype = out.real.dtype.type
@@ -855,20 +860,24 @@ class Detector(Component):
         Qpinv = calculate_Qpinv(A, B, C, D, Qinv, xp=xp)
 
         # det_coords = cp.array(det_coords)
-        # p2m = cp.array(p2m)
+        # theta2m = cp.array(theta2m)
         # path_length = cp.array(path_length)
         # k = cp.array(k)
 
-        phi_x2m = rays.data[1, 0::5]  # slope that central ray arrives at
-        phi_y2m = rays.data[3, 0::5]  # slope that central ray arrives at
-        p2m = xp.array([phi_x2m, phi_y2m]).T.astype(float_dtype)
+        px1m = x0y0[0] #rays.data[0, 0::5]  # x that central ray arrives at
+        py1m = x0y0[1] #rays.data[2, 0::5]  # y that central ray arrives at
+        thetax2m = rays.data[1, 0::5]  # slope that central ray arrives at
+        thetay2m = rays.data[3, 0::5]  # slope that central ray arrives at
+
+        p1m = xp.array([[px1m], [py1m]]).T.astype(float_dtype)
+        theta2m = xp.array([thetax2m, thetay2m]).T.astype(float_dtype)
 
         xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
         # central beam final x , y coords
         det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd, xp=xp)
         propagate_misaligned_gaussian(
-            Qinv, Qpinv, det_coords,
-            p2m, k, A, B, path_length, out.ravel(), xp=xp
+            Qinv, Qpinv, det_coords, p1m,
+            theta2m, k, A, B, path_length, out.ravel(), xp=xp
         )
 
     @staticmethod
