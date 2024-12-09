@@ -302,8 +302,8 @@ class Lens(Component):
 
     @staticmethod
     def gui_wrapper():
-        from .gui import LensGUI
-        return LensGUI
+        from .gui import BasicLensGUI
+        return BasicLensGUI
 
 
 class Sample(Component):
