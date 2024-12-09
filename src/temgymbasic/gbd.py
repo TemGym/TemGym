@@ -296,7 +296,7 @@ def propagate_misaligned_gaussian(
     # path_length: (n_gauss,), float => path length of central ray
 
     misaligned_phase = misalign_phase_plane_wave(r, theta2m, k, xp=xp)
-    extra_factor = extra_factors(r, -rho_1m, B, A)
+    extra_factor = extra_factors(-rho_1m, r, B, A)
     # (n_px, n_gauss): complex
     # Phase and Amplitude at transversal plane to beam dir
 
