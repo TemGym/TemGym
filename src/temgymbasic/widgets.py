@@ -108,6 +108,7 @@ def labelled_slider(
 ):
     if decimals > 0:
         slider = QLabeledDoubleSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setDecimals(decimals)
     else:
         slider = QLabeledSlider(QtCore.Qt.Orientation.Horizontal)
     slider_config(slider, value, vmin, vmax, tick_interval)
