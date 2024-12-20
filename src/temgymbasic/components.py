@@ -19,7 +19,8 @@ from . import (
 from .rays import Rays
 from .utils import (
     P2R, R2P,
-    make_beam,
+    circular_beam,
+    point_beam,
 )
 
 from .utils import (
@@ -30,7 +31,6 @@ from scipy.constants import c, e, m_e
 
 # Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
 EPSILON = abs(e)/(2*m_e*c**2)
-
 
 if TYPE_CHECKING:
     from .gui import ComponentGUIWrapper
@@ -126,11 +126,9 @@ class Lens(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Just straightforward matrix multiplication
-        yield Rays(
+        yield rays.new_with(
             data=np.matmul(self.lens_matrix(self.f), rays.data),
-            indices=rays.indices,
             location=self,
-            path_length=rays.path_length
         )
 
     @staticmethod
@@ -146,8 +144,6 @@ class Sample(Component):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        # Sample has no effect, yet
-        # Could implement ray intensity / attenuation ??
         rays.location = self
         yield rays
 
@@ -179,36 +175,33 @@ class PotentialSample(Sample):
     ) -> Generator[Rays, None, None]:
 
         # See Chapter 2 & 3 of principles of electron optics 2017 Vol 1 for more info
-        rho = np.sqrt(1+rays.dx**2+rays.dy**2)  # Equation 3.16
-        phi_0_plus_phi = (rays.phi_0+self.phi((rays.x, rays.y)))  # Part of Equation 2.18
+        rho = np.sqrt(1 + rays.dx ** 2 + rays.dy ** 2)  # Equation 3.16
+        phi_0_plus_phi = (rays.phi_0 + self.phi((rays.x, rays.y)))  # Part of Equation 2.18
 
-        phi_hat = (phi_0_plus_phi)*(1+EPSILON*(phi_0_plus_phi))  # Equation 2.18
+        phi_hat = (phi_0_plus_phi) * (1 + EPSILON * phi_0_plus_phi)  # Equation 2.18
 
         # Between Equation 2.22 & 2.23
-        dphi_hat_dx = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dx((rays.x, rays.y))
-        dphi_hat_dy = 1+2*EPSILON*(phi_0_plus_phi)*self.dphi_dy((rays.x, rays.y))
+        dphi_hat_dx = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dx((rays.x, rays.y))
+        dphi_hat_dy = (1+2*EPSILON*(phi_0_plus_phi))*self.dphi_dy((rays.x, rays.y))
 
         # Perform deflection to ray in slope coordinates
-        rays.dx += (rho**2)/(2*phi_hat)*dphi_hat_dx  # Equation 3.22
-        rays.dy += (rho**2)/(2*phi_hat)*dphi_hat_dy  # Equation 3.22
+        rays.dx += ((rho ** 2) / (2 * phi_hat)) * dphi_hat_dx  # Equation 3.22
+        rays.dy += ((rho ** 2) / (2 * phi_hat)) * dphi_hat_dy  # Equation 3.22
 
         # Note here we are ignoring the Ez component (dphi/dz) of 3.22,
-        # because this has the effect of only
-        # slowing the electron down, and since we have modelled the potential of the atom in a plane
-        # only, we also won't have an Ez component (At least I don't think this is the case?
-        # I could be completely wrong here though - it might actually have an effect!
-        # But I don't think I can get an Ez from an infinitely thin slice.
+        # since we have modelled the potential of the atom in a plane
+        # only, we won't have an Ez component (At least I don't think this is the case?
+        # I could be completely wrong here though - it might actually have an effect.
+        # But I'm not sure I can get an Ez from an infinitely thin slice.
 
         # Equation 5.16 & 5.17 & 3.16, where ds of 5.16 is replaced by ds/dz * dz,
         # where ds/dz = rho (See 3.16 and a little below it)
-        rays.path_length += rho*np.sqrt(phi_hat/rays.phi_0)
+        rays.path_length += rho * np.sqrt(phi_hat / rays.phi_0)
 
-        yield Rays(
-            data=rays.data,
-            indices=rays.indices,
-            path_length=rays.path_length,
+        # Currently the modifications are all inplace so we only need
+        # to change the location, this should be made clearer
+        yield rays.new_with(
             location=self,
-            wavelength=rays.wavelength,
         )
 
     @staticmethod
@@ -283,43 +276,45 @@ class Source(Component):
     def __init__(
         self, z: float,
         tilt_yx: Tuple[float, float] = (0., 0.),
-        phi_0: Optional[float] = None,
+        voltage: Optional[float] = None,
         name: Optional[str] = None,
     ):
         super().__init__(z=z, name=name)
         self.tilt_yx = tilt_yx
-        self.phi_0 = phi_0
+        self.phi_0 = voltage
+
+    @property
+    def voltage(self):
+        return self.phi_0
 
     @abc.abstractmethod
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         raise NotImplementedError
 
-    def _make_rays(self, r: NDArray, indices: Optional[NDArray] = None) -> Rays:
-        num_rays = r.shape[1]
-        if indices is None:
-            indices = np.arange(num_rays)
-        r[1, :] += self.tilt_yx[1]
-        r[3, :] += self.tilt_yx[0]
+    def _make_rays(self, r: NDArray) -> Rays:
+        # Add beam tilt (if any)
+        if self.tilt_yx[1] != 0:
+            r[1, :] += self.tilt_yx[1]
+        if self.tilt_yx[0] != 0:
+            r[3, :] += self.tilt_yx[0]
 
-        if self.phi_0 is None:
-            wavelengths = None
-        else:
-            wavelengths = np.ones((num_rays,)) * calculate_wavelength(self.phi_0)
+        wavelength = None
+        if self.phi_0 is not None:
+            wavelength = calculate_wavelength(self.phi_0)
 
-        return Rays(
+        return Rays.new(
             data=r,
-            indices=indices,
             location=self,
-            path_length=np.zeros((num_rays,)),
-            wavelength=wavelengths,
+            wavelength=wavelength,
         )
 
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Source has no effect after get_rays was called
-        rays.location = self
-        yield rays
+        yield rays.new_with(
+            location=self
+        )
 
 
 class ParallelBeam(Source):
@@ -327,15 +322,15 @@ class ParallelBeam(Source):
         self,
         z: float,
         radius: float,
-        phi_0: Optional[float] = None,
+        voltage: Optional[float] = None,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(z=z, tilt_yx=tilt_yx, name=name, phi_0=phi_0)
+        super().__init__(z=z, tilt_yx=tilt_yx, name=name, voltage=voltage)
         self.radius = radius
 
-    def get_rays(self, num_rays: int) -> Rays:
-        r, _ = make_beam(num_rays, self.radius, 'circular_beam')
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+        r = circular_beam(num_rays, self.radius, random=random)
         return self._make_rays(r)
 
     @staticmethod
@@ -345,7 +340,7 @@ class ParallelBeam(Source):
 
 
 class XAxialBeam(ParallelBeam):
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         r = np.zeros((5, num_rays))
         r[0, :] = np.linspace(
             -self.radius, self.radius, num=num_rays, endpoint=True
@@ -354,7 +349,7 @@ class XAxialBeam(ParallelBeam):
 
 
 class RadialSpikesBeam(ParallelBeam):
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         xvals = np.linspace(
             0., self.radius, num=num_rays // 4, endpoint=True
         )
@@ -377,19 +372,17 @@ class PointBeam(Source):
     def __init__(
         self,
         z: float,
-        phi_0: Optional[float] = None,
+        voltage: Optional[float] = None,
         semi_angle: Optional[float] = 0.,
         tilt_yx: Tuple[float, float] = (0., 0.),
         name: Optional[str] = None,
     ):
-        super().__init__(name=name, z=z, phi_0=phi_0)
+        super().__init__(name=name, z=z, voltage=voltage)
         self.semi_angle = semi_angle
         self.tilt_yx = tilt_yx
 
-    def get_rays(self, num_rays: int) -> Rays:
-        r = np.zeros((5, num_rays))
-        r, _ = make_beam(num_rays, self.semi_angle, 'point_beam')
-
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
+        r = point_beam(num_rays, self.semi_angle, random=random)
         return self._make_rays(r)
 
     @staticmethod
@@ -399,7 +392,7 @@ class PointBeam(Source):
 
 
 class XPointBeam(PointBeam):
-    def get_rays(self, num_rays: int) -> Rays:
+    def get_rays(self, num_rays: int, random: bool = False) -> Rays:
         r = np.zeros((5, num_rays))
         r[1, :] = np.linspace(
             -self.semi_angle, self.semi_angle, num=num_rays, endpoint=True
@@ -482,8 +475,9 @@ class Detector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         # Detector has no effect on rays
-        rays.location = self
-        yield rays
+        yield rays.new_with(
+            location=self
+        )
 
     def on_grid(self, rays: Rays, as_int: bool = True) -> NDArray:
         return rays.on_grid(
@@ -494,7 +488,9 @@ class Detector(Component):
             as_int=as_int,
         )
 
-    def get_image(self, rays: Rays, interference: bool = False) -> NDArray:
+    def get_image(
+        self, rays: Rays, interference: bool = False, out: Optional[NDArray] = None
+    ) -> NDArray:
 
         # Convert rays from detector positions to pixel positions
         pixel_coords_y, pixel_coords_x = self.on_grid(rays, as_int=True)
@@ -514,37 +510,93 @@ class Detector(Component):
             # If we are doing interference, we add a complex number representing
             # the phase of the ray for now to each pixel.
             # Amplitude is 1.0 for now for each complex ray.
-            image_dtype = np.complex128
             wavefronts = 1.0 * np.exp(-1j * (2 * np.pi / rays.wavelength) * rays.path_length)
             valid_wavefronts = wavefronts[mask]
+            image_dtype = valid_wavefronts.dtype
         else:
             # If we are not doing interference, we simply add 1 to each pixel that a ray hits
-            image_dtype = int
             valid_wavefronts = 1
+            image_dtype = type(valid_wavefronts)
 
-        image = np.zeros(
-            self.shape,
-            dtype=image_dtype,
-        )
+        if out is None:
+            out = np.zeros(
+                self.shape,
+                dtype=image_dtype,
+            )
+        else:
+            assert out.dtype == image_dtype
+            assert out.shape == self.shape
         flat_icds = np.ravel_multi_index(
             [
                 pixel_coords_y[mask],
                 pixel_coords_x[mask],
             ],
-            image.shape
+            out.shape
         )
         # Increment at each pixel for each ray that hits
         np.add.at(
-            image.ravel(),
+            out.ravel(),
             flat_icds,
             valid_wavefronts,
         )
-        return image
+        return out
 
     @staticmethod
     def gui_wrapper():
         from .gui import DetectorGUI
         return DetectorGUI
+
+
+class AccumulatingDetector(Detector):
+    def __init__(
+        self,
+        z: float,
+        pixel_size: float,
+        shape: Tuple[int, int],
+        buffer_length: int,
+        rotation: Degrees = 0.,
+        flip_y: bool = False,
+        center: Tuple[float, float] = (0., 0.),
+        name: Optional[str] = None,
+    ):
+        super().__init__(
+            z=z,
+            pixel_size=pixel_size,
+            shape=shape,
+            rotation=rotation,
+            flip_y=flip_y,
+            center=center,
+            name=name,
+        )
+        self.buffer = None
+        self.buffer_length = buffer_length
+
+    @property
+    def buffer_frame_shape(self) -> Optional[Tuple[int, int]]:
+        if self.buffer is None:
+            return
+        return self.buffer.shape[1:]
+
+    def reset_buffer(self, rays: Rays):
+        self.buffer = np.zeros(
+            (self.buffer_length, *self.shape),
+            dtype=int if rays.wavelength is None else np.complex128,
+        )
+        # the next index to write into
+        self.buffer_idx = 0
+
+    def get_image(self, rays: Rays) -> NDArray:
+        if self.buffer_frame_shape != self.shape:
+            self.reset_buffer(rays)
+        else:
+            self.buffer[self.buffer_idx] = 0.
+        super().get_image(
+            rays,
+            interference=rays.wavelength is not None,
+            out=self.buffer[self.buffer_idx],
+        )
+        self.buffer_idx = (self.buffer_idx + 1) % self.buffer_length
+        return np.abs(self.buffer.sum(axis=0))
 
 
 class Deflector(Component):
@@ -603,14 +655,12 @@ class Deflector(Component):
     def step(
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
-        yield Rays(
+        yield rays.new_with(
             data=np.matmul(
                 self.deflector_matrix(self.defx, self.defy),
                 rays.data,
             ),
-            indices=rays.indices,
             location=self,
-            path_length=rays.path_length
         )
 
 
@@ -684,12 +734,15 @@ class DoubleDeflector(Component):
         self, rays: Rays
     ) -> Generator[Rays, None, None]:
         for rays in self.first.step(rays):
-            rays.location = (self, self.first)
-            yield rays
+            yield rays.new_with(
+                location=(self, self.first)
+            )
         rays = rays.propagate_to(self.second.entrance_z)
         for rays in self.second.step(rays):
             rays.location = (self, self.second)
-            yield rays
+            yield rays.new_with(
+                location=(self, self.second)
+            )
 
     @staticmethod
     def _send_ray_through_pts_1d(
@@ -829,19 +882,14 @@ class Biprism(Component):
         xdeflection_mag = rejection[:, 0]
         ydeflection_mag = rejection[:, 1]
 
-        rays.data[1] += xdeflection_mag*deflection
-        rays.data[3] += ydeflection_mag*deflection
-
-        yield Rays(
-            data=rays.data,
-            indices=rays.indices,
-            path_length=(
-                rays.path_length
-                + xdeflection_mag * deflection * rays.x
-                + ydeflection_mag * deflection * rays.y
-            ),
+        rays.dx += xdeflection_mag * deflection
+        rays.dy += ydeflection_mag * deflection
+        rays.path_length += (
+            xdeflection_mag * deflection * rays.x
+            + ydeflection_mag * deflection * rays.y
+        )
+        yield rays.new_with(
             location=self,
-            wavelength=rays.wavelength,
         )
 
     @staticmethod
@@ -854,13 +902,13 @@ class Aperture(Component):
     def __init__(
         self,
         z: float,
-        radius_inner: float = 0.005,
-        radius_outer: float = 0.25,
+        radius: float,
         x: float = 0.,
         y: float = 0.,
         name: Optional[str] = None,
     ):
         '''
+        An Aperture that lets through rays within a radius centered on (x, y)
 
         Parameters
         ----------
@@ -868,10 +916,8 @@ class Aperture(Component):
             Position of component in optic axis
         name : str, optional
             Name of this component which will be displayed by GUI, by default 'Aperture'
-        radius_inner : float, optional
-           Inner radius of the aperture, by default 0.005
-        radius_outer : float, optional
-            Outer radius of the aperture, by default 0.25
+        radius : float, optional
+           The radius of the aperture
         x : int, optional
             X position of the centre of the aperture, by default 0
         y : int, optional
@@ -882,8 +928,7 @@ class Aperture(Component):
 
         self.x = x
         self.y = y
-        self.radius_inner = radius_inner
-        self.radius_outer = radius_outer
+        self.radius = radius
 
     def step(
         self, rays: Rays,
@@ -892,11 +937,12 @@ class Aperture(Component):
         distance = np.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
-        mask = np.logical_and(
-            distance >= self.radius_inner,
-            distance < self.radius_outer,
+        yield rays.with_mask(
+            distance < self.radius,
+            location=self,
         )
-        yield Rays(
-            data=rays.data[:, mask], indices=rays.indices[mask],
-            location=self, path_length=rays.path_length[mask],
-        )
+
+    @staticmethod
+    def gui_wrapper():
+        from .gui import ApertureGUI
+        return ApertureGUI

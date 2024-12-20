@@ -6,21 +6,29 @@ from temgymbasic.model import (
 )
 import temgymbasic.components as comp
 from temgymbasic.rays import Rays
+from temgymbasic.utils import calculate_phi_0, calculate_wavelength
 from numpy.testing import assert_allclose, assert_equal
+from temgymbasic.plotting import plot_model
 import scipy
+# import matplotlib.pyplot as plt
+from typing import Tuple, NamedTuple
+from scipy.constants import e, m_e, c
+
+
+ETA = (abs(e)/(2*m_e))**(1/2)
+EPSILON = abs(e)/(2*m_e*c**2)
 
 
 @pytest.fixture()
 def empty_rays():
     return Rays(
         data=np.empty(shape=(5, 0)),
-        indices=np.empty([]),
         location=0.2,
         path_length=np.empty([]),
     )
 
 
-def single_quadrant_ray(x, y):
+def single_random_uniform_ray(x, y, phi_0=1.0):
     data = np.zeros(shape=(5, 1))
 
     data[0, :] = np.random.uniform(low=0, high=x)
@@ -31,9 +39,9 @@ def single_quadrant_ray(x, y):
 
     return Rays(
         data=data,
-        indices=1,
         location=0.2,
         path_length=0.0,
+        wavelength=calculate_wavelength(phi_0=phi_0)
     )
 
 
@@ -44,7 +52,6 @@ def random_rays(request):
     n_rays = request.param
     return Rays(
         data=np.random.uniform(size=(5, n_rays)),
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
@@ -65,9 +72,9 @@ def parallel_rays(request):
 
     return Rays(
         data=data,
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
+        wavelength=np.ones(shape=n_rays)*calculate_wavelength(1.0)
     )
 
 
@@ -86,7 +93,6 @@ def point_rays(request):
 
     return Rays(
         data=data,
-        indices=np.arange(n_rays),
         location=0.0,
         path_length=np.zeros((n_rays,)),
     )
@@ -105,9 +111,8 @@ def slope_of_one_rays(request):
     data[3, :] = np.ones(shape=n_rays)
     data[4, :] = np.ones(shape=n_rays)
 
-    return Rays(
+    return Rays.new(
         data=data,
-        indices=np.arange(n_rays),
         location=0.2,
         path_length=np.zeros((n_rays,)),
     )
@@ -120,7 +125,7 @@ def slope_of_one_rays(request):
         (comp.Deflector, tuple()),
         (comp.DoubleDeflector.from_params, tuple()),
         (comp.Detector, (0.001, (64, 64))),
-        (comp.Aperture, tuple()),
+        (comp.Aperture, (0.1,)),
         (comp.Biprism, tuple()),
     ]
 )
@@ -136,6 +141,19 @@ def test_interface(component, random_rays):
         location = out_rays.location
     assert location is comp
     assert out_rays.num <= random_rays.num
+
+
+def test_lens_random_rays(random_rays):
+    f = np.random.uniform(0., 1)
+    out_manual_dx = random_rays.x*(-1/f) + random_rays.dx
+    out_manual_dy = random_rays.y*(-1/f) + random_rays.dy
+
+    lens = comp.Lens(random_rays.location, f)
+    out_rays = tuple(lens.step(random_rays))[0]
+
+    # Check that the lens has applied the correct deflection to rays
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
 
 
 def test_lens_focusing_to_point(parallel_rays):
@@ -189,6 +207,25 @@ def test_lens_focusing_to_infinity(point_rays):
     assert_allclose(propagated_rays.dy, out_rays.dy)
 
 
+def test_deflector_random_rays(random_rays):
+    deflection = np.random.uniform(-5, 5)
+
+    # The last row of rays should always be 1.0, but random rays randomises
+    # this, and we have no getter for the final row because it was always supposed to be 1.0
+    # so we use data instead to make the test succeed
+    out_manual_dx = random_rays.dx + random_rays.data[-1, :]*deflection
+    out_manual_dy = random_rays.dy + random_rays.data[-1, :]*deflection
+
+    deflector = comp.Deflector(random_rays.location, defx=deflection, defy=deflection)
+    out_rays = tuple(deflector.step(random_rays))[0]
+
+    # Check that the lens has applied the correct deflection to rays
+    assert_allclose(out_rays.x, random_rays.x)
+    assert_allclose(out_rays.y, random_rays.y)
+    assert_allclose(out_rays.dx, out_manual_dx)
+    assert_allclose(out_rays.dy, out_manual_dy)
+
+
 def test_deflector_deflection(parallel_rays):
     deflection = 0.5
     out_manual_dx = parallel_rays.dx + 1.0*deflection
@@ -231,6 +268,25 @@ def test_double_deflector_deflection(parallel_rays):
     assert_allclose(out_rays.dy, out_manual_dy)
 
 
+def test_biprism_total_deflection_is_one(point_rays):
+
+    # We need to test our vector calculus that we use to find the deflection vectors in x and y
+    # space. If we have done this correctly, the sqrt(deflection_x**2 + deflection_y**2) we
+    # calculate if the biprism is rotated should be equal to the total deflection of the biprism.
+    rot = np.random.uniform(-180, 180)
+    deflection = np.random.uniform(-5, 5)
+    biprism_location = 0.5
+    biprism = comp.Biprism(z=biprism_location, deflection=deflection, rotation=rot)
+    biprism_rays = point_rays.propagate(biprism_location)
+    out_rays = tuple(biprism.step(biprism_rays))[0]
+
+    deflection_x = out_rays.dx - point_rays.dx
+    deflection_y = out_rays.dy - point_rays.dy
+
+    total_deflection = np.sqrt(deflection_x**2 + deflection_y**2)
+    assert_allclose(total_deflection, np.ones(point_rays.num)*np.abs(deflection))
+
+
 def test_biprism_deflection_perpendicular(parallel_rays):
     deflection = -1.0
 
@@ -255,7 +311,7 @@ def test_biprism_deflection_perpendicular(parallel_rays):
     (-45, (1, -1), (-1, 1)),  # Bottom Right to Top Left
 ])
 def test_biprism_deflection_by_quadrant(rot, inp, out):
-    ray = single_quadrant_ray(inp[0], inp[1])
+    ray = single_random_uniform_ray(inp[0], inp[1])
     # Test that the ray ends up in the correct quadrant if the biprism is rotated
     deflection = -100.0
     biprism = comp.Biprism(z=ray.location, deflection=deflection, rotation=rot)
@@ -267,7 +323,6 @@ def test_biprism_deflection_by_quadrant(rot, inp, out):
 
 
 def test_biprism_interference():
-    from temgymbasic.utils import calculate_phi_0
     # This test uses an old biprism equation from light optics
     # to calculate the number of peaks in a biprism interefence pattern,
     # The biprism equation tells you the spacing between interference peaks
@@ -298,7 +353,7 @@ def test_biprism_interference():
     components = (
         comp.XPointBeam(
             z=0.0,
-            phi_0=phi_0,
+            voltage=phi_0,
             semi_angle=0.1,
         ),
         comp.Biprism(
@@ -326,12 +381,175 @@ def test_biprism_interference():
 
 
 def test_aperture_blocking(parallel_rays, empty_rays):
-    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=2.0, radius_outer=2.0)
+    aperture = comp.Aperture(z=parallel_rays.location, radius=0.)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, empty_rays.data)
 
 
 def test_aperture_nonblocking(parallel_rays):
-    aperture = comp.Aperture(z=parallel_rays.location, radius_inner=0., radius_outer=2.0)
+    aperture = comp.Aperture(z=parallel_rays.location, radius=2.)
     out_rays = tuple(aperture.step(parallel_rays))[0]
     assert_equal(out_rays.data, parallel_rays.data)
+
+
+def test_sample_potential_deflection():
+    from scipy.interpolate import RegularGridInterpolator as RGI
+
+    # Sample deflection test: The implemented method we test called in the
+    # Potential Sample step function uses the relativistic deflection
+    # equations explained in principles of electron optics.
+
+    # The calculated analytical method used to compare our result comes
+    # from newton's third law and the lorentz force equation for an electron:
+    # We say m * \gamma * a = qE, where m is the rest mass of the electron,
+    # \gamma is the relativistic correction factor, a = acceleration, q =
+    # the electron charge (-ve for electron) and E is the E field.
+    # a is implicitly dv/dt in this equation, but using the relation,
+    # d/dt = v/(sqrt(1+x'^2 + y'^2)) * d/dz where x' denotes derivative with
+    # respect to z (dx/dz), one can derive the instantaneous force as a function of z, and thus
+    # velocity change on the electron in this infinitely thin plane (note dirac delta function is
+    # also implied here as dz is an infinitely thin slice), thus -
+    # x' += (q * (1+x'^2 + y'^2)) / (m * v^2 * gamma) * Ex
+    # One must be careful about the velocity term: I believe it also needs to encode
+    # the potential of the "Sample" that the electron sees. I am unsure about this for now,
+    # but there is no other term that can account for the sample potential, so it makes sense to me.
+
+    # Set initial potential of electron
+    phi_0 = 1.0
+    ray = single_random_uniform_ray(0., 0., phi_0=phi_0)
+
+    # Set up sample properties and potential
+    x0 = -0.25
+    y0 = -0.25
+    extent = (1, 1)
+    gpts = (256, 256)
+    x = np.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
+    y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
+    xx, _ = np.meshgrid(x, y)
+
+    # Set initial potential
+    phi_r = xx - x0
+
+    # Find voltage at central pixel
+    phi_centre = phi_0 - x0
+    phi_hat_centre = (phi_centre)*(1 + EPSILON * (phi_centre))
+
+    # Calculate gamma
+    gamma = np.sqrt(1 + 4 * EPSILON * phi_hat_centre)
+
+    # Calculate velocity two ways for sanity check
+    v = 2 * ETA * np.sqrt(phi_hat_centre) / gamma
+    v_acc = 1 * c * (1 - (1 - (- e*(phi_centre)) / (m_e * (c ** 2))) ** (-2)) ** (1/2)
+
+    assert_allclose(v, v_acc, atol=1e-3)
+
+    # Interpolate potential
+    pot_interp = RGI([x, y], phi_r, method='linear', bounds_error=False, fill_value=0.0)
+    Ey, Ex = np.gradient(phi_r, x, y)
+    Ex_interp = RGI([x, y], Ex, method='linear', bounds_error=False, fill_value=0.0)
+    Ey_interp = RGI([x, y], Ey, method='linear', bounds_error=False, fill_value=0.0)
+
+    sample = comp.PotentialSample(
+        z=ray.location,
+        potential=pot_interp,
+        Ex=Ex_interp,
+        Ey=Ey_interp,
+    )
+
+    # rho encodes the slope of the ray into a single parameter and is needed for when the calc
+    # is performed as a function of d/dz, instead of d/dt
+    rho = np.sqrt(1 + ray.dx ** 2 + ray.dy ** 2)
+
+    # Step rays
+    out_rays = tuple(sample.step(ray))[0]
+
+    # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
+    # but their derivation is not well explained, and is verbose, so this is what we have.
+    dx_analytical_one = np.float64((e * rho ** 2)/(gamma*m_e*v*v)) * np.max(Ex)
+
+    assert_allclose(out_rays.dx, dx_analytical_one, atol=1e-7)
+
+
+@pytest.mark.skip(reason="No way to numerically test this now, so visualise plot below to check")
+def test_sample_phase_shift():
+    from scipy.interpolate import RegularGridInterpolator as RGI, interp1d
+
+    class PlotParams(NamedTuple):
+        num_rays: int = 10
+        ray_color: str = 'dimgray'
+        fill_color: str = 'aquamarine'
+        fill_color_pair: Tuple[str, str] = ('khaki', 'deepskyblue')
+        fill_alpha: float = 0.0
+        ray_alpha: float = 1.
+        component_lw: float = 1.
+        edge_lw: float = 1.
+        ray_lw: float = 1.
+        label_fontsize: int = 12
+        figsize: Tuple[int, int] = (6, 6)
+        extent_scale: float = 1.1
+
+    phi_0 = 1.1
+    x0 = -0.5
+    y0 = -0.5
+
+    extent = (1, 1)
+    gpts = (256, 256)
+    x = np.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
+    y = np.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
+    xx, yy = np.meshgrid(x, y, indexing='ij')
+
+    phi_r = xx - x0
+
+    pot_interp = RGI([x, y], phi_r, method='linear', bounds_error=False, fill_value=0.0)
+    Ex, Ey = np.gradient(phi_r, x, y)
+    Ex_interp = RGI([x, y], Ex, method='linear', bounds_error=False, fill_value=0.0)
+    Ey_interp = RGI([x, y], Ey, method='linear', bounds_error=False, fill_value=0.0)
+
+    components = (
+        comp.XAxialBeam(
+            z=0.0,
+            radius=0.5,
+            voltage=phi_0
+        ),
+        comp.PotentialSample(
+            z=0.5,
+            potential=pot_interp,
+            Ex=Ex_interp,
+            Ey=Ey_interp,
+        ),
+        comp.Detector(
+            z=6,
+            pixel_size=0.01,
+            shape=(100, 100),
+        ),
+    )
+
+    num_rays = 100
+    plot_params = PlotParams(num_rays=num_rays)
+
+    model = Model(components)
+    fig, ax = plot_model(model, plot_params=plot_params)
+    rays = tuple(model.run_iter(num_rays=num_rays))
+    print(rays[1].path_length[1], rays[1].path_length[2])
+    x = np.stack(tuple(r.x for r in rays), axis=0)
+    z = np.asarray(tuple(r.z for r in rays))
+    opl = np.asarray(tuple(r.path_length for r in rays))
+
+    opls = np.linspace(0.5, 5, 11)
+
+    for idx in range(num_rays):
+
+        # Interpolation for x and z as functions of path length
+        z_of_L = interp1d(opl[:, idx], z, kind='linear')
+        x_of_z = interp1d(z, x[:, idx])
+
+        # Find x and z for the given path length L'
+        z_prime = z_of_L(opls)
+        x_prime = x_of_z(z_prime)
+
+        ax.plot(x_prime, z_prime, '.r')
+
+    # Uncomment these plotting lines to see if the wavefront looks correct
+
+    # plt.axis('equal')
+    # plt.show()
