@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union
 
 from PySide6 import QtCore
 from PySide6.QtWidgets import (
@@ -9,12 +9,15 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QLineEdit,
-)
-from PySide6.QtGui import (
-    QIntValidator,
+    QPushButton,
 )
 
-from superqt import QLabeledDoubleSlider, QLabeledSlider
+from PySide6.QtGui import (
+    QIntValidator,
+    QDoubleValidator,
+)
+
+from superqt import QLabeledDoubleSlider, QLabeledSlider, QDoubleSlider
 import OpenGL.GL as gl
 from OpenGL.GL import (
     GL_PROXY_TEXTURE_2D,
@@ -33,7 +36,55 @@ from OpenGL.GL import (
 )
 import numpy as np
 
+from pyqtgraph.dockarea import DockLabel
 from pyqtgraph.opengl.GLGraphicsItem import GLGraphicsItem
+
+# Set the locale to "C" to enable . as decimal separator.
+QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.C))
+
+
+class MyDockLabel(DockLabel):
+    def updateStyle(self):
+        r = '3px'
+        if self.dim:
+            fg = '#aaa'
+            bg = '#44a'
+            border = '#339'
+        else:
+            fg = '#fff'
+            bg = '#333'
+            border = '#444'
+
+        if self.orientation == 'vertical':
+            self.vStyle = """DockLabel {
+                background-color : %s;
+                color : %s;
+                border-top-right-radius: 0px;
+                border-top-left-radius: %s;
+                border-bottom-right-radius: 0px;
+                border-bottom-left-radius: %s;
+                border-width: 0px;
+                border-right: 2px solid %s;
+                padding-top: 3px;
+                padding-bottom: 3px;
+                font-size: %s;
+            }""" % (bg, fg, r, r, border, self.fontSize)
+            self.setStyleSheet(self.vStyle)
+        else:
+            self.hStyle = """DockLabel {
+                background-color : %s;
+                color : %s;
+                border-top-right-radius: %s;
+                border-top-left-radius: %s;
+                border-bottom-right-radius: 0px;
+                border-bottom-left-radius: 0px;
+                border-width: 0px;
+                border-bottom: 2px solid %s;
+                padding-left: 3px;
+                padding-right: 3px;
+                font-size: %s;
+            }""" % (bg, fg, r, r, border, self.fontSize)
+            self.setStyleSheet(self.hStyle)
 
 
 def slider_config(slider: QSlider, value: int, vmin: int, vmax: int, tick_interval: Optional[int]):
@@ -53,21 +104,230 @@ def labelled_slider(
     insert_into: Optional[QLayout] = None,
     decimals: int = 0,
     tick_interval: Optional[int] = None,
+    reset_to: Optional[Union[int, bool]] = True,
 ):
     if decimals > 0:
         slider = QLabeledDoubleSlider(QtCore.Qt.Orientation.Horizontal)
+        slider.setDecimals(decimals)
     else:
         slider = QLabeledSlider(QtCore.Qt.Orientation.Horizontal)
     slider_config(slider, value, vmin, vmax, tick_interval)
+    slider._slider.setStyleSheet(
+        R"""
+QSlider::groove:horizontal {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66b2ff, stop:1 #cce5ff);
+    margin: 4px 0;
+}
+
+QSlider::groove:horizontal:disabled {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    margin: 4px 0;
+}
+
+QSlider::handle:horizontal:disabled {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #b4b4b4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+"""
+    )
 
     if isinstance(insert_into, QHBoxLayout):
         hbox = insert_into
     else:
-        hbox = QHBoxLayout()
+        hbox = QVBoxLayout()
 
     if name is not None:
-        slider_namelabel = QLabel(name)
-        hbox.addWidget(slider_namelabel)
+        if reset_to is not None:
+
+            @QtCore.Slot()
+            def reset():
+                if reset_to is True:
+                    slider.setValue(value)
+                else:
+                    slider.setValue(reset_to)
+
+            button = QPushButton(name)
+            button.setFlat(True)
+            button.setMaximumWidth(175)
+            button.setStyleSheet("text-align:left;")
+            # button.setSizePolicy(
+            #     QSizePolicy.Policy.Minimum,
+            #     QSizePolicy.Policy.Minimum,
+            # )
+            button.clicked.connect(reset)
+            hbox.addWidget(button)
+        else:
+            slider_namelabel = QLabel(name)
+            hbox.addWidget(slider_namelabel)
+
+    hbox.addWidget(slider)
+
+    if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
+        insert_into.addLayout(hbox)
+
+    return slider, hbox
+
+
+def arrow_slider(
+    value: int,
+    vmin: int,
+    vmax: int,
+    name: Optional[str] = None,
+    insert_into: Optional[QLayout] = None,
+    increment: int = 1,
+    reset_to: Optional[Union[int, bool]] = True,
+    decimals: int = 0,
+):
+
+    # widget = QWidget()
+    hbox = QHBoxLayout()
+    # widget.setLayout(hbox)
+
+    left_button = QPushButton("<")
+    right_button = QPushButton(">")
+    value_box = QLineEdit(str(value))
+    increment_box = QLineEdit(str(increment))
+
+    value_validator = QDoubleValidator(-999999, 999999, decimals)
+    value_box.setValidator(value_validator)
+    value_box.setText(str(round(value, decimals)))
+
+    increment_validator = QDoubleValidator(-999999, 999999, decimals)
+    increment_box.setValidator(increment_validator)
+
+    if name is not None:
+        if reset_to is not None:
+
+            @QtCore.Slot()
+            def reset():
+                if reset_to is True:
+                    value_box.setText(str(value))
+                else:
+                    value_box.setText(str(reset_to))
+
+            button = QPushButton(name)
+            button.setFlat(True)
+            button.setMaximumWidth(175)
+            button.setStyleSheet("text-align:left;")
+            button.clicked.connect(reset)
+
+    insert_into.addWidget(button)
+
+    def update_value(delta):
+        current_value = float(value_box.text())
+        new_value = current_value + delta
+        # Validate the new value to ensure it does not exceed the number of decimals
+        if decimals > 0:
+            new_value = round(new_value, decimals)
+        value_box.setText(str(new_value))
+
+
+    left_button.clicked.connect(lambda: update_value(-float(increment_box.text())))
+    right_button.clicked.connect(lambda: update_value(float(increment_box.text())))
+
+    hbox.addWidget(left_button)
+    hbox.addWidget(value_box)
+    hbox.addWidget(right_button)
+    hbox.addWidget(QLabel("Increment:"))
+    hbox.addWidget(increment_box)
+
+
+    if insert_into is not None and not isinstance(insert_into, QHBoxLayout):
+        insert_into.addLayout(hbox)
+
+    return value_box, hbox
+
+
+def slider(
+    value: int,
+    vmin: int,
+    vmax: int,
+    name: Optional[str] = None,
+    insert_into: Optional[QLayout] = None,
+    decimals: int = 0,
+    tick_interval: Optional[int] = None,
+    reset_to: Optional[Union[int, bool]] = True,
+):
+
+    slider = QDoubleSlider(QtCore.Qt.Orientation.Horizontal)
+    slider_config(slider, value, vmin, vmax, tick_interval)
+    slider.setStyleSheet(
+        R"""
+QSlider::groove:horizontal {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #66b2ff, stop:1 #cce5ff);
+    margin: 4px 0;
+}
+
+QSlider::groove:horizontal:disabled {
+    border: 1px solid #999999;
+    height: 10px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    margin: 4px 0;
+}
+
+QSlider::handle:horizontal:disabled {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f4f4f4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+
+QSlider::handle:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #b4b4b4, stop:1 #8f8f8f);
+    border: 1px solid #5c5c5c;
+    width: 12px;
+    margin: -2px 0;
+    border-radius: 3px;
+}
+"""
+    )
+
+    if isinstance(insert_into, QHBoxLayout):
+        hbox = insert_into
+    else:
+        hbox = QVBoxLayout()
+
+    if name is not None:
+        if reset_to is not None:
+
+            @QtCore.Slot()
+            def reset():
+                if reset_to is True:
+                    slider.setValue(value)
+                else:
+                    slider.setValue(reset_to)
+
+            button = QPushButton(name)
+            button.setFlat(True)
+            button.setMaximumWidth(175)
+            button.setStyleSheet("text-align:left;")
+            # button.setSizePolicy(
+            #     QSizePolicy.Policy.Minimum,
+            #     QSizePolicy.Policy.Minimum,
+            # )
+            button.clicked.connect(reset)
+            hbox.addWidget(button)
+        else:
+            slider_namelabel = QLabel(name)
+            hbox.addWidget(slider_namelabel)
 
     hbox.addWidget(slider)
 
@@ -80,7 +340,7 @@ def labelled_slider(
 class LabelledIntField(QWidget):
     def __init__(self, title, initial_value=None):
         QWidget.__init__(self)
-        layout = QVBoxLayout()
+        layout = QHBoxLayout()
         self.setLayout(layout)
 
         self.label = QLabel()
@@ -88,18 +348,10 @@ class LabelledIntField(QWidget):
         layout.addWidget(self.label)
 
         self.lineEdit = QLineEdit(self)
-        self.lineEdit.setFixedWidth(40)
         self.lineEdit.setValidator(QIntValidator())
         if initial_value is not None:
             self.lineEdit.setText(str(initial_value))
         layout.addWidget(self.lineEdit)
-        layout.addStretch()
-
-    def setLabelWidth(self, width):
-        self.label.setFixedWidth(width)
-
-    def setInputWidth(self, width):
-        self.lineEdit.setFixedWidth(width)
 
     def getValue(self, default: int = 1):
         try:

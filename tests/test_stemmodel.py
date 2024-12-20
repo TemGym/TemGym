@@ -69,7 +69,7 @@ def make_model(params: OverfocusParams, nav_shape, sig_shape) -> STEMModel:
     # Adapted from https://github.com/LiberTEM/Microscope-Calibration/blob/
     # 7e08ca84a6539ac8e4e4068c5f7ea48e97db63d2/src/microscope_calibration/
     # common/stem_overfocus.py#L23-L37
-    model = STEMModel()
+    model = STEMModel(backend='cpu')
     model.set_stem_params(
         overfocus=params['overfocus'],
         semiconv_angle=params['semiconv'],

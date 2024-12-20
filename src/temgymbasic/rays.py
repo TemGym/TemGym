@@ -3,8 +3,10 @@ from typing import (
 )
 from typing_extensions import Self
 from dataclasses import dataclass, asdict
-import numpy as np
+
 from numpy.typing import NDArray
+
+from .utils import get_xp
 
 from . import (
     PositiveFloat,
@@ -14,6 +16,7 @@ from .utils import (
     get_pixel_coords,
     calculate_phi_0
 )
+
 
 if TYPE_CHECKING:
     from .components import Component
@@ -41,16 +44,27 @@ class Rays:
         location: LocationT,
         wavelength: Optional[float] = None,
         path_length: Union[float, NDArray] = 0.,
+        **kwargs,
     ):
+        xp = get_xp(data)
         num_rays = data.shape[1]
-        if np.isscalar(path_length):
-            path_length = np.full((num_rays,), path_length)
+        if xp.isscalar(path_length):
+            path_length = xp.full((num_rays,), path_length)
+        assert len(path_length) == num_rays, (
+            "path_length must be a scalar or an array of the same length as the number of rays"
+        )
+
         return cls(
             data=data,
             location=location,
             path_length=path_length,
             wavelength=wavelength,
+            **kwargs,
         )
+
+    @property
+    def xp(self):
+        return get_xp(self.data)
 
     @property
     def z(self) -> float:
@@ -113,13 +127,36 @@ class Rays:
         self.data[3, :] = yslope
 
     @property
+    def num_display(self):
+        return self.num
+
+    @property
+    def x_central(self):
+        return self.x
+
+    @property
+    def dx_central(self):
+        return self.dx
+
+    @property
+    def y_central(self):
+        return self.y
+
+    @property
+    def dy_central(self):
+        return self.dy
+
+    @property
+    def mask_display(self):
+        return self.mask
+
+    @property
     def phi_0(self):
         if self.wavelength is not None:
             return calculate_phi_0(self.wavelength)
         return self.wavelength
 
-    @staticmethod
-    def propagation_matrix(z):
+    def propagation_matrix(self, z):
         '''
         Propagation matrix
 
@@ -133,7 +170,8 @@ class Rays:
         ndarray
             Propagation matrix
         '''
-        return np.array(
+
+        return self.xp.array(
             [[1, z, 0, 0, 0],
              [0, 1, 0, 0, 0],
              [0, 0, 1, z, 0],
@@ -142,8 +180,17 @@ class Rays:
         )
 
     def propagate(self, distance: float) -> Self:
+
+        # degree_x = self.xp.rad2deg(self.xp.arctan(self.dx))
+        # degree_y = self.xp.rad2deg(self.xp.arctan(self.dy))
+
+        # if self.xp.any(degree_x > 20):
+        #     warnings.warn("dx is too large for parabasal representation", UserWarning)
+        # elif self.xp.any(degree_y > 20):
+        #     warnings.warn("dy is too large for parabasal representation", UserWarning)
+
         return self.new_with(
-            data=np.matmul(
+            data=self.xp.matmul(
                 self.propagation_matrix(distance),
                 self.data,
             ),
@@ -167,15 +214,17 @@ class Rays:
     ) -> Tuple[NDArray, NDArray]:
         """Returns in yy, xx!"""
         xx, yy = get_pixel_coords(
-            rays_x=self.x,
-            rays_y=self.y,
+            rays_x=self.x_central,
+            rays_y=self.y_central,
             shape=shape,
             pixel_size=pixel_size,
             flip_y=flip_y,
             scan_rotation=rotation,
+            xp=self.xp
         )
+
         if as_int:
-            return np.round((yy, xx)).astype(int)
+            return self.xp.round((yy, xx)).astype(int)
         return yy, xx
 
     def get_image(
@@ -186,6 +235,7 @@ class Rays:
         rotation: Degrees = 0.
     ):
         from .components import Detector
+
         det = Detector(
             z=self.z,
             pixel_size=pixel_size,
@@ -225,3 +275,34 @@ class Rays:
             wavelength=self.wavelength,
             mask=~self.mask,
         )
+
+
+@dataclass
+class GaussianRays(Rays):
+    wo: Optional[NDArray] = None
+
+    @property
+    def x_central(self):
+        return self.x[0::5]
+
+    @property
+    def dx_central(self):
+        return self.dx[0::5]
+
+    @property
+    def y_central(self):
+        return self.y[0::5]
+
+    @property
+    def dy_central(self):
+        return self.dy[0::5]
+
+    @property
+    def mask_display(self):
+        if self.mask is not None:
+            raise NotImplementedError
+        return self.mask
+
+    @property
+    def num_display(self):
+        return self.x_central.size
