@@ -2,7 +2,7 @@ from typing import (
     Tuple, Optional, Union, TYPE_CHECKING
 )
 from typing_extensions import Self
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import numpy as np
 from numpy.typing import NDArray
 
@@ -19,16 +19,38 @@ if TYPE_CHECKING:
     from .components import Component
 
 
+LocationT = Union[float, 'Component', Tuple['Component', ...]]
+
+
 @dataclass
 class Rays:
-    data: np.ndarray
-    indices: np.ndarray
-    location: Union[float, 'Component', Tuple['Component', ...]]
-    path_length: np.ndarray
-    wavelength: Optional[NDArray] = None
+    data: NDArray
+    location: LocationT
+    path_length: NDArray
+    wavelength: Optional[float] = None
+    mask: Optional[NDArray] = None
+    blocked: Optional[NDArray] = None
 
     def __eq__(self, other: 'Rays') -> bool:
         return self.num == other.num and (self.data == other.data).all()
+
+    @classmethod
+    def new(
+        cls,
+        data: NDArray,
+        location: LocationT,
+        wavelength: Optional[float] = None,
+        path_length: Union[float, NDArray] = 0.,
+    ):
+        num_rays = data.shape[1]
+        if np.isscalar(path_length):
+            path_length = np.full((num_rays,), path_length)
+        return cls(
+            data=data,
+            location=location,
+            path_length=path_length,
+            wavelength=wavelength,
+        )
 
     @property
     def z(self) -> float:
@@ -92,7 +114,9 @@ class Rays:
 
     @property
     def phi_0(self):
-        return calculate_phi_0(self.wavelength)
+        if self.wavelength is not None:
+            return calculate_phi_0(self.wavelength)
+        return self.wavelength
 
     @staticmethod
     def propagation_matrix(z):
@@ -118,18 +142,16 @@ class Rays:
         )
 
     def propagate(self, distance: float) -> Self:
-        return Rays(
+        return self.new_with(
             data=np.matmul(
                 self.propagation_matrix(distance),
                 self.data,
             ),
-            indices=self.indices,
             location=self.z + distance,
             path_length=(
                 self.path_length
-                + 1.0 * distance * (1 + self.dx**2 + self.dy**2)**0.5
+                + 1.0 * distance * (1 + self.dx ** 2 + self.dy ** 2) ** 0.5
             ),
-            wavelength=self.wavelength,
         )
 
     def propagate_to(self, z: float) -> Self:
@@ -172,3 +194,34 @@ class Rays:
             flip_y=flip_y,
         )
         return det.get_image(self)
+
+    def new_with(self, **kwargs):
+        kwargs = {
+            **asdict(self),
+            **kwargs,
+        }
+        kwargs.pop('mask', None)
+        kwargs.pop('blocked', None)
+        return type(self)(**kwargs)
+
+    def with_mask(
+        self, mask: NDArray, **kwargs,
+    ):
+        return type(self)(
+            data=self.data[:, mask],
+            path_length=self.path_length[mask],
+            mask=mask,
+            blocked=self.data[:, ~mask],
+            **kwargs,
+        )
+
+    def blocked_rays(self) -> Optional['Rays']:
+        if self.blocked is None or self.mask is None:
+            return None
+        return Rays(
+            data=self.blocked,
+            location=self.z,
+            path_length=None,  # this is invalidates the interface
+            wavelength=self.wavelength,
+            mask=~self.mask,
+        )

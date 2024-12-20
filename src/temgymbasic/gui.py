@@ -7,6 +7,7 @@ from PySide6.QtGui import QVector3D
 from PySide6.QtCore import (
     Slot,
     Qt,
+    QTimer,
 )
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -281,6 +282,11 @@ class TemGymWindow(QMainWindow):
         # Any model-specific GUI setup called in finalize
         self.model_gui.finalize(self)
 
+        # Update rays timer
+        self.rays_timer = QTimer(parent=self)
+        self.rays_timer.timeout.connect(self.update_rays)
+        self.rays_timer.start(30)
+
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() in (Qt.Key_Escape, Qt.Key_Q):
             self.close()
@@ -385,24 +391,20 @@ class TemGymWindow(QMainWindow):
     @Slot()
     def update_rays(self):
         all_rays = tuple(self.model.run_iter(
-            self.gui_components[0].num_rays
+            self.gui_components[0].num_rays,
+            random=True,
         ))
-        vertices = as_gl_lines(all_rays)
-        vertices[:, 2] *= Z_ORIENT
+        vertices = as_gl_lines(all_rays, z_mult=Z_ORIENT)
         self.ray_geometry.setData(
             pos=vertices,
             color=RAY_COLOR + (0.05,),
         )
 
         if self.model.detector is not None:
-            # image = self.model.detector.get_image(all_rays[-1])
-            image = self.model.detector.get_image_intensity(all_rays[-1])
-            if np.max(np.abs(image.T)**2) < 1e-12:
-                max_val = 1.
-            else:
-                max_val = np.max(np.abs(image.T)**2)
-
-            self.spot_img.setImage(np.abs(image.T)**2/max_val)
+            image = self.model.detector.get_image(
+                all_rays[-1]
+            )
+            self.spot_img.setImage(image.T)
 
     def add_geometry(self):
         self.tem_window.clear()
@@ -639,6 +641,10 @@ class LensGUI(ComponentGUIWrapper):
 
 class SourceGUI(ComponentGUIWrapper):
     @property
+    def beam(self) -> 'comp.Source':
+        return self.component
+
+    @property
     def num_rays(self) -> int:
         return self.rayslider.value()
 
@@ -655,7 +661,7 @@ class SourceGUI(ComponentGUIWrapper):
         beam_tilt_y, beam_tilt_x = self.beam.tilt_yx
 
         self.rayslider, _ = labelled_slider(
-            num_rays, 1, 2**18, name="Number of Rays"
+            num_rays, 1, 2048, name="Number of Rays"
         )
         self.rayslider.valueChanged.connect(self.try_update_slot)
 
@@ -1329,7 +1335,7 @@ class DetectorGUI(GridGeomMixin, ComponentGUIWrapper):
         )
 
 
-class ApertureGUI(ComponentGUIWrapper):
+class ApertureGUI(LensGUI):
     @property
     def aperture(self) -> 'comp.Aperture':
         return self.component
@@ -1339,13 +1345,9 @@ class ApertureGUI(ComponentGUIWrapper):
         vbox = QVBoxLayout()
 
         hbox = QHBoxLayout()
-        self.inner_radiusslider, _ = labelled_slider(
-            self.aperture.radius_inner, 0.0, 0.25,
-            name="Inner radius", insert_into=hbox, decimals=2,
-        )
-        self.outer_radiusslider, _ = labelled_slider(
-            self.aperture.radius_outer, 0.0, 0.25,
-            name="Outer radius", insert_into=hbox, decimals=2,
+        self.radiusslider, _ = labelled_slider(
+            self.aperture.radius, 0.0, 0.25,
+            name="Radius", insert_into=hbox, decimals=2,
         )
         vbox.addLayout(hbox)
 
