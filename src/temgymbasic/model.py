@@ -1,22 +1,28 @@
 from typing import (
-    Generator, Iterable, Tuple, Optional
+    Generator, Sequence, Tuple, Optional
 )
 from typing_extensions import Self
-import numpy as np
 
 from . import (
     PositiveFloat,
     UsageError,
     InvalidModelError,
 )
-from . import components as comp, Degrees
+from . import components as comp, Degrees, BackendT
 from .rays import Rays
 from .utils import pairwise
+import numpy as np
 
 
 class Model:
-    def __init__(self, components: Iterable[comp.Component]):
+    def __init__(
+        self,
+        components: Sequence[comp.Component],
+        backend: BackendT = 'cpu'
+    ):
+        self.backend = backend
         self._components = components
+
         self._sort_components()
         self._validate_components()
 
@@ -37,7 +43,7 @@ class Model:
             c._validate_component()
 
     @property
-    def components(self) -> Iterable[comp.Component]:
+    def components(self) -> Sequence[comp.Component]:
         return self._components
 
     def __repr__(self):
@@ -59,6 +65,10 @@ class Model:
     @property
     def last(self) -> comp.Detector:
         return self.components[-1]
+
+    def set_backend_for_components(self, backend):
+        for component in self.components:
+            component.set_backend(backend)
 
     def move_component(
         self,
@@ -107,17 +117,20 @@ class Model:
         )
 
     def run_iter(
-        self, num_rays: int, random: bool = False,
+        self, num_rays: int, random: Optional[bool] = None, backend: Optional[BackendT] = None,
     ) -> Generator[Rays, None, None]:
         source: comp.Source = self.components[0]
-        rays = source.get_rays(num_rays, random=random)
+        rays = source.get_rays(num_rays, random=random, backend=backend or self.backend)
+
         for component in self.components:
             rays = rays.propagate_to(component.entrance_z)
             for rays in component.step(rays):
                 # Could use generator with return value here...
                 yield rays
 
-    def run_to_z(self, num_rays: int, z: float) -> Optional[Rays]:
+    def run_to_z(
+        self, num_rays: int, z: float, backend: Optional[BackendT] = None
+    ) -> Optional[Rays]:
         """
         Get the rays at a point z
 
@@ -126,14 +139,14 @@ class Model:
         use 'run_to_component' instead.
         """
         last_rays = None
-        for rays in self.run_iter(num_rays):
+        for rays in self.run_iter(num_rays, backend=backend):
             if last_rays is not None and (last_rays.z < z <= rays.z):
                 return last_rays.propagate_to(z)
             last_rays = rays
         return None
 
-    def run_to_end(self, num_rays: int) -> Rays:
-        for rays in self.run_iter(num_rays):
+    def run_to_end(self, num_rays: int, backend: Optional[BackendT] = None) -> Rays:
+        for rays in self.run_iter(num_rays, backend=backend):
             pass
         return rays
 
@@ -141,8 +154,9 @@ class Model:
         self,
         component: comp.Component,
         num_rays: int,
+        backend: Optional[BackendT] = None
     ) -> Optional[Rays]:
-        for rays in self.run_iter(num_rays):
+        for rays in self.run_iter(num_rays, backend=backend):
             if rays.component is component:
                 return rays
         return None
@@ -154,11 +168,11 @@ class Model:
 
 
 class STEMModel(Model):
-    def __init__(self):
+    def __init__(self, backend: str = 'cpu'):
         # Note a flip_y or flip_x can be achieved by setting
         # either of scan_step_yx to negative values
         self._scan_pixel_yx = (0, 0)  # Maybe should live on STEMSample
-        super().__init__(self.default_components())
+        super().__init__(self.default_components(), backend=backend)
         self.set_stem_params()
 
     def _validate_components(self):
@@ -190,6 +204,7 @@ class STEMModel(Model):
             comp.ParallelBeam(
                 z=0.0,
                 radius=0.01,
+                voltage=1.0,
             ),
             comp.DoubleDeflector(
                 first=comp.Deflector(z=0.1, name='Upper'),
@@ -211,7 +226,7 @@ class STEMModel(Model):
             ),
             comp.Detector(
                 z=1.,
-                pixel_size=0.01,
+                pixel_size=0.001,
                 shape=(128, 128),
             ),
         )
