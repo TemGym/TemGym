@@ -107,10 +107,10 @@ class Model:
         )
 
     def run_iter(
-        self, num_rays: int
+        self, num_rays: int, random: bool = False,
     ) -> Generator[Rays, None, None]:
         source: comp.Source = self.components[0]
-        rays = source.get_rays(num_rays)
+        rays = source.get_rays(num_rays, random=random)
         for component in self.components:
             rays = rays.propagate_to(component.entrance_z)
             for rays in component.step(rays):

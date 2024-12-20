@@ -119,8 +119,8 @@ def plot_model(model, *, plot_params: PlotParams = PlotParams()):
                 component.name, fontsize=p.label_fontsize, zorder=1000, va='center')
             ax.plot(
                 [
-                    -component.pixel_size*component.shape[1]/2,
-                    component.pixel_size*component.shape[1]/2
+                    -0.5,
+                    0.5
                 ],
                 [component.z, component.z],
                 color='dimgrey',
