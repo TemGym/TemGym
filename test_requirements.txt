@@ -1,3 +1,5 @@
 pytest
+ipytest
 pytest-cov
 scipy
+diffractio

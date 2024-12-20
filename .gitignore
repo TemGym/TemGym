@@ -32,3 +32,8 @@ junit.xml
 *.sif
 examples/generated/
 dist/
+*.lprof
+*.txt
+*.png
+*nsys-rep
+wavefronts/

@@ -1,15 +1,22 @@
 from typing import TYPE_CHECKING, Tuple, Sequence
 from typing_extensions import TypeAlias
+
 import numpy as np
 from numpy.typing import NDArray
 from numba import njit
+
+try:
+    import cupy as cp
+except ImportError:
+    cp = None
 
 from scipy.constants import e, m_e, h
 
 if TYPE_CHECKING:
     from .model import STEMModel
     from .rays import Rays
-    from . import Degrees, Radians
+    from . import Degrees, Radians, BackendT
+
 
 RadiansNP: TypeAlias = np.float64
 
@@ -26,6 +33,40 @@ except ImportError:
         return zip(a, b)
 
 
+def get_cupy():
+    """
+    Get CuPy, previously imported
+
+    If not available raises ModuleNotFoundError
+    """
+    if cp is None:
+        raise ModuleNotFoundError("Cannot use backend == gpu, cupy not found")
+    return cp
+
+
+def get_xp(data: NDArray):
+    try:
+        if data.device != 'cpu':
+            return cp
+    except AttributeError:
+        pass
+    return np
+
+
+def get_array_module(backend: 'BackendT'):
+    if backend == "cpu":
+        return np
+    elif backend == "gpu":
+        return get_cupy()
+
+
+def get_array_from_device(data: NDArray):
+    try:
+        return data.get()
+    except AttributeError:
+        return data
+
+
 def P2R(radii: NDArray[np.float64], angles: NDArray[RadiansNP]) -> NDArray[np.complex128]:
     return radii * np.exp(1j*angles)
 
@@ -37,10 +78,11 @@ def R2P(x: NDArray[np.complex128]) -> Tuple[NDArray[np.float64], NDArray[Radians
 def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
     num_vertices = 0
     for r in all_rays[:-1]:
-        num_vertices += r.num
+        num_vertices += r.num_display
     num_vertices *= 2
 
-    vertices = np.empty(
+    xp = all_rays[0].xp
+    vertices = xp.empty(
         (num_vertices, 3),
         dtype=np.float32,
     )
@@ -49,16 +91,16 @@ def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
     def _add_vertices(r1: 'Rays', r0: 'Rays'):
         nonlocal idx, vertices
 
-        num_endpoints = r1.num
+        num_endpoints = r1.num_display
         sl = slice(idx, idx + num_endpoints * 2, 2)
-        vertices[sl, 0] = r1.x
-        vertices[sl, 1] = r1.y
+        vertices[sl, 0] = r1.x_central
+        vertices[sl, 1] = r1.y_central
         vertices[sl, 2] = r1.z * z_mult
         sl = slice(1 + idx, 1 + idx + num_endpoints * 2, 2)
         # Relies on the fact that indexing
         # with None creates a new axis, only
-        vertices[sl, 0] = r0.x[r1.mask].flat
-        vertices[sl, 1] = r0.y[r1.mask].flat
+        vertices[sl, 0] = r0.x_central[r1.mask_display].ravel()
+        vertices[sl, 1] = r0.y_central[r1.mask_display].ravel()
         vertices[sl, 2] = r0.z * z_mult
         idx += num_endpoints * 2
         return idx
@@ -70,7 +112,7 @@ def as_gl_lines(all_rays: Sequence['Rays'], z_mult: int = 1):
             _add_vertices(r1b, r0)
         r1 = r0
 
-    return vertices
+    return get_array_from_device(vertices)
 
 
 def plot_rays(model: 'STEMModel'):
@@ -126,46 +168,46 @@ def plot_rays(model: 'STEMModel'):
     plt.show()
 
 
-def _flip_y():
+def _flip_y(xp=np):
     # From libertem.corrections.coordinates v0.11.1
-    return np.array([
+    return xp.array([
         (-1, 0),
         (0, 1)
     ])
 
 
-def _identity():
+def _identity(xp=np):
     # From libertem.corrections.coordinates v0.11.1
-    return np.eye(2)
+    return xp.eye(2)
 
 
-def _rotate(radians: 'Radians'):
+def _rotate(radians: 'Radians', xp=np):
     # From libertem.corrections.coordinates v0.11.1
     # https://en.wikipedia.org/wiki/Rotation_matrix
     # y, x instead of x, y
-    return np.array([
-        (np.cos(radians), np.sin(radians)),
-        (-np.sin(radians), np.cos(radians))
+    return xp.array([
+        (xp.cos(radians), xp.sin(radians)),
+        (-xp.sin(radians), xp.cos(radians))
     ])
 
 
-def _rotate_deg(degrees: 'Degrees'):
+def _rotate_deg(degrees: 'Degrees', xp=np):
     # From libertem.corrections.coordinates v0.11.1
-    return _rotate(np.pi / 180 * degrees)
+    return _rotate(xp.pi / 180 * degrees, xp)
 
 
 def get_pixel_coords(
-    rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation: 'Degrees' = 0.,
+    rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation: 'Degrees' = 0., xp=np
 ):
     if flip_y:
-        transform = _flip_y()
+        transform = _flip_y(xp)
     else:
-        transform = _identity()
+        transform = _identity(xp)
 
     # Transformations are applied right to left
-    transform = _rotate_deg(scan_rotation) @ transform
+    transform = _rotate_deg(xp.array(scan_rotation), xp) @ transform
 
-    y_transformed, x_transformed = (np.array((rays_y, rays_x)).T @ transform).T
+    y_transformed, x_transformed = (xp.array((rays_y, rays_x)).T @ transform).T
 
     sy, sx = shape
     pixel_coords_x = (x_transformed / pixel_size) + (sx // 2)
@@ -180,6 +222,15 @@ def initial_r(num_rays: int):
         dtype=np.float64,
     )  # x, theta_x, y, theta_y, 1
 
+    r[4, :] = 1.
+    return r
+
+
+def initial_r_rayset(num_gauss: int, xp=np):
+    r = xp.zeros(
+        (5, num_gauss * 5),
+        dtype=xp.float64,
+    )  # x, theta_x, y, theta_y, 1
     r[4, :] = 1.
     return r
 
@@ -225,7 +276,11 @@ def concentric_rings(
     div_angle = 2 * np.pi / points_per_ring
 
     params = np.stack((radii, div_angle), axis=0)
-    all_params = np.repeat(params, points_per_ring, axis=-1)
+
+    # Cupy gave an error here saying that points_per_ring must not be an array
+    repeats = points_per_ring.tolist()
+
+    all_params = np.repeat(params, repeats, axis=-1)
     multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
 
     all_radii = all_params[0, :]
@@ -237,15 +292,63 @@ def concentric_rings(
     )
 
 
-def random_coords(num: int, max_r: float, with_radii: bool = False):
-    # generate random points uniformly sampled in x/y
-    # within a centred circle of radius max_r
-    # return (y, x)
-    yx = np.random.uniform(
-        -max_r, max_r, size=(int(num * 1.28), 2)  # 4 / np.pi
+def fibonacci_spiral(
+    nb_samples: int,
+    radius: float,
+    alpha=2,
+    xp=np,
+):
+    # From https://github.com/matt77hias/fibpy/blob/master/src/sampling.py
+    # Fibonacci spiral sampling in a unit circle
+    # Alpha parameter determines smoothness of boundary - default of 2 means a smooth boundary
+    # 0 for a rough boundary.
+    # Returns a tuple of y, x coordinates of the samples
+
+    # nb_samples * np.random.random()
+
+    ga = xp.pi * (3.0 - xp.sqrt(5.0))
+
+    # Boundary points
+    np_boundary = xp.round(alpha * xp.sqrt(nb_samples))
+
+    # ss = np.zeros((nb_samples, 2))
+
+    ii = xp.arange(nb_samples)
+    rr = xp.where(
+        ii > nb_samples - (np_boundary + 1),
+        radius,
+        radius * xp.sqrt((ii + 0.5) / (nb_samples - 0.5 * (np_boundary + 1)))
     )
-    radii = np.sqrt((yx ** 2).sum(axis=1))
-    mask = radii < max_r
+    rr[0] = 0.
+    phi = ii * ga
+    y = rr * xp.sin(phi)
+    x = rr * xp.cos(phi)
+
+    # for i in range(nb_samples):
+    #     if i == 0:
+    #         r = 0
+    #     elif i > nb_samples - (np_boundary + 1):
+    #         r = radius
+    #     else:
+    #         r =
+    #     phi = ga * i
+    #     ss[j, :] = np.array([, ])
+
+    # y = ss[:, 0]
+    # x = ss[:, 1]
+
+    return y, x
+
+
+def random_coords(num: int, xp=np):
+    # generate random points uniformly sampled in x/y
+    # within a centred circle of radius 0.5
+    # return (y, x)
+    yx = xp.random.uniform(
+        -1, 1, size=(int(num * 1.28), 2)  # 4 / np.pi
+    )
+    radii = xp.sqrt((yx ** 2).sum(axis=1))
+    mask = radii < 1
     yx = yx[mask, :]
     return (
         yx[:, 0],
@@ -275,12 +378,62 @@ def circular_beam(
         Ray position & slope matrix
     '''
     if random:
-        y, x = random_coords(num_rays_approx, outer_radius)
+        y, x = random_coords(num_rays_approx) * outer_radius
     else:
         y, x = concentric_rings(num_rays_approx, outer_radius)
     r = initial_r(y.shape[0])
     r[0, :] = x
     r[2, :] = y
+    return r
+
+
+def gauss_beam_rayset(
+    num_gauss_approx: int,
+    outer_radius: float,
+    semi_angle: float,
+    wo: float,
+    wavelength: float,
+    xp=np,
+    random: bool = False,
+    centre_yx: Tuple[float, float] = (0., 0.),
+) -> NDArray:
+
+    div = wavelength / (np.pi * wo)
+    dPx = wo
+    dPy = wo
+    dHx = div
+    dHy = div
+
+    if random:
+        y, x = random_coords(num_gauss_approx, xp=xp)
+
+        dy, dx = y * semi_angle, x * semi_angle
+        y, x = y * outer_radius, x * outer_radius
+
+    else:
+        y, x = fibonacci_spiral(num_gauss_approx, outer_radius, xp=xp)
+        dy, dx = fibonacci_spiral(num_gauss_approx, semi_angle, xp=xp)
+
+    # this multiplies n_rays by 5
+    r = initial_r_rayset(y.shape[0], xp=xp)
+
+    # Central coords
+    r[0] = xp.repeat(x, 5) + centre_yx[1]
+    r[2] = xp.repeat(y, 5) + centre_yx[0]
+
+    # Semi Angle addition to each ray
+    r[1] += xp.repeat(dx, 5)
+    r[3] += xp.repeat(dy, 5)
+
+    # Offset in x
+    r[0, 1::5] += dPx
+    # Offset in y
+    r[2, 2::5] += dPy
+    # Slope in x from origin
+    r[1, 3::5] += dHx
+    # Slope in y from origin
+    r[3, 4::5] += dHy
+
     return r
 
 
@@ -306,7 +459,7 @@ def point_beam(
         Ray position & slope matrix
     '''
     if random:
-        y, x = random_coords(num_rays_approx, semiangle, with_radii=True)
+        y, x = random_coords(num_rays_approx) * semiangle
     else:
         y, x = concentric_rings(num_rays_approx, semiangle)
     r = initial_r(y.size)
@@ -321,3 +474,99 @@ def calculate_wavelength(phi_0: float):
 
 def calculate_phi_0(wavelength: float):
     return h ** 2 / (2 * wavelength ** 2 * abs(e) * m_e)
+
+
+def convert_slope_to_direction_cosines(dx, dy):
+    l_dir_cosine = dx / np.sqrt(1 + dx ** 2 + dy ** 2)
+    m_dir_cosine = dy / np.sqrt(1 + dx ** 2 + dy ** 2)
+    n_dir_cosine = 1 / np.sqrt(1 + dx ** 2 + dy ** 2)
+    return l_dir_cosine, m_dir_cosine, n_dir_cosine
+
+
+def calculate_direction_cosines(x0, y0, z0, x1, y1, z1, xp=np):
+    # Calculate the principal ray vector from ray coordinate on object to centre of lens
+    vx = x1 - x0
+    vy = y1 - y0
+    vz = z1 - z0
+    v_mag = np.sqrt(vx**2 + vy**2 + vz**2)
+
+    # And it's direction cosines
+    M = vy / v_mag
+    L = vx / v_mag
+    N = vz / v_mag
+
+    return L, M, N
+
+
+def zero_phase_1D(u, idx_x):
+    u_centre = u[idx_x]
+    phase_difference = 0 - np.angle(u_centre)
+    u = u * np.exp(1j * phase_difference)
+    return u
+
+
+def zero_phase(u, idx_x, idx_y):
+    u_centre = u[idx_x, idx_y]
+    phase_difference = 0 - np.angle(u_centre)
+    u = u * np.exp(1j * phase_difference)
+    return u
+
+
+def FresnelPropagator(E0, ps, lambda0, z):
+    """
+    Parameters:
+        E0 : 2D array
+            The initial complex field in the x-y source plane.
+        ps : float
+            Pixel size in the object plane (same units as wavelength).
+        lambda0 : float
+            Wavelength of the light (in the same units as ps).
+        z : float
+            Propagation distance (in the same units as ps).
+
+    Returns:
+        Ef : 2D array
+            The complex field after propagating a distance z.
+    """
+    n, m = E0.shape
+
+    fx = np.fft.fftfreq(n, ps)
+    fy = np.fft.fftfreq(m, ps)
+    Fx, Fy = np.meshgrid(fx, fy)
+
+    H = np.exp(-1j * (
+        2 * np.pi / lambda0) * z) * np.exp(
+        -1j * np.pi * lambda0 * z * (Fx**2 + Fy**2))
+
+    E0fft = np.fft.fft2(E0)
+    G = H * E0fft
+    Ef = np.fft.ifft2(G)
+
+    return Ef
+
+
+def lens_phase_factor(n, ps, lambda0, f):
+    """
+    Compute the phase factor introduced by an ideal lens.
+
+    Parameters:
+        n : int
+            Number of pixels (assuming square grid, n x n).
+        ps : float
+            Pixel size (in the same units as wavelength and focal length).
+        lambda0 : float
+            Wavelength of the light (in the same units as ps).
+        f : float
+            focal length of the lens (in the same units as ps).
+
+    Returns:
+        phase_factor : 2D array (n x n)
+            The phase factor to multiply with the field.
+    """
+    x = np.linspace(-n/2, n/2, n) * ps
+    y = np.linspace(-n/2, n/2, n) * ps
+    X, Y = np.meshgrid(x, y)
+
+    phase_factor = np.exp(-1j * np.pi * (X**2 + Y**2) / (lambda0 * f) + 1j * np.pi)
+
+    return phase_factor

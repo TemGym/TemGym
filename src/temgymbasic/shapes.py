@@ -1,7 +1,7 @@
-import numpy as np
 import triangle as tr
 from .utils import P2R, R2P
 from . import Radians
+import numpy as xp
 
 
 def rectangle(w, h, x, y, z, rotation: Radians = 0.):
@@ -24,7 +24,7 @@ def rectangle(w, h, x, y, z, rotation: Radians = 0.):
         vertices to draw a 3D model
     '''
 
-    vertices = np.array(
+    vertices = xp.array(
         [[x + w / 2, y + h / 2, z],
          [x - w / 2, y + h / 2, z],
          [x - w / 2, y - h / 2, z],
@@ -35,7 +35,7 @@ def rectangle(w, h, x, y, z, rotation: Radians = 0.):
         _vertices = P2R(mag, ang + rotation)
         vertices[:, 0] = _vertices.real
         vertices[:, 1] = _vertices.imag
-    faces = np.array(
+    faces = xp.array(
         [[0, 1, 2],
          [0, 2, 3]]
     )
@@ -64,17 +64,17 @@ def deflector(r, phi, z, n_arc):
         Points of a circle to represent the lens geometry
     '''
 
-    THETA = np.linspace(-phi, phi, n_arc, endpoint=True)
-    R = r*np.ones(np.size(THETA))
-    Z = z*np.ones(np.size(THETA))
+    THETA = xp.linspace(-phi, phi, n_arc, endpoint=True)
+    R = r*xp.ones(xp.size(THETA))
+    Z = z*xp.ones(xp.size(THETA))
 
-    points_arc_1 = np.array([R*np.cos(THETA), R*np.sin(THETA), Z])
-    points_arc_2 = np.array([-R*np.cos(THETA), -R*np.sin(-THETA), Z])
+    points_arc_1 = xp.array([R*xp.cos(THETA), R*xp.sin(THETA), Z])
+    points_arc_2 = xp.array([-R*xp.cos(THETA), -R*xp.sin(-THETA), Z])
 
     return points_arc_1, points_arc_2
 
 
-def lens(r, z, n_arc):
+def lens(r, z, n_arc, cxy=(0., 0.)):
     '''Wire model geometry of lens
 
     Parameters
@@ -91,11 +91,12 @@ def lens(r, z, n_arc):
     points_circle : ndarray
         Points of a circle to represent the lens geometry
     '''
-    THETA = np.linspace(0, 2*np.pi, n_arc, endpoint=True)
-    R = r*np.ones(np.size(THETA))
-    Z = z*np.ones(np.size(THETA))
+    THETA = xp.linspace(0, 2*xp.pi, n_arc, endpoint=True)
+    R = r*xp.ones(xp.size(THETA))
+    Z = z*xp.ones(xp.size(THETA))
+    cx, cy = cxy
 
-    points_circle = np.array([R*np.cos(THETA), R*np.sin(THETA), Z])
+    points_circle = xp.array([R*xp.cos(THETA) + cx, R*xp.sin(THETA) + cy, Z])
 
     return points_circle
 
@@ -119,17 +120,17 @@ def biprism(z, r, theta: Radians, offset):
     points : ndarray
         Points array of wire geometry
     '''
-    biprism_loc_v = np.array([offset * np.cos(theta), offset * np.sin(theta)])
-    biprism_v = np.array([-np.sin(theta), np.cos(theta)])
+    biprism_loc_v = xp.array([offset * xp.cos(theta), offset * xp.sin(theta)])
+    biprism_v = xp.array([-xp.sin(theta), xp.cos(theta)])
 
-    points = np.array([
+    points = xp.array([
             biprism_loc_v - r * biprism_v,
             biprism_loc_v + r * biprism_v,
     ])
 
-    return np.concatenate((
+    return xp.concatenate((
             points,
-            np.array((z, z)).reshape(2, 1)
+            xp.array((z, z)).reshape(2, 1)
         ),
         axis=1,
     )
@@ -161,14 +162,14 @@ def quadrupole(r, phi, z, n_arc):
         Points of fourth semi circle that represent the quadrupole geometry
     '''
 
-    THETA = np.linspace(-phi, phi, n_arc, endpoint=True)
-    R = r*np.ones(np.size(THETA))
-    Z = z*np.ones(np.size(THETA))
+    THETA = xp.linspace(-phi, phi, n_arc, endpoint=True)
+    R = r*xp.ones(xp.size(THETA))
+    Z = z*xp.ones(xp.size(THETA))
 
-    points_arc_1 = np.array([R*np.cos(THETA), R*np.sin(THETA), Z])
-    points_arc_2 = np.array([-R*np.cos(THETA), -R*np.sin(-THETA), Z])
-    points_arc_3 = np.array([R*np.cos(THETA+np.pi/2), R*np.sin(THETA+np.pi/2), Z])
-    points_arc_4 = np.array([-R*np.cos(THETA+np.pi/2), -R*np.sin(-THETA+np.pi/2), Z])
+    points_arc_1 = xp.array([R*xp.cos(THETA), R*xp.sin(THETA), Z])
+    points_arc_2 = xp.array([-R*xp.cos(THETA), -R*xp.sin(-THETA), Z])
+    points_arc_3 = xp.array([R*xp.cos(THETA+xp.pi/2), R*xp.sin(THETA+xp.pi/2), Z])
+    points_arc_4 = xp.array([-R*xp.cos(THETA+xp.pi/2), -R*xp.sin(-THETA+xp.pi/2), Z])
 
     return points_arc_1, points_arc_2, points_arc_3, points_arc_4
 
@@ -198,23 +199,23 @@ def aperture(r_i, r_o, n_i, n_o, x, y, z):
     verts3D : ndarray
         3D array of vertices that represent the aperture model
     '''
-    i_i = np.arange(n_i)
-    i_o = np.arange(n_o)
-    theta_i = i_i * 2 * np.pi / n_i
-    theta_o = i_o * 2 * np.pi / n_o
-    pts_inner = np.stack([x + np.cos(theta_i)*r_i, y + np.sin(theta_i)*r_i], axis=1)
-    pts_outer = np.stack([x + np.cos(theta_o)*r_o, y + np.sin(theta_o)*r_o], axis=1)
-    seg_i = np.stack([i_i, i_i + 1], axis=1) % n_i
-    seg_o = np.stack([i_o, i_o + 1], axis=1) % n_o
+    i_i = xp.arange(n_i)
+    i_o = xp.arange(n_o)
+    theta_i = i_i * 2 * xp.pi / n_i
+    theta_o = i_o * 2 * xp.pi / n_o
+    pts_inner = xp.stack([x + xp.cos(theta_i)*r_i, y + xp.sin(theta_i)*r_i], axis=1)
+    pts_outer = xp.stack([x + xp.cos(theta_o)*r_o, y + xp.sin(theta_o)*r_o], axis=1)
+    seg_i = xp.stack([i_i, i_i + 1], axis=1) % n_i
+    seg_o = xp.stack([i_o, i_o + 1], axis=1) % n_o
 
-    pts = np.vstack([pts_outer, pts_inner])
-    seg = np.vstack([seg_o, seg_i + seg_o.shape[0]])
+    pts = xp.vstack([pts_outer, pts_inner])
+    seg = xp.vstack([seg_o, seg_i + seg_o.shape[0]])
 
     aperture_dict = dict(vertices=pts, segments=seg, holes=[[x, y]])
     aperture_tri = tr.triangulate(aperture_dict, 'qpa0.05')
 
-    zverts = np.ones((aperture_tri['triangles'].shape[0], 3, 1), dtype=np.float32)*z
+    zverts = xp.ones((aperture_tri['triangles'].shape[0], 3, 1), dtype=xp.float32)*z
     verts_2D = aperture_tri['vertices'][aperture_tri['triangles']]
-    verts_3D = np.dstack([verts_2D, zverts])
+    verts_3D = xp.dstack([verts_2D, zverts])
 
     return verts_3D
