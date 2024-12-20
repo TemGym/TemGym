@@ -46,4 +46,3 @@ class MultisliceSample(Sample):
     def gui_wrapper():
         from .gui import SampleGUI
         return SampleGUI
-

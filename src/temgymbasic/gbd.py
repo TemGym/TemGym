@@ -256,7 +256,7 @@ def misalign_phase_plane_wave(r2, theta2m, k, xp=np):
     # l0 = r2 * theta2m ########!!!!!!!!#########
     # The r2 *theta2m part below is just using the small angle approximation to calculate
     # the l0 term in the paper "Collins integral for misalgned optical elements"
-    # See section 3.1 of that paper for more details. 
+    # See section 3.1 of that paper for more details.
     phi = (r2[:, :, 0]) * theta2m[:, 0] * (1 + ((theta2m[:, 0] ** 2) / 2))
     # phi_y = l0_y * (1 + ((theta2m[:, 1] ** 2) / 2))
     # phi = phi_x + phi_y
