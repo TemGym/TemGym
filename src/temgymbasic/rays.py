@@ -197,7 +197,7 @@ class Rays:
             location=self.z + distance,
             path_length=(
                 self.path_length
-                + 1.0 * distance * (1 + self.dx ** 2 + self.dy ** 2) ** 0.5
+                + 1.0 * distance #* (1 + self.dx ** 2 + self.dy ** 2) ** 0.5
             ),
         )
 
