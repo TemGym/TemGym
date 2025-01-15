@@ -3,7 +3,7 @@ from typing_extensions import TypeAlias
 
 import numpy as np
 from numpy.typing import NDArray
-from numba import njit
+# from numba import njit
 
 try:
     import cupy as cp
@@ -235,7 +235,7 @@ def initial_r_rayset(num_gauss: int, xp=np):
     return r
 
 
-@njit
+# @njit
 def multi_cumsum_inplace(values, partitions, start):
     part_idx = 0
     current_part_len = partitions[part_idx]
@@ -418,8 +418,8 @@ def gauss_beam_rayset(
     r = initial_r_rayset(y.shape[0], xp=xp)
 
     # Central coords
-    r[0] = xp.repeat(x, 5) + centre_yx[1]
-    r[2] = xp.repeat(y, 5) + centre_yx[0]
+    r[0] = xp.repeat(x, 5)# + centre_yx[1]
+    r[2] = xp.repeat(y, 5)# + centre_yx[0]
 
     # Semi Angle addition to each ray
     r[1] += xp.repeat(dx, 5)
@@ -534,7 +534,7 @@ def FresnelPropagator(E0, ps, lambda0, z):
     fy = np.fft.fftfreq(m, ps)
     Fx, Fy = np.meshgrid(fx, fy)
 
-    H = np.exp(-1j * (
+    H = np.exp(1j * (
         2 * np.pi / lambda0) * z) * np.exp(
         -1j * np.pi * lambda0 * z * (Fx**2 + Fy**2))
 
