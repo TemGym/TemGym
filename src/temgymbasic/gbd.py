@@ -132,11 +132,9 @@ def calculate_Qpinv(A, B, C, D, Qinv, xp=np):
 
     return NUM @ DEN
 
-
 def gaussian_amplitude(Qinv, A, B, xp=np):
     den = A + B @ Qinv
     return 1 / xp.sqrt(xp.linalg.det(den))
-
 
 def propagate_misaligned_gaussian(
     Q1_inv,

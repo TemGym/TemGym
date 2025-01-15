@@ -56,34 +56,34 @@ class MyDockLabel(DockLabel):
             border = '#444'
 
         if self.orientation == 'vertical':
-            self.vStyle = """DockLabel {
-                background-color : %s;
-                color : %s;
+            self.vStyle = """DockLabel {{
+                background-color : {};
+                color : {};
                 border-top-right-radius: 0px;
-                border-top-left-radius: %s;
+                border-top-left-radius: {};
                 border-bottom-right-radius: 0px;
-                border-bottom-left-radius: %s;
+                border-bottom-left-radius: {};
                 border-width: 0px;
-                border-right: 2px solid %s;
+                border-right: 2px solid {};
                 padding-top: 3px;
                 padding-bottom: 3px;
-                font-size: %s;
-            }""" % (bg, fg, r, r, border, self.fontSize)
+                font-size: {};
+            }}""".format(bg, fg, r, r, border, self.fontSize)
             self.setStyleSheet(self.vStyle)
         else:
-            self.hStyle = """DockLabel {
-                background-color : %s;
-                color : %s;
-                border-top-right-radius: %s;
-                border-top-left-radius: %s;
+            self.hStyle = """DockLabel {{
+                background-color : {};
+                color : {};
+                border-top-right-radius: {};
+                border-top-left-radius: {};
                 border-bottom-right-radius: 0px;
                 border-bottom-left-radius: 0px;
                 border-width: 0px;
-                border-bottom: 2px solid %s;
+                border-bottom: 2px solid {};
                 padding-left: 3px;
                 padding-right: 3px;
-                font-size: %s;
-            }""" % (bg, fg, r, r, border, self.fontSize)
+                font-size: {};
+            }}""".format(bg, fg, r, r, border, self.fontSize)
             self.setStyleSheet(self.hStyle)
 
 

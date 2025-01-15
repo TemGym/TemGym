@@ -23,15 +23,15 @@ def aber(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     Parameters:
     r_aperture (float or ndarray): Radial coordinate at the aperture.
     r_object (float or ndarray): Radial coordinate at the object.
-    psi (float or ndarray): Angular coordinate at the aperture - equivalent to angle of ray at aperture - angle of ray at object. See Hawkes principles of electron 
-    optics vol 1 2017, page 367, eq 24.34. We have made some extra modifications to include the radius of the reference sphere. 
+    psi (float or ndarray): Angular coordinate at the aperture - equivalent to angle of ray at aperture - angle of ray at object. See Hawkes principles of electron
+    optics vol 1 2017, page 367, eq 24.34. We have made some extra modifications to include the radius of the reference sphere.
     coeffs (ndarray): [Aberration coefficients.
-    
+
     Returns:
     float or ndarray: Optical path length as given by the aberration function.
     """
     B, F, C, D, E = coeffs
-    
+
     B = B
     F = F
     C = C
@@ -56,23 +56,23 @@ def daber_dr_a(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     Parameters:
     r_aperture (float or ndarray): Radial coordinate at the aperture.
     r_object (float or ndarray): Radial coordinate at the object.
-    psi (float or ndarray): Angular coordinate at the aperture - equivalent to angle of ray at aperture - angle of ray at object. See Hawkes principles of electron 
-    optics vol 1 2017, page 367, eq 24.34. We have made some extra modifications to include the radius of the reference sphere. 
+    psi (float or ndarray): Angular coordinate at the aperture - equivalent to angle of ray at aperture - angle of ray at object. See Hawkes principles of electron
+    optics vol 1 2017, page 367, eq 24.34. We have made some extra modifications to include the radius of the reference sphere.
     coeffs (ndarray): [Aberration coefficients.
     xp (module): Numerical library, default is numpy.
-    
+
     Returns:
     float or ndarray: Derivative of aberration functon with respect to r_aperture.
     """
     B, F, C, D, E = coeffs
-    
+
     B = B * (M ** 4) / (R ** 4)
     F = F * (M ** 3) / (R ** 3)
     C = C * (M ** 2) / (R ** 2)
     D = D * (M ** 2) / (R ** 2)
     E = E * M / R
 
-    
+
     dSpherical = B * r_aperture ** 3
     dComa = 3 * F * r_aperture ** 2 * r_object * xp.cos(psi)
     dAstig = C * r_aperture * r_object ** 2 * xp.cos(psi) ** 2
@@ -91,15 +91,15 @@ def daber_dpsi(r_aperture, r_object, psi, coeffs, R, M, xp=np):
     Parameters:
     r_aperture (float or ndarray): Radial coordinate at the aperture.
     r_object (float or ndarray): Radial coordinate at the object.
-    psi (float or ndarray): Angular coordinate at the aperture - equivalent to angle of ray at aperture - angle of ray at object. See Hawkes principles of electron 
-    optics vol 1 2017, page 367, eq 24.34. We have made some extra modifications to include the radius of the reference sphere. 
+    psi (float or ndarray): Angular coordinate at the aperture - equivalent to angle of ray at aperture - angle of ray at object. See Hawkes principles of electron
+    optics vol 1 2017, page 367, eq 24.34. We have made some extra modifications to include the radius of the reference sphere.
     coeffs (ndarray): [Aberration coefficients.
     xp (module): Numerical library, default is numpy.
-    
+
     Returns:
     float or ndarray: Derivative of aberration functon with respect to psi
     """
-    
+
     B, F, C, D, E = coeffs
 
     B = B * (M ** 4) / (R ** 4)
@@ -176,7 +176,7 @@ def opd(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
 def aber_x_aber_y(x_a, y_a, x_o, y_o, coeffs, R, M, xp=np):
     B, F, C, D, E = coeffs
 
-    dx = -R*(B*x_a*(x_a**2 + y_a**2)  # Spherical 
+    dx = -R*(B*x_a*(x_a**2 + y_a**2)  # Spherical
              + 2*F*x_a*(x_a*x_o + y_a*y_o) + F*x_o*(x_a**2 + y_a**2)  # Coma
              + C*x_o*(x_a*x_o + y_a*y_o)  # Astigmatism
              + D*x_a*(x_o**2 + y_o**2)  # Field Curvature
@@ -241,7 +241,7 @@ def dopd_dy(x_a, y_a, x_o, y_o, psi, coeffs, R, M, xp=np):
     _, dr_ady = grad_r_a(x_a, y_a, xp=xp)
     _, dpsi_dy = grad_psi(x_a, y_a, xp=xp)
     dW_dy = (dW_dr_a * dr_ady + dW_dpsi * dpsi_dy)
-    
+
     return dW_dy
 
 

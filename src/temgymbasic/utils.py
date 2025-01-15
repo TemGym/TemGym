@@ -568,5 +568,3 @@ def lens_phase_factor(n, ps, lambda0, f):
     X, Y = np.meshgrid(x, y)
 
     phase_factor = np.exp(-1j * np.pi * (X**2 + Y**2) / (lambda0 * f) + 1j * np.pi)
-
-    return phase_factor
