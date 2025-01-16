@@ -1,8 +1,10 @@
 from typing import (
-    Tuple, Optional, Union, TYPE_CHECKING
+    Tuple, Optional, Union, NamedTuple, TYPE_CHECKING
 )
 from typing_extensions import Self
 from dataclasses import dataclass, asdict
+
+import jax.numpy as jnp
 
 from numpy.typing import NDArray
 
@@ -25,7 +27,40 @@ if TYPE_CHECKING:
 LocationT = Union[float, 'Component', Tuple['Component', ...]]
 
 
-@dataclass
+class Ray(NamedTuple):
+    matrix: jnp.ndarray  # Shape (5,) vector [x, y, dx, dy, 1]
+    z: float
+    amplitude: float
+    pathlength: float
+    wavelength: float
+    mask: Optional[jnp.ndarray] = None
+    blocked: Optional[jnp.ndarray] = None
+
+class GaussianRay(Ray):
+    w0x: float = 1.0
+    Rx: float = 0.0
+    w0y: float = 1.0
+    Ry: float = 0.0
+
+
+def propagate(distance, ray: Ray):
+    x, y, dx, dy = ray.matrix[:4]
+
+    new_x = x + dx * distance
+    new_y = y + dy * distance
+
+    pathlength = ray.pathlength + distance * jnp.sqrt(1 + dx ** 2 + dy ** 2)
+    new_matrix = jnp.array([new_x, new_y, dx, dy, 1.])
+
+    return Ray(
+        z=ray.z + distance,
+        matrix=new_matrix,
+        amplitude=ray.amplitude,
+        pathlength=pathlength,
+        wavelength=ray.wavelength
+    )
+
+
 class Rays:
     data: NDArray
     location: LocationT

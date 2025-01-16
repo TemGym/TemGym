@@ -13,6 +13,15 @@ from .rays import Rays
 from .utils import pairwise
 import numpy as np
 
+def RayTrace(components, ray):
+    for component in components:
+        component_type = component['type']
+        component_z = components['z']
+
+        propagate = 
+
+
+
 
 class Model:
     def __init__(
