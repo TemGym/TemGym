@@ -13,12 +13,14 @@ from .rays import Rays
 from .utils import pairwise
 import numpy as np
 
-def RayTrace(components, ray):
-    for component in components:
-        component_type = component['type']
-        component_z = components['z']
+def run_model(ray, model):
+    for component in model:
 
-        propagate = 
+        distance = component.z - ray.z
+        ray = propagate(distance, ray)
+        ray = component.step(ray)
+
+    return ray.matrix
 
 
 

@@ -360,6 +360,7 @@ def circular_beam(
     num_rays_approx: int,
     outer_radius: float,
     random: bool = False,
+    centre_yx = (0., 0.),
 ) -> NDArray:
     '''
     Generates a circular parallel initial beam
@@ -382,8 +383,8 @@ def circular_beam(
     else:
         y, x = concentric_rings(num_rays_approx, outer_radius)
     r = initial_r(y.shape[0])
-    r[0, :] = x
-    r[2, :] = y
+    r[0, :] = x + centre_yx[1]
+    r[1, :] = y + centre_yx[0]
     return r
 
 
@@ -441,6 +442,7 @@ def point_beam(
     num_rays_approx: int,
     semiangle: float,
     random: bool = False,
+    centre_yx = (0., 0.),
 ) -> NDArray:
     '''
     Generates a diverging point source initial beam
@@ -459,12 +461,12 @@ def point_beam(
         Ray position & slope matrix
     '''
     if random:
-        y, x = random_coords(num_rays_approx) * semiangle
+        dy, dx = random_coords(num_rays_approx) * semiangle
     else:
-        y, x = concentric_rings(num_rays_approx, semiangle)
-    r = initial_r(y.size)
-    r[1, :] = y
-    r[3, :] = x
+        dy, dx = concentric_rings(num_rays_approx, semiangle)
+    r = initial_r(dy.size)
+    r[2, :] = dx
+    r[3, :] = dy
     return r
 
 
