@@ -76,23 +76,6 @@ def diagonal_vec_mat_mul_linear(a, M, b, xp=np):
 
     return Mxx_ax[:, np.newaxis] * bx + Myy_ay[:, np.newaxis] * by
 
-
-def calculate_Qinv(z_r, num_rays, xp=np):
-
-    qinv = 1 / (-1j * z_r)
-    try:
-        dtype = qinv.dtype
-    except AttributeError:
-        dtype = complex
-    Qinv = xp.zeros((num_rays, 2, 2), dtype=dtype)
-
-    # Fill the diagonal elements
-    Qinv[:, 0, 0] = qinv
-    Qinv[:, 1, 1] = qinv
-
-    return Qinv
-
-
 # Rayleigh Range
 def R(z, z_r):
     return z * (1 + (z_r / z) ** 2)
