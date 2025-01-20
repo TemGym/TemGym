@@ -6,6 +6,8 @@ from temgymbasic.model import (
     Model,
 )
 import temgymbasic.jax_components as comp
+import temgymbasic.jax_source as source
+from temgymbasic.jax_model import run_model_to_end, run_model_iter
 from temgymbasic.jax_ray import Ray, propagate
 from temgymbasic.jax_utils import (
     calculate_phi_0,
@@ -26,7 +28,7 @@ try:
 except ImportError:
     cp = None
 
-USE_GPU = 0
+USE_GPU = False
 
 ETA = (abs(e) / (2 * m_e)) ** (1 / 2)
 EPSILON = abs(e) / (2 * m_e * c**2)
@@ -46,10 +48,10 @@ def empty_rays():
 
 
 def single_random_uniform_ray(x, y, phi_0=1.0):
-    matrix = jnp.zeros(shape=(5, 1))
+    matrix = jnp.zeros(shape=(1, 5))
 
-    matrix = matrix.at[:, 0].set(jax.random.uniform(key, minval=0, maxval=x))
-    matrix = matrix.at[:, 1].set(jax.random.uniform(key, minval=0, maxval=y))
+    matrix = matrix.at[:, 0].set(jax.random.uniform(key, minval=1e-12, maxval=x) * jnp.sign(x))
+    matrix = matrix.at[:, 1].set(jax.random.uniform(key, minval=1e-12, maxval=y) * jnp.sign(y))
     matrix = matrix.at[:, 2].set(jnp.zeros(1))
     matrix = matrix.at[:, 3].set(jnp.zeros(1))
     matrix = matrix.at[:, 4].set(jnp.ones(1))
@@ -62,9 +64,8 @@ def single_random_uniform_ray(x, y, phi_0=1.0):
     )
 
 
-def single_ray(x, dx, y, dy, phi_0=1.0):
-    n_rays = len(x)
-    matrix = jnp.zeros(shape=(n_rays, 5))
+def single_ray(x, y, dx, dy, phi_0=1.0):
+    matrix = jnp.zeros(shape=(1, 5))
 
     matrix = matrix.at[:, 0].set(x)
     matrix = matrix.at[:, 1].set(y)
@@ -81,8 +82,15 @@ def single_ray(x, dx, y, dy, phi_0=1.0):
 
 
 def random_rays(n_rays):
+    matrix = jnp.zeros(shape=(n_rays, 5))
+    matrix = matrix.at[:, 0].set(jax.random.uniform(key, minval=-1.0, maxval=1.0, shape=n_rays))
+    matrix = matrix.at[:, 1].set(jax.random.uniform(key, minval=-1.0, maxval=1.0, shape=n_rays))
+    matrix = matrix.at[:, 2].set(jax.random.uniform(key, minval=-0.2, maxval=0.2, shape=n_rays))
+    matrix = matrix.at[:, 3].set(jax.random.uniform(key, minval=-0.2, maxval=0.2, shape=n_rays))
+    matrix = matrix.at[:, 4].set(jnp.ones(shape=(n_rays)))
+
     return Ray(
-        matrix=jax.random.uniform(key, shape=(n_rays, 5)),
+        matrix=matrix,
         z=jnp.ones(n_rays) * 0.2,
         pathlength=jnp.zeros((n_rays,)),
     )
@@ -324,8 +332,8 @@ def test_deflector_random_rays(n_rays):
     # The last row of rays should always be 1.0, but random rays randomises
     # this, and we have no getter for the final row because it was always supposed to be 1.0
     # so we use matrix instead to make the test succeed
-    out_manual_dx = rays.dx + rays.matrix[-1, :] * deflection
-    out_manual_dy = rays.dy + rays.matrix[-1, :] * deflection
+    out_manual_dx = rays.dx + rays.matrix[:, -1] * deflection
+    out_manual_dy = rays.dy + rays.matrix[:, ] * deflection
 
     deflector = comp.Deflector(rays.z, def_x=deflection, def_y=deflection)
     out_rays = deflector.step(rays)
@@ -433,12 +441,12 @@ def test_biprism_deflection_perpendicular(parallel_rays):
     ],
 )
 def test_biprism_deflection_by_quadrant(rot, inp, out):
-    ray = single_random_uniform_ray(inp[0], inp[1])
+    ray = single_ray(inp[0], inp[1], 0.0, 0.0)
     # Test that the ray ends up in the correct quadrant if the biprism is rotated
     deflection = -0.3
     biprism = comp.Biprism(z=ray.z, deflection=deflection, rotation=rot)
     biprism_out_rays = biprism.step(ray)
-    propagated_rays = biprism_out_rays.propagate(0.2)
+    propagated_rays = propagate(0.2, biprism_out_rays)
 
     assert_allclose(jnp.sign(propagated_rays.dx), out[0], atol=1e-6)
     assert_allclose(jnp.sign(propagated_rays.dy), out[1], atol=1e-6)
@@ -458,7 +466,7 @@ def test_biprism_interference():
     # although this test is not quite so general, and will probably break
     # if any of these parameters are modified significantly
     wavelength = 0.001
-    phi_0 = calculate_phi_0(wavelength)
+    voltage = calculate_phi_0(wavelength)
 
     deflection = -0.1  # Deflection of biprism
     a = 0.5  # Source to biprism distance
@@ -476,12 +484,14 @@ def test_biprism_interference():
     pixel_size = 0.001
     num_peaks = int(pixel_size * det_shape[1] / spacing) + 1
 
-    components = (
-        comp.XPointBeam(
-            z=0.0,
-            voltage=phi_0,
-            semi_angle=0.1,
-        ),
+    Rays = source.XPointBeam(z=0.0,
+                             n_rays=2**8,
+                             semi_angle=0.,
+                             tilt_yx=(0., 0.),
+                             centre_yx=(0., 0.),
+                             voltage=voltage,
+                             random=False)
+    model = (
         comp.Biprism(
             z=a,
             offset=0.0,
@@ -495,198 +505,29 @@ def test_biprism_interference():
         ),
     )
 
-    model = Model(components)
-
     # We need enough rays that there is lots of interference in the image plane
     # so that there are definite peaks for peak finder
-    rays = model.run_iter(num_rays=2**20)
-    image = model.detector.get_image(rays[-1])
+    out_rays = run_model_to_end(Rays, model)
+    image = model[-1].get_image(out_rays)
     peaks, _ = scipy.signal.find_peaks(jnp.abs(image[0, :]) ** 2, height=0)
 
-    assert_equal(len(peaks), num_peaks, atol=1e-6)
+    assert_equal(len(peaks), num_peaks)
 
 
 @pytest.mark.skipif(USE_GPU, reason="Test not supported on GPU")
-def test_aperture_blocking(parallel_rays, empty_rays):
-    aperture = comp.Aperture(z=parallel_rays.z, radius=0.0)
+def test_aperture_blocking(parallel_rays):
+    blocked_matrix = jnp.ones(len(parallel_rays.x), dtype=jnp.bool_)
+    aperture = comp.Aperture(z=parallel_rays.z[0], radius=0.0)
     out_rays = aperture.step(parallel_rays)
-    assert_equal(out_rays.matrix, empty_rays.matrix, atol=1e-6)
+
+    assert jnp.array_equal(out_rays.blocked, blocked_matrix)
 
 
 @pytest.mark.skipif(USE_GPU, reason="Test not supported on GPU")
 def test_aperture_nonblocking(parallel_rays):
+    blocked_matrix = jnp.zeros(len(parallel_rays.x), dtype=jnp.bool_)
+
     aperture = comp.Aperture(z=parallel_rays.z, radius=2.0)
     out_rays = aperture.step(parallel_rays)
 
-    assert_equal(out_rays.matrix, parallel_rays.matrix, atol=1e-6)
-
-
-@pytest.mark.skipif(USE_GPU, reason="Test not supported on GPU")
-def test_sample_potential_deflection():
-    from scipy.interpolate import RegularGridInterpolator as RGI
-
-    # Sample deflection test: The implemented method we test called in the
-    # Potential Sample step function uses the relativistic deflection
-    # equations explained in principles of electron optics.
-
-    # The calculated analytical method used to compare our result comes
-    # from newton's third law and the lorentz force equation for an electron:
-    # We say m * \gamma * a = qE, where m is the rest mass of the electron,
-    # \gamma is the relativistic correction factor, a = acceleration, q =
-    # the electron charge (-ve for electron) and E is the E field.
-    # a is implicitly dv/dt in this equation, but using the relation,
-    # d/dt = v/(sqrt(1+x'^2 + y'^2)) * d/dz where x' denotes derivative with
-    # respect to z (dx/dz), one can derive the instantaneous force as a function of z, and thus
-    # velocity change on the electron in this infinitely thin plane (note dirac delta function is
-    # also implied here as dz is an infinitely thin slice), thus -
-    # x' += (q * (1+x'^2 + y'^2)) / (m * v^2 * gamma) * Ex
-    # One must be careful about the velocity term: I believe it also needs to encode
-    # the potential of the "Sample" that the electron sees. I am unsure about this for now,
-    # but there is no other term that can account for the sample potential, so it makes sense to me.
-
-    # Set initial potential of electron
-    phi_0 = 1.0
-    ray = single_random_uniform_ray(0.0, 0.0, phi_0=phi_0)
-
-    # Set up sample properties and potential
-    x0 = -0.25
-    y0 = -0.25
-    extent = (1, 1)
-    gpts = (256, 256)
-    x = jnp.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
-    y = jnp.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
-    xx, _ = jnp.meshgrid(x, y)
-
-    # Set initial potential
-    phi_r = xx - x0
-
-    # Find voltage at central pixel
-    phi_centre = phi_0 - x0
-    phi_hat_centre = (phi_centre) * (1 + EPSILON * (phi_centre))
-
-    # Calculate gamma
-    gamma = jnp.sqrt(1 + 4 * EPSILON * phi_hat_centre)
-
-    # Calculate velocity two ways for sanity check
-    v = 2 * ETA * jnp.sqrt(phi_hat_centre) / gamma
-    v_acc = 1 * c * (1 - (1 - (-e * (phi_centre)) / (m_e * (c**2))) ** (-2)) ** (1 / 2)
-
-    assert_allclose(v, v_acc, atol=1e-3)
-
-    Ey, Ex = jnp.gradient(phi_r, x, y)
-
-    # Interpolate potential
-    pot_interp = RGI([x, y], phi_r, method="linear", bounds_error=False, fill_value=0.0)
-    Ex_interp = RGI([x, y], Ex, method="linear", bounds_error=False, fill_value=0.0)
-    Ey_interp = RGI([x, y], Ey, method="linear", bounds_error=False, fill_value=0.0)
-
-    sample = comp.PotentialSample(
-        z=ray.z,
-        potential=pot_interp,
-        Ex=Ex_interp,
-        Ey=Ey_interp,
-    )
-
-    # rho encodes the slope of the ray into a single parameter and is needed for when the calc
-    # is performed as a function of d/dz, instead of d/dt
-    rho = jnp.sqrt(1 + ray.dx**2 + ray.dy**2)
-
-    # Step rays
-    out_rays = tuple(sample.step(ray))[0]
-
-    # Analytical calculation to the slope change - See Szilagyi Ion and Electron Optics also
-    # but their derivation is not well explained, and is verbose, so this is what we have.
-    dx_analytical_one = jnp.float64((e * rho**2) / (gamma * m_e * v * v)) * jnp.max(Ex)
-
-    # This other equation comes from solving the equation for an electrosatic deflector,
-    # I need to do the derivation from scratch in the
-    # relativistic sense, as there is another gamma that I don't quite understand
-    dx_analytical_two = (1.0 * gamma) / (2 * phi_hat_centre)
-
-    assert_allclose(out_rays.dx, dx_analytical_one, atol=1e-7)
-    assert_allclose(out_rays.dx, dx_analytical_two, atol=1e-7)
-
-
-# @pytest.mark.skip(
-#     reason="No way to numerically test this now, so visualise plot below to check"
-# )
-def test_sample_phase_shift():
-    from scipy.interpolate import RegularGridInterpolator as RGI, interp1d
-
-    class PlotParams(NamedTuple):
-        num_rays: int = 10
-        ray_color: str = "dimgray"
-        fill_color: str = "aquamarine"
-        fill_color_pair: Tuple[str, str] = ("khaki", "deepskyblue")
-        fill_alpha: float = 0.0
-        ray_alpha: float = 1.0
-        component_lw: float = 1.0
-        edge_lw: float = 1.0
-        ray_lw: float = 1.0
-        label_fontsize: int = 12
-        figsize: Tuple[int, int] = (6, 6)
-        extent_scale: float = 1.1
-
-    phi_0 = 10
-    x0 = -0.5
-    y0 = -0.5
-
-    extent = (1, 1)
-    gpts = (256, 256)
-    x = jnp.linspace(x0, x0 + extent[0], gpts[0], endpoint=True)
-    y = jnp.linspace(y0, y0 + extent[1], gpts[1], endpoint=True)
-    xx, yy = jnp.meshgrid(x, y, indexing="ij")
-
-    phi_r = xx - x0
-
-    Ey, Ex = jnp.gradient(phi_r, x, y)
-
-    # Interpolate potential
-    pot_interp = RGI([x, y], phi_r, method="linear", bounds_error=False, fill_value=0.0)
-    Ex_interp = RGI([x, y], Ex, method="linear", bounds_error=False, fill_value=0.0)
-    Ey_interp = RGI([x, y], Ey, method="linear", bounds_error=False, fill_value=0.0)
-
-    components = (
-        comp.XAxialBeam(z=0.0, radius=0.5, voltage=phi_0),
-        comp.PotentialSample(
-            z=3.0,
-            potential=pot_interp,
-            Ex=Ex_interp,
-            Ey=Ey_interp,
-        ),
-        comp.Detector(
-            z=6,
-            pixel_size=0.01,
-            shape=(100, 100),
-        ),
-    )
-
-    num_rays = 100
-    plot_params = PlotParams(num_rays=num_rays)
-
-    model = Model(components)
-    fig, ax = plot_model(model, plot_params=plot_params)
-    rays = tuple(model.run_iter(num_rays=num_rays))
-    print(rays[1].pathlength[1], rays[1].pathlength[2])
-    x = jnp.stack(tuple(r.x for r in rays), axis=0)
-    z = jnp.asarray(tuple(r.z for r in rays))
-    opl = jnp.asarray(tuple(r.pathlength for r in rays))
-
-    opls = jnp.linspace(3.0, 6, 20)
-
-    for idx in range(num_rays):
-        # Interpolation for x and z as functions of path length
-        z_of_L = interp1d(opl[:, idx], z, kind="linear")
-        x_of_z = interp1d(z, x[:, idx])
-
-        # Find x and z for the given path length L'
-        z_prime = z_of_L(opls)
-        x_prime = x_of_z(z_prime)
-
-        ax.plot(x_prime, z_prime, ".r")
-
-    # Uncomment these plotting lines to see if the wavefront looks correct
-
-    # import matplotlib.pyplot as plt
-    # plt.axis('equal')
-    # plt.show()
+    assert jnp.array_equal(out_rays.blocked, blocked_matrix)

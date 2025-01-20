@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 LocationT = Union[float, 'Component', Tuple['Component', ...]]
 
-
+@dataclass
 class Rays:
     data: NDArray
     location: LocationT

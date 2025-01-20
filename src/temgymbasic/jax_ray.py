@@ -63,7 +63,7 @@ def propagate(distance, ray: Ray):
     )
 
 
-def on_grid(
+def ray_on_grid(
     ray,
     shape: Tuple[int, int],
     pixel_size: 'PositiveFloat',
@@ -80,3 +80,9 @@ def on_grid(
         flip_y=flip_y,
         scan_rotation=rotation,
     )
+
+    if as_int:
+        xx = jnp.round(xx).astype(jnp.int32)
+        yy = jnp.round(yy).astype(jnp.int32)
+
+    return yy, xx
