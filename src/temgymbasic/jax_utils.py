@@ -146,9 +146,9 @@ def get_pixel_coords(
     rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation: 'Degrees' = 0.
 ):
     if flip_y:
-        transform = _flip_y(jnp)
+        transform = _flip_y()
     else:
-        transform = _identity(jnp)
+        transform = _identity()
 
     # Transformations are applied right to left
     transform = _rotate_deg(jnp.array(scan_rotation), jnp) @ transform
@@ -162,14 +162,15 @@ def get_pixel_coords(
     return (pixel_coords_x, pixel_coords_y)
 
 
-def initial_r(num_rays: int):
-    r = jnp.zeros(
-        (5, num_rays),
+def initial_matrix(n_rays: int):
+    matrix = jnp.zeros(
+        (n_rays, 5),
         dtype=jnp.float64,
-    )  # x, theta_x, y, theta_y, 1
+    )  # x, y, theta_x, theta_y, 1
 
-    r[4, :] = 1.
-    return r
+    matrix = matrix.at[:, 4].set(jnp.ones(n_rays))
+
+    return matrix
 
 
 @jax.jit
@@ -264,9 +265,9 @@ def random_coords(num: int, jnp=jnp):
     # generate random points uniformly sampled in x/y
     # within a centred circle of radius 0.5
     # return (y, x)
-    yx = jnp.random.uniform(
-        -1, 1, size=(int(num * 1.28), 2)  # 4 / jnp.pi
-    )
+    key = jax.random.PRNGKey(1)
+
+    yx = jax.random.uniform(key, -1, 1, size=(int(num * 1.28), 2))  # 1.28 =  4 / np.pi
     radii = jnp.sqrt((yx ** 2).sum(axis=1))
     mask = radii < 1
     yx = yx[mask, :]
@@ -274,70 +275,6 @@ def random_coords(num: int, jnp=jnp):
         yx[:, 0],
         yx[:, 1],
     )
-
-
-def circular_beam(
-    num_rays_approx: int,
-    outer_radius: float,
-    random: bool = False,
-    centre_yx: Tuple[float, float] = (0., 0.),
-) -> NDArray:
-    '''
-    Generates a circular parallel initial beam
-    in approximately equally-filled concentric rings
-
-    Parameters
-    ----------
-    num_rays_approx : int
-        The approximate number of rays
-    outer_radius : float
-        Outer radius of the circular beam
-
-    Returns
-    -------
-    r : ndarray
-        Ray position & slope matrix
-    '''
-    if random:
-        y, x = random_coords(num_rays_approx) * outer_radius
-    else:
-        y, x = concentric_rings(num_rays_approx, outer_radius)
-    r = initial_r(y.shape[0])
-    r[0, :] = x + centre_yx[1]
-    r[1, :] = y + centre_yx[0]
-    return r
-
-
-def point_beam(
-    num_rays_approx: int,
-    semiangle: float,
-    random: bool = False,
-    centre_yx: Tuple[float, float] = (0., 0.),
-) -> NDArray:
-    '''
-    Generates a diverging point source initial beam
-    in approximately equally-filled conic shells
-
-    Parameters
-    ----------
-    num_rays_approx : int
-        The approximate number of rays
-    semiangle : float
-        The maximum semiangle of the beam
-
-    Returns
-    -------
-    r : ndarray
-        Ray position & slope matrix
-    '''
-    if random:
-        dy, dx = random_coords(num_rays_approx) * semiangle
-    else:
-        dy, dx = concentric_rings(num_rays_approx, semiangle)
-    r = initial_r(dy.size)
-    r[2, :] = dx
-    r[3, :] = dy
-    return r
 
 
 def calculate_wavelength(phi_0: float):

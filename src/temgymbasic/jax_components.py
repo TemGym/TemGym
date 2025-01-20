@@ -5,7 +5,7 @@ from typing import (
     Tuple, Optional,  Sequence, Union
 )
 
-from .jax_ray import Ray, propagate, GaussianRay
+from .jax_ray import Ray, propagate, GaussianRay, ray_on_grid
 from . import UsageError
 from .jax_utils import R2P, P2R
 from . import (
@@ -151,8 +151,8 @@ class Biprism:
 
         # Using .squeeze is a crappy hack for now because the
         # dimensions wont match with jax without it.
-        new_dx = (dx + xdeflection_mag * deflection).squeeze()
-        new_dy = (dy + ydeflection_mag * deflection).squeeze()
+        new_dx = (dx + xdeflection_mag * deflection)
+        new_dy = (dy + ydeflection_mag * deflection)
 
         pathlength = ray.pathlength + (
             xdeflection_mag * deflection * pos_x + ydeflection_mag * deflection * pos_y
@@ -215,7 +215,8 @@ class Detector:
         self.center = coord.imag, coord.real
 
     def on_grid(self, ray: Ray, as_int: bool = True) -> NDArray:
-        return ray.on_grid(
+        return ray_on_grid(
+            ray,
             shape=self.shape,
             pixel_size=self.pixel_size,
             flip_y=self.flip_y,
