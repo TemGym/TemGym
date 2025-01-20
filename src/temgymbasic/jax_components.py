@@ -1,6 +1,6 @@
 import jax_dataclasses as jdc
 import jax.numpy as jnp
-from jax.typing import array as NDArray
+from jax.numpy import ndarray as NDArray
 from typing import (
     Tuple, Optional,  Sequence, Union
 )
@@ -24,14 +24,14 @@ class Lens:
     def step(self, ray: Ray):
         f = self.focal_length
 
-        x, y, dx, dy = ray.matrix[:4]
+        x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
         new_dx = -x / f + dx
         new_dy = -y / f + dy
 
         pathlength = ray.pathlength - (x ** 2 + y ** 2) / (2 * f)
 
-        new_matrix = jnp.array([x, y, new_dx, new_dy, 1.])
+        new_matrix = jnp.array([x, y, new_dx, new_dy, jnp.ones_like(x)]).T
 
         return Ray(
             z=ray.z,
@@ -50,13 +50,13 @@ class Deflector:
 
     def step(self, ray: Ray):
 
-        x, y, dx, dy = ray.matrix[:4]
+        x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
         new_dx = dx + self.def_x
         new_dy = dy + self.def_y
 
         pathlength = ray.pathlength + dx * x + dy * y
 
-        new_matrix = jnp.array([x, y, new_dx, new_dy, 1.])
+        new_matrix = jnp.array([x, y, new_dx, new_dy, jnp.ones_like(x)]).T
 
         return Ray(
             z=ray.z,
@@ -91,7 +91,7 @@ class Aperture:
 
     def step(self, ray: Ray):
 
-        pos_x, pos_y, dx, dy = ray.matrix[:4]
+        pos_x, pos_y, _, _ = ray.x, ray.y, ray.dx, ray.dy
         distance = jnp.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
@@ -121,7 +121,7 @@ class Biprism:
         self, ray: Ray,
     ) -> Ray:
 
-        pos_x, pos_y, dx, dy = ray.matrix[:4]
+        pos_x, pos_y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
         deflection = self.deflection
         offset = self.offset
@@ -158,7 +158,7 @@ class Biprism:
             xdeflection_mag * deflection * pos_x + ydeflection_mag * deflection * pos_y
         )
 
-        new_matrix = jnp.array([pos_x, pos_y, new_dx, new_dy, 1.])
+        new_matrix = jnp.array([pos_x, pos_y, new_dx, new_dy, jnp.ones_like(pos_x)]).T
 
         return Ray(
             z=ray.z,
@@ -182,11 +182,11 @@ class Detector:
         return ray
 
     @property
-    def rotation(self) -> Degrees:  # type: ignore
+    def rotation_deg(self) -> Degrees:  # type: ignore
         return jnp.rad2deg(self.rotation_rad)
 
-    @rotation.setter
-    def rotation(self, val: Degrees):
+    @rotation_deg.setter
+    def rotation_deg(self, val: Degrees):
         self.rotation_rad: Radians = jnp.deg2rad(val)
 
     @property

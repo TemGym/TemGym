@@ -1,25 +1,24 @@
-from jax.typing import array as NDArray
+from jax.numpy import ndarray as NDArray
 import jax
 import jax.numpy as jnp
 from . import Degrees, Radians
-from .jax_ray import Ray, GaussianRay
+# from .jax_ray import Ray, GaussianRay
 
-from . import UsageError
 from scipy.constants import e, m_e, h
 from typing import (
-    Tuple, Optional, Sequence, Union, TypeAlias
+    Tuple, TypeAlias
 )
 
-RadiansJNP: TypeAlias = jnp.float64  # type: ignore
+RadiansJNP = jnp.float64
 
 
-def P2R(radii: NDArray[jnp.float64],  # type: ignore
-        angles: NDArray[RadiansJNP]) -> NDArray[jnp.complex128]:  # type: ignore
+def P2R(radii: NDArray,
+        angles: NDArray) -> NDArray:
     return radii * jnp.exp(1j*angles)
 
 
-def R2P(x: NDArray[jnp.complex128]) -> Tuple[NDArray[jnp.float64],  # type: ignore
-                                             NDArray[RadiansJNP]]:  # type: ignore
+def R2P(x: NDArray) -> Tuple[NDArray,
+                             NDArray]:
     return jnp.abs(x), jnp.angle(x)
 
 # def as_gl_lines(all_rays: Sequence['Ray'], z_mult: int = 1):
@@ -339,110 +338,6 @@ def point_beam(
     r[2, :] = dx
     r[3, :] = dy
     return r
-
-
-def get_image(
-    ray: Union[Ray, Sequence[Ray]],
-    shape: Tuple[int, int],
-    pixel_size: float,
-    flip_y: bool = False,
-    scan_rotation: Degrees = 0.,
-    interfere: bool = True,
-    out: Optional[NDArray] = None,
-    image_dtype: Optional[jnp.dtype] = jnp.complex64,
-) -> NDArray:
-
-    if not isinstance(ray, Sequence):
-        ray = [ray]
-    assert len(ray) > 0
-
-    image_dtype = image_dtype(interfere)
-
-    if out is None:
-        out = jnp.zeros(
-            shape,
-            dtype=image_dtype,
-        )
-    else:
-        assert out.dtype == image_dtype
-        assert out.shape == shape
-
-    if interfere and isinstance(ray[0], GaussianRay):
-        if len(ray) < 2:
-            raise UsageError(
-                "GaussianRays must have input and output set of rays to calculate interference"
-            )
-
-        _gaussian_beam_summation(ray, out=out)
-
-    else:
-        _basic_beam_summation(ray,
-                              shape,
-                              pixel_size,
-                              flip_y,
-                              scan_rotation,
-                              out=out)
-    return out
-
-
-def _basic_beam_summation(
-    
-    ray: tuple[Ray],
-    interfere: bool,
-    shape: Tuple[int, int],
-    out: Optional[NDArray] = None,
-) -> NDArray:
-
-    # Convert rays from detector positions to pixel positions
-    pixel_coords_y, pixel_coords_x = get_pixel_coords(
-                                            rays_x=ray.x,
-                                            rays_y=ray.x,
-                                            shape=shape,
-                                            pixel_size=pixel_size,
-                                            flip_y=flip_y,
-                                            scan_rotation=rotation,
-                                        )
-
-    sy, sx = shape
-    mask = jnp.logical_and(
-        jnp.logical_and(
-            0 <= pixel_coords_y,
-            pixel_coords_y < sy
-        ),
-        jnp.logical_and(
-            0 <= pixel_coords_x,
-            pixel_coords_x < sx
-        )
-    )
-
-    # Add rays as complex numbers if interference is enabled,
-    # or just add rays as counts otherwise.
-    if interfere:
-        # If we are doing interference, we add a complex number representing
-        # the phase of the ray for now to each pixel.
-        # Amplitude is 1.0 for now for each complex ray.
-        # Need to implement triangulation of wavefront
-        # to properly track amplitude of each ray.
-        wavefronts = 1.0 * jnp.exp(-1j * (2 * jnp.pi / ray.wavelength) * ray.path_length)
-        valid_wavefronts = wavefronts[mask]
-    else:
-        # If we are not doing interference, we simply add 1 to each pixel that a ray hits
-        valid_wavefronts = 1
-
-    # Get a flattened list pixel indices where rays have hit
-    flat_icds = jnp.ravel_multi_index(
-            [
-                pixel_coords_y[mask],
-                pixel_coords_x[mask],
-            ],
-            out.shape
-        )
-
-    self.sum_rays_on_detector(out, flat_icds, valid_wavefronts)
-
-
-
-
 
 
 def calculate_wavelength(phi_0: float):

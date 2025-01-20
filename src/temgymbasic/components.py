@@ -4,10 +4,8 @@ from typing import (
     TYPE_CHECKING, Sequence, Union
 )
 from dataclasses import dataclass, astuple
-import jax_dataclasses as jdc
 
 import numpy as np
-import jax.numpy as jnp
 
 from numpy.typing import NDArray  # Assuming np is an alias for numpy
 from scipy.constants import c, e, m_e
@@ -28,7 +26,7 @@ from .gbd import (
     calculate_Qpinv,
     propagate_misaligned_gaussian
 )
-from .rays import Rays, GaussianRays, Ray, GaussianRay, propagate
+from .rays import Rays, GaussianRays
 from .utils import (
     get_array_module,
     P2R, R2P,
@@ -45,6 +43,7 @@ if TYPE_CHECKING:
 
 # Defining epsilon constant from page 18 of principles of electron optics 2017, Volume 1.
 EPSILON = abs(e)/(2*m_e*c**2)
+
 
 class Component(abc.ABC):
     def __init__(self, z: float, name: Optional[str] = None):
