@@ -1,7 +1,7 @@
 import jax_dataclasses as jdc
 import jax.numpy as jnp
 from typing import Optional
-from utils import get_pixel_coords
+from .jax_utils import get_pixel_coords
 from numpy.typing import NDArray
 from typing import Tuple
 from . import (
@@ -12,12 +12,28 @@ from . import (
 
 @jdc.pytree_dataclass
 class Ray:
-    matrix: jnp.ndarray  # Shape (5,) vector [x, y, dx, dy, 1]
+    matrix: jnp.ndarray  # Shape (5,) vector [x, y, dx, dy, 1], or shape (N, 5)
     z: float
-    amplitude: float
-    pathlength: float
-    wavelength: float
+    amplitude: float = 1.0
+    pathlength: float = 0.0
+    wavelength: float = 1.0
     blocked: jdc.Static[Optional[jnp.ndarray]] = 0
+
+    @property
+    def x(self):
+        return self.matrix[..., 0]
+
+    @property
+    def y(self):
+        return self.matrix[..., 1]
+
+    @property
+    def dx(self):
+        return self.matrix[..., 2]
+
+    @property
+    def dy(self):
+        return self.matrix[..., 3]
 
 
 @jdc.pytree_dataclass
@@ -29,13 +45,13 @@ class GaussianRay(Ray):
 
 
 def propagate(distance, ray: Ray):
-    x, y, dx, dy = ray.matrix[:4]
+    x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
     new_x = x + dx * distance
     new_y = y + dy * distance
 
     pathlength = ray.pathlength + distance * jnp.sqrt(1 + dx ** 2 + dy ** 2)
-    new_matrix = jnp.array([new_x, new_y, dx, dy, 1.])
+    new_matrix = jnp.array([new_x, new_y, dx, dy, jnp.ones_like(x)]).T
 
     return Ray(
         z=ray.z + distance,

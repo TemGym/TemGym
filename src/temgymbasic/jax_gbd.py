@@ -109,7 +109,7 @@ def propagate_misaligned_gaussian(
     Q1 = jnp.linalg.inv(Q1_inv)
 
     amplitude = 1 / jnp.sqrt(jnp.linalg.det(A + B @ Q1_inv))[:, jnp.newaxis]
-    constant_phase = jnp.exp(-1j * k * path_length)[:, jnp.newaxis]
+    # constant_phase = jnp.exp(-1j * k * path_length)[:, jnp.newaxis]
 
     misaligned_phase_r1 = (
         jnp.diag(diagonal_vec_mat_mul_linear(r1m, A @ B_inv, r1m))[:, jnp.newaxis] - 2

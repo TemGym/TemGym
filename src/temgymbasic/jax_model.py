@@ -1,7 +1,7 @@
 
 from .jax_ray import propagate
 import jax
-import jax.numpy as jnp
+# import jax.numpy as jnp
 
 
 def run_model_to_end(ray, model):
