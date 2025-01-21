@@ -334,10 +334,11 @@ class Detector:
                 ],
                 out.shape
             )
+        
+        out_flat = out.flatten()
+        out_flat = self.sum_rays_on_detector(out_flat, flat_icds, valid_wavefronts)
 
-        out = self.sum_rays_on_detector(out.flatten(), flat_icds, valid_wavefronts)
-
-        return out
+        return out_flat
 
     def sum_rays_on_detector(self,
                              out: NDArray,
@@ -346,8 +347,8 @@ class Detector:
 
         if jnp.iscomplexobj(out):
             # Separate the real and imaginary parts
-            real_out = out.real.flatten()
-            imag_out = out.imag.flatten()
+            real_out = out.real
+            imag_out = out.imag
 
             # Perform the addition separately for real and imaginary parts
             real_out = real_out.at[flat_icds].add(valid_wavefronts.real)
