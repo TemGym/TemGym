@@ -14,9 +14,9 @@ from . import (
 class Ray:
     matrix: jnp.ndarray  # Shape (5,) vector [x, y, dx, dy, 1], or shape (N, 5)
     z: float
-    amplitude: float = 1.0
-    pathlength: float = 0.0
-    wavelength: float = 1.0
+    amplitude: jdc.Static[float] = 1.0
+    pathlength: jdc.Static[float] = 0.0
+    wavelength: jdc.Static[float] = 1.0
     blocked: jdc.Static[Optional[jnp.ndarray]] = 0
 
     @property
@@ -51,16 +51,12 @@ def propagate(distance, ray: Ray):
     new_y = y + dy * distance
 
     pathlength = ray.pathlength + distance * jnp.sqrt(1 + dx ** 2 + dy ** 2)
-    new_matrix = jnp.array([new_x, new_y, dx, dy, jnp.ones_like(x)]).T
 
-    return Ray(
-        z=ray.z + distance,
-        matrix=new_matrix,
-        amplitude=ray.amplitude,
-        pathlength=pathlength,
-        wavelength=ray.wavelength,
-        blocked=ray.blocked
-    )
+    Ray = ray_matrix(new_x, new_y, dx, dy,
+                    ray.z + distance, ray.amplitude,
+                    pathlength, ray.wavelength,
+                    ray.blocked)
+    return Ray
 
 
 def ray_on_grid(
@@ -86,3 +82,20 @@ def ray_on_grid(
         yy = jnp.round(yy).astype(jnp.int32)
 
     return yy, xx
+
+
+def ray_matrix(x, y, dx, dy,
+               z, amplitude,
+               pathlength, wavelength,
+               blocked):
+
+    # new_matrix = jnp.stack([x, y, dx, dy, jnp.ones_like(x)], axis=1) # Doesnt work if all values have 0 shape
+    new_matrix = jnp.array([x, y, dx, dy, jnp.ones_like(x)]).T  # Doesnt work if all values have 0 shape
+    return Ray(
+        matrix=new_matrix,
+        z=z,
+        amplitude=amplitude,
+        pathlength=pathlength,
+        wavelength=wavelength,
+        blocked=blocked
+    )

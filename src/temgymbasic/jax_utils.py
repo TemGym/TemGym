@@ -174,20 +174,26 @@ def initial_matrix(n_rays: int):
 
 
 @jax.jit
-def multi_cumsum_ijnplace(values, partitions, start):
-    part_idx = 0
-    current_part_len = partitions[part_idx]
-    part_count = 0
-    values[0] = start
-    for v_idx in range(1, values.size):
-        if current_part_len == part_count:
-            part_count = 0
-            part_idx += 1
-            current_part_len = partitions[part_idx]
-            values[v_idx] = start
-        else:
-            values[v_idx] += values[v_idx - 1]
-            part_count += 1
+def multi_cumsum_inplace(values, partitions, start):
+    def body_fun(i, carry):
+        vals, part_idx, part_count = carry
+        current_len = partitions[part_idx]
+
+        def reset_part(_):
+            # move to the next partition, reset, set start
+            new_vals = vals.at[i].set(start)
+            return (new_vals, part_idx + 1, 0)
+
+        def continue_part(_):
+            # accumulate with previous value
+            new_vals = vals.at[i].add(vals[i - 1])
+            return (new_vals, part_idx, part_count + 1)
+
+        return jax.lax.cond(part_count == current_len, reset_part, continue_part, None)
+
+    values = values.at[0].set(start)
+    values, _, _ = jax.lax.fori_loop(1, values.shape[0], body_fun, (values, 0, 0))
+    return values
 
 
 def concentric_rings(
@@ -216,10 +222,10 @@ def concentric_rings(
     params = jnp.stack((radii, div_angle), axis=0)
 
     # Cupy gave an error here saying that points_per_ring must not be an array
-    repeats = points_per_ring.tolist()
+    repeats = points_per_ring
 
     all_params = jnp.repeat(params, repeats, axis=-1)
-    multi_cumsum_ijnplace(all_params[1, :], points_per_ring, 0.)
+    multi_cumsum_inplace(all_params[1, :], points_per_ring, 0.)
 
     all_radii = all_params[0, :]
     all_angles = all_params[1, :]
@@ -267,7 +273,7 @@ def random_coords(num: int, jnp=jnp):
     # return (y, x)
     key = jax.random.PRNGKey(1)
 
-    yx = jax.random.uniform(key, -1, 1, size=(int(num * 1.28), 2))  # 1.28 =  4 / np.pi
+    yx = jax.random.uniform(key, shape=(int(num * 1.28), 2), minval=-1, maxval=1)  # 1.28 =  4 / np.pi
     radii = jnp.sqrt((yx ** 2).sum(axis=1))
     mask = radii < 1
     yx = yx[mask, :]

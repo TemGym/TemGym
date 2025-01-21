@@ -5,7 +5,7 @@ from typing import (
     Tuple, Optional,  Sequence, Union
 )
 
-from .jax_ray import Ray, propagate, GaussianRay, ray_on_grid
+from .jax_ray import Ray, propagate, GaussianRay, ray_on_grid, ray_matrix
 from . import UsageError
 from .jax_utils import R2P, P2R
 from . import (
@@ -31,15 +31,11 @@ class Lens:
 
         pathlength = ray.pathlength - (x ** 2 + y ** 2) / (2 * f)
 
-        new_matrix = jnp.array([x, y, new_dx, new_dy, jnp.ones_like(x)]).T
-
-        return Ray(
-            z=ray.z,
-            matrix=new_matrix,
-            amplitude=ray.amplitude,
-            pathlength=pathlength,
-            wavelength=ray.wavelength
-        )
+        Ray = ray_matrix(x, y, new_dx, new_dy,
+                        ray.z, ray.amplitude,
+                        pathlength, ray.wavelength,
+                        ray.blocked)
+        return Ray
 
 
 @jdc.pytree_dataclass
@@ -56,15 +52,11 @@ class Deflector:
 
         pathlength = ray.pathlength + dx * x + dy * y
 
-        new_matrix = jnp.array([x, y, new_dx, new_dy, jnp.ones_like(x)]).T
-
-        return Ray(
-            z=ray.z,
-            matrix=new_matrix,
-            amplitude=ray.amplitude,
-            pathlength=pathlength,
-            wavelength=ray.wavelength
-        )
+        Ray = ray_matrix(x, y, new_dx, new_dy,
+                        ray.z, ray.amplitude,
+                        pathlength, ray.wavelength,
+                        ray.blocked)
+        return Ray
 
 
 @jdc.pytree_dataclass
@@ -91,7 +83,7 @@ class Aperture:
 
     def step(self, ray: Ray):
 
-        pos_x, pos_y, _, _ = ray.x, ray.y, ray.dx, ray.dy
+        pos_x, pos_y, pos_dx, pos_dy = ray.x, ray.y, ray.dx, ray.dy
         distance = jnp.sqrt(
             (pos_x - self.x) ** 2 + (pos_y - self.y) ** 2
         )
@@ -100,14 +92,12 @@ class Aperture:
         # evaluates to 1 if the ray was not blocked before and is now,
         # and evaluates to 0 if the ray was not blocked before and is NOT now.
         blocked = jnp.where(distance > self.radius, 1, ray.blocked)
-        return Ray(
-            z=ray.z,
-            matrix=ray.matrix,
-            amplitude=ray.amplitude,
-            pathlength=ray.pathlength,
-            wavelength=ray.wavelength,
-            blocked=blocked
-        )
+
+        Ray = ray_matrix(pos_x, pos_y, pos_dx, pos_dy,
+                        ray.z, ray.amplitude,
+                        ray.pathlength, ray.wavelength,
+                        blocked)
+        return Ray
 
 
 @jdc.pytree_dataclass
@@ -149,8 +139,6 @@ class Biprism:
         xdeflection_mag = rejection[:, 0]
         ydeflection_mag = rejection[:, 1]
 
-        # Using .squeeze is a crappy hack for now because the
-        # dimensions wont match with jax without it.
         new_dx = (dx + xdeflection_mag * deflection).squeeze()
         new_dy = (dy + ydeflection_mag * deflection).squeeze()
 
@@ -158,20 +146,16 @@ class Biprism:
             xdeflection_mag * deflection * pos_x + ydeflection_mag * deflection * pos_y
         )
 
-        new_matrix = jnp.array([pos_x, pos_y, new_dx, new_dy, jnp.ones_like(pos_x)]).T
-
-        return Ray(
-            z=ray.z,
-            matrix=new_matrix,
-            amplitude=ray.amplitude,
-            pathlength=pathlength,
-            wavelength=ray.wavelength
-        )
+        Ray = ray_matrix(pos_x.squeeze(), pos_y.squeeze(), new_dx, new_dy,
+                        ray.z, ray.amplitude,
+                        pathlength, ray.wavelength,
+                        ray.blocked)
+        return Ray
 
 
 @jdc.pytree_dataclass
 class Detector:
-    z: jdc.Static[float]
+    z: float
     pixel_size: jdc.Static[float]
     shape: jdc.Static[Tuple[int, int]]
     rotation: jdc.Static[Degrees] = 0.
@@ -334,7 +318,7 @@ class Detector:
                 ],
                 out.shape
             )
-        
+
         out_flat = out.flatten()
         out_flat = self.sum_rays_on_detector(out_flat, flat_icds, valid_wavefronts)
 
@@ -382,11 +366,7 @@ class Detector:
 
     #     z0 = float_dtype(ray_start.z)
     #     z_r = float_dtype(jnp.pi * wo ** 2 / wavelength)
-
-
     #     pathlength = ray_end.path_length[0::5].astype(float_dtype)
-
-
     #     # A, B, C, D all have shape (n_gauss, 2, 2)
     #     Qinv = calculate_Qinv(z0, z_r, wo, wavelength, n_gauss, xp=xp)
 
