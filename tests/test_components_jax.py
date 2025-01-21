@@ -2,25 +2,19 @@ import pytest
 import jax
 import jax.numpy as jnp
 
-from temgymbasic.model import (
-    Model,
-)
+
 import temgymbasic.jax_components as comp
 import temgymbasic.jax_source as source
-from temgymbasic.jax_model import run_model_to_end, run_model_iter
+from temgymbasic.jax_run import run_model_to_end
 from temgymbasic.jax_ray import Ray, propagate
 from temgymbasic.jax_utils import (
     calculate_phi_0,
     calculate_wavelength,
-    concentric_rings,
 )
 
 from numpy.testing import assert_equal, assert_allclose
-from temgymbasic.plotting import plot_model
-import scipy
 
-# import matplotlib.pyplot as plt
-from typing import Tuple, NamedTuple
+import scipy
 from scipy.constants import e, m_e, c
 
 try:
@@ -44,23 +38,6 @@ def empty_rays():
         wavelength=jnp.empty([]),
         amplitude=jnp.empty([]),
         pathlength=jnp.empty([]),
-    )
-
-
-def single_random_uniform_ray(x, y, phi_0=1.0):
-    matrix = jnp.zeros(shape=(1, 5))
-
-    matrix = matrix.at[:, 0].set(jax.random.uniform(key, minval=1e-12, maxval=x) * jnp.sign(x))
-    matrix = matrix.at[:, 1].set(jax.random.uniform(key, minval=1e-12, maxval=y) * jnp.sign(y))
-    matrix = matrix.at[:, 2].set(jnp.zeros(1))
-    matrix = matrix.at[:, 3].set(jnp.zeros(1))
-    matrix = matrix.at[:, 4].set(jnp.ones(1))
-
-    return Ray(
-        matrix=matrix,
-        z=0.2,
-        pathlength=0.0,
-        wavelength=calculate_wavelength(phi_0=phi_0),
     )
 
 
@@ -96,11 +73,9 @@ def random_rays(n_rays):
     )
 
 
-@pytest.fixture(
-    params=[128],
-)
-def parallel_rays(request):
-    n_rays = request.param
+@pytest.fixture()
+def parallel_rays():
+    n_rays = 128
     matrix = jnp.zeros(shape=(n_rays, 5))
 
     matrix = matrix.at[:, 0].set(jax.random.uniform(key, minval=-1.0, maxval=1.0, shape=n_rays))
@@ -108,28 +83,6 @@ def parallel_rays(request):
     matrix = matrix.at[:, 2].set(jnp.zeros(shape=(n_rays)))
     matrix = matrix.at[:, 3].set(jnp.zeros(shape=(n_rays)))
     matrix = matrix.at[:, 4].set(jnp.ones(shape=(n_rays)))
-
-    return Ray(
-        matrix=matrix,
-        z=jnp.ones(n_rays) * 0.2,
-        pathlength=jnp.zeros((n_rays,)),
-        wavelength=jnp.ones(shape=n_rays) * calculate_wavelength(1.0),
-    )
-
-
-@pytest.fixture()
-def parallel_point_rays():
-    n_rays = 128
-    matrix = jnp.zeros(shape=(n_rays, 5))
-    radius = 1e-3
-    low = -radius / 2
-    high = radius / 2
-
-    matrix = matrix.at[:, 0].set(jax.random.uniform(key, minval=low, maxval=high, shape=n_rays))
-    matrix = matrix.at[:, 1].set(jax.random.uniform(key, minval=low, maxval=high, shape=n_rays))
-    matrix = matrix.at[:, 2].set(jnp.zeros(shape=n_rays))
-    matrix = matrix.at[:, 3].set(jnp.zeros(shape=n_rays))
-    matrix = matrix.at[:, 4].set(jnp.ones(shape=n_rays))
 
     return Ray(
         matrix=matrix,
@@ -152,25 +105,6 @@ def point_rays():
     matrix = matrix.at[:, 1].set(jnp.zeros(shape=n_rays))
     matrix = matrix.at[:, 2].set(jax.random.uniform(key, minval=low, maxval=high, shape=n_rays))
     matrix = matrix.at[:, 3].set(jax.random.uniform(key, minval=low, maxval=high, shape=n_rays))
-    matrix = matrix.at[:, 4].set(jnp.ones(shape=n_rays))
-
-    return Ray(
-        matrix=matrix,
-        z=0.0,
-        pathlength=jnp.zeros((n_rays,)),
-    )
-
-
-@pytest.fixture()
-def increasing_slope_rays():
-    n_rays = 128
-    matrix = jnp.zeros(shape=(n_rays, 5))
-
-    y, x = concentric_rings(n_rays, 1e-2)
-    matrix = matrix.at[:, 0].set(jnp.zeros(shape=n_rays))
-    matrix = matrix.at[:, 1].set(jnp.zeros(shape=n_rays))
-    matrix = matrix.at[:, 2].set(x)
-    matrix = matrix.at[:, 3].set(y)
     matrix = matrix.at[:, 4].set(jnp.ones(shape=n_rays))
 
     return Ray(
@@ -223,26 +157,6 @@ def paraxial_point_rays():
     return Ray(
         matrix=matrix,
         z=0.0,
-        pathlength=jnp.zeros((n_rays,)),
-    )
-
-
-@pytest.fixture(
-    params=[128],
-)
-def slope_of_one_rays(request):
-    n_rays = request.param
-    matrix = jnp.zeros(shape=(n_rays, 5))
-
-    matrix = matrix.at[:, 0].set(jax.random.uniform(key, shape=n_rays))
-    matrix = matrix.at[:, 1].set(jax.random.uniform(key, shape=n_rays))
-    matrix = matrix.at[:, 2].set(jnp.ones(shape=n_rays))
-    matrix = matrix.at[:, 3].set(jnp.ones(shape=n_rays))
-    matrix = matrix.at[:, 4].set(jnp.ones(shape=n_rays))
-
-    return Ray(
-        matrix=matrix,
-        z=jnp.ones(n_rays) * 0.2,
         pathlength=jnp.zeros((n_rays,)),
     )
 
@@ -512,7 +426,6 @@ def test_biprism_interference():
     peaks, _ = scipy.signal.find_peaks(jnp.abs(image[0, :]) ** 2, height=0)
 
     assert_equal(len(peaks), num_peaks)
-
 
 
 @pytest.mark.skipif(USE_GPU, reason="Test not supported on GPU")
