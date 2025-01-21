@@ -485,8 +485,8 @@ def test_biprism_interference():
     num_peaks = int(pixel_size * det_shape[1] / spacing) + 1
 
     Rays = source.XPointBeam(z=0.0,
-                             n_rays=2**8,
-                             semi_angle=0.,
+                             n_rays=2**12,
+                             semi_angle=0.1,
                              tilt_yx=(0., 0.),
                              centre_yx=(0., 0.),
                              voltage=voltage,
@@ -512,6 +512,7 @@ def test_biprism_interference():
     peaks, _ = scipy.signal.find_peaks(jnp.abs(image[0, :]) ** 2, height=0)
 
     assert_equal(len(peaks), num_peaks)
+
 
 
 @pytest.mark.skipif(USE_GPU, reason="Test not supported on GPU")

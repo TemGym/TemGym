@@ -151,8 +151,8 @@ class Biprism:
 
         # Using .squeeze is a crappy hack for now because the
         # dimensions wont match with jax without it.
-        new_dx = (dx + xdeflection_mag * deflection)
-        new_dy = (dy + ydeflection_mag * deflection)
+        new_dx = (dx + xdeflection_mag * deflection).squeeze()
+        new_dy = (dy + ydeflection_mag * deflection).squeeze()
 
         pathlength = ray.pathlength + (
             xdeflection_mag * deflection * pos_x + ydeflection_mag * deflection * pos_y
@@ -285,8 +285,9 @@ class Detector:
             self._gaussian_beam_summation(ray, out=out)
 
         else:
-            self._basic_beam_summation(ray, interfere, out=out)
-        return out
+            out = self._basic_beam_summation(ray, interfere, out=out)
+
+        return out.reshape(self.shape)
 
     def _basic_beam_summation(
         self,
@@ -334,7 +335,9 @@ class Detector:
                 out.shape
             )
 
-        self.sum_rays_on_detector(out, flat_icds, valid_wavefronts)
+        out = self.sum_rays_on_detector(out.flatten(), flat_icds, valid_wavefronts)
+
+        return out
 
     def sum_rays_on_detector(self,
                              out: NDArray,
@@ -343,18 +346,20 @@ class Detector:
 
         if jnp.iscomplexobj(out):
             # Separate the real and imaginary parts
-            real_out = out.real
-            imag_out = out.imag
+            real_out = out.real.flatten()
+            imag_out = out.imag.flatten()
 
             # Perform the addition separately for real and imaginary parts
-            jnp.add.at(real_out.reshape(-1), flat_icds, valid_wavefronts.real)
-            jnp.add.at(imag_out.reshape(-1), flat_icds, valid_wavefronts.imag)
+            real_out = real_out.at[flat_icds].add(valid_wavefronts.real)
+            imag_out = imag_out.at[flat_icds].add(valid_wavefronts.imag)
 
             # Combine the real and imaginary parts back into the out array
             out = real_out + 1j * imag_out
         else:
             # Perform the addition directly for non-complex arrays
-            jnp.add.at(out.reshape(-1), flat_icds, valid_wavefronts)
+            out = out.at[flat_icds].add(valid_wavefronts)
+
+        return out
 
     # def _gaussian_beam_summation(
     #     self,
