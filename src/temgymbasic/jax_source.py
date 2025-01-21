@@ -176,8 +176,8 @@ def XPointBeam(z,
     input_matrix = initial_matrix(n_rays)
     input_matrix = input_matrix.at[:, 0].set(x + centre_yx[1])
     input_matrix = input_matrix.at[:, 1].set(y + centre_yx[0])
-    input_matrix = input_matrix.at[:, 2].set(tilt_yx[1])
-    input_matrix = input_matrix.at[:, 3].set(tilt_yx[0] + tilts)
+    input_matrix = input_matrix.at[:, 2].set(tilt_yx[1] + tilts)
+    input_matrix = input_matrix.at[:, 3].set(tilt_yx[0])
 
     # Create ray
     input_z = jnp.ones((n_rays,)) * z
