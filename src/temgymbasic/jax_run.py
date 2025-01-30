@@ -11,4 +11,4 @@ def run_to_end(ray, components):
         ray = propagate(distance, ray)
         ray = component.step(ray)
 
-    return ray
+    return ray.matrix

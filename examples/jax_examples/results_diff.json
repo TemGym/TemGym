@@ -1,0 +1,152 @@
+{
+    "80": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5078", 
+        "IL2": "0xaec1", 
+        "IL3": "0x929c", 
+        "PL1": "0xfa00"
+    },
+    "100": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5265", 
+        "IL2": "0xafa9", 
+        "IL3": "0x9137", 
+        "PL1": "0xfa00"
+    },
+    "120": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5221", 
+        "IL2": "0xb0b6", 
+        "IL3": "0x8fe1", 
+        "PL1": "0xfa00"
+    },
+    "150": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x533e", 
+        "IL2": "0xb1ad", 
+        "IL3": "0x8de4", 
+        "PL1": "0xfa00"
+    },
+    "200": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x533e", 
+        "IL2": "0xb3dc", 
+        "IL3": "0x8aaf", 
+        "PL1": "0xfa00"
+    },
+    "250": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5383", 
+        "IL2": "0xb69f", 
+        "IL3": "0x8796", 
+        "PL1": "0xfa00"
+    },
+    "300": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x53a9", 
+        "IL2": "0xb88f", 
+        "IL3": "0x849f", 
+        "PL1": "0xfa00"
+    },
+    "400": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x53b3", 
+        "IL2": "0xbe63", 
+        "IL3": "0x7f5d", 
+        "PL1": "0xfa00"
+    },
+    "500": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x538b", 
+        "IL2": "0xc51d", 
+        "IL3": "0x79f3", 
+        "PL1": "0xfa00"
+    },
+    "600": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5381", 
+        "IL2": "0xc930", 
+        "IL3": "0x7500", 
+        "PL1": "0xfa00"
+    },
+    "800": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x530b", 
+        "IL2": "0xd280", 
+        "IL3": "0x6be0", 
+        "PL1": "0xfa00"
+    },
+    "1000": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x530b", 
+        "IL2": "0xdac0", 
+        "IL3": "0x6400", 
+        "PL1": "0xfa00"
+    },
+    "1200": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x52cb", 
+        "IL2": "0xe3c0", 
+        "IL3": "0x5bd0", 
+        "PL1": "0xfa00"
+    },
+    "1500": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5271", 
+        "IL2": "0xf020", 
+        "IL3": "0x4fd0", 
+        "PL1": "0xfa00"
+    },
+    "2000": {
+        "OLc": "0xb2fa", 
+        "OLf": "0x981a", 
+        "OLSuperFineValue": "0x800", 
+        "OM2": "0x0", 
+        "IL1": "0x5208", 
+        "IL2": "0xfff0", 
+        "IL3": "0x3780", 
+        "PL1": "0xfa00"
+    }
+}

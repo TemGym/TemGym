@@ -39,6 +39,34 @@ class Lens:
 
 
 @jdc.pytree_dataclass
+class ThickLens:
+    z_po: float
+    z_pi: float
+    focal_length: float
+
+    def step(self, ray: Ray):
+        f = self.focal_length
+
+        x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
+
+        new_dx = -x / f + dx
+        new_dy = -y / f + dy
+
+        pathlength = ray.pathlength - (x ** 2 + y ** 2) / (2 * f)
+
+        new_z = ray.z - (self.z_po - self.z_pi)
+        Ray = ray_matrix(x, y, new_dx, new_dy,
+                        new_z, ray.amplitude,
+                        pathlength, ray.wavelength,
+                        ray.blocked)
+        return Ray
+
+    @property
+    def z(self):
+        return self.z_po
+
+
+@jdc.pytree_dataclass
 class Deflector:
     z: float
     def_x: float
@@ -72,6 +100,7 @@ class DoubleDeflector:
         ray = self.second.step(ray)
 
         return ray
+
 
 
 @jdc.pytree_dataclass
