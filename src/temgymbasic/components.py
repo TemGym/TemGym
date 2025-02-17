@@ -733,7 +733,7 @@ class Detector(Component):
                 raise UsageError(
                     "GaussianRays must have two sets of rays to calculate interference"
                 )
-            
+
             self._gaussian_beam_summation(rays, out=out)
 
         else:
@@ -856,7 +856,7 @@ class Detector(Component):
 
         # central beam final x , y coords
         det_coords = self.get_det_coords_for_gauss_rays(xEnd, yEnd, xp=xp)
-        
+
         propagate_misaligned_gaussian(
             Qinv, Qpinv, det_coords, p1m,
             theta1m, k, A, B, path_length, out.ravel(), xp=xp
