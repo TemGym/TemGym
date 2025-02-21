@@ -65,6 +65,40 @@ class ThickLens:
     def z(self):
         return self.z_po
 
+@jdc.pytree_dataclass
+class Descanner:
+    #Implicit in the descanner is that the incoming rays are all part of 
+    # a collimated beam that have come from a lens directly before it.
+    z: float
+    scan_position: Tuple[float, float]  # (x, y) position
+    incoming_beam_angle: Tuple[float, float]  #  (dx, dy) angle
+    descan_error_pos_x: float  # Outgoing error in position
+    descan_error_pos_y: float  # Outgoing error in position
+    descan_error_tilt_x: float  # Outgoing error in tilt
+    descan_error_tilt_y: float  # Outgoing error in tilt
+
+    def step(self, ray: Ray):
+        scan_position_x = self.scan_position[0]
+        scan_position_y = self.scan_position[1]
+        incoming_beam_angle_x = self.incoming_beam_angle[0]
+        incoming_beam_angle_y = self.incoming_beam_angle[1]
+
+        x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
+
+        new_x = x - scan_position_x + self.descan_error_pos_x
+        new_y = y - scan_position_y + self.descan_error_pos_y
+        new_dx = dx - incoming_beam_angle_x + self.descan_error_tilt_x
+        new_dy = dy - incoming_beam_angle_y + self.descan_error_tilt_y
+
+        # The extra distance due to the change in tilt is given by the dot‐product
+        # of the transverse position with the change in slope.
+        pathlength = ray.pathlength + x * (new_dx - dx) + y * (new_dy - dy)
+
+        Ray = ray_matrix(new_x, new_y, new_dx, new_dy,
+                         ray.z, ray.amplitude,
+                         pathlength, ray.wavelength,
+                         ray.blocked)
+        return Ray
 
 @jdc.pytree_dataclass
 class Deflector:
@@ -100,8 +134,19 @@ class DoubleDeflector:
         ray = self.second.step(ray)
 
         return ray
+    
+@jdc.pytree_dataclass
+class Sample:
+    z: float
+    complex_image: NDArray
+    pixel_size: float
+    shape: Tuple[int, int]
+    rotation: Degrees = 0.
+    flip_y: bool = False
+    center: Tuple[float, float] = (0., 0.)
 
-
+    def step(self, ray: Ray):
+        return ray
 
 @jdc.pytree_dataclass
 class Aperture:
