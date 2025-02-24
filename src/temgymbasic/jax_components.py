@@ -67,17 +67,14 @@ class ThickLens:
 
 @jdc.pytree_dataclass
 class Descanner:
-    #Implicit in the descanner is that the incoming rays are all part of 
-    # a collimated beam that have come from a lens directly before it.
+    # Implicit in the descanner is that there is no lens above it, and 
+    # the incoming beam above is from a point source above the sample. 
     z: float
-    scan_position: Tuple[float, float]  # (x, y) position
-    incoming_beam_angle: Tuple[float, float]  #  (dx, dy) angle
-    descan_error_pos_x: float  # Outgoing error in position
-    descan_error_pos_y: float  # Outgoing error in position
-    descan_error_tilt_x: float  # Outgoing error in tilt
-    descan_error_tilt_y: float  # Outgoing error in tilt
+    scan_position: Tuple[float, float]  # Position of the scan center
+    descan_error: Tuple[float, float, float, float]  # Error in the scan position pos_x, y, tilt_x, y
 
     def step(self, ray: Ray):
+        
         scan_position_x = self.scan_position[0]
         scan_position_y = self.scan_position[1]
         incoming_beam_angle_x = self.incoming_beam_angle[0]
