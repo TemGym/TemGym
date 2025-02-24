@@ -2,7 +2,7 @@ from jax.numpy import ndarray as NDArray
 import jax
 import jax.numpy as jnp
 from . import Degrees, Radians
-# from .jax_ray import Ray, GaussianRay
+from jax.flatten_util import ravel_pytree
 
 from scipy.constants import e, m_e, h
 from typing import (
@@ -21,97 +21,39 @@ def R2P(x: NDArray) -> Tuple[NDArray,
                              NDArray]:
     return jnp.abs(x), jnp.angle(x)
 
-# def as_gl_lines(all_rays: Sequence['Ray'], z_mult: int = 1):
-#     num_vertices = 0
-#     for r in all_rays[:-1]:
-#         num_vertices += r.num_display
-#     num_vertices *= 2
+    
+def get_pytree_idx_from_model(model, parameters):
 
-#     jnp = all_rays[0].jnp
-#     vertices = jnp.empty(
-#         (num_vertices, 3),
-#         dtype=jnp.float32,
-#     )
-#     idx = 0
+    indices = {}
 
-#     def _add_vertices(r1:, r0:):
-#         nonlocal idx, vertices
+    # Flatten the model to indices, and return the treedef function to reconstruct the model
+    flat_model, treedef = ravel_pytree(model)
 
-#         num_endpoints = r1.num_display
-#         sl = slice(idx, idx + num_endpoints * 2, 2)
-#         vertices[sl, 0] = r1.x_central
-#         vertices[sl, 1] = r1.y_central
-#         vertices[sl, 2] = r1.z * z_mult
-#         sl = slice(1 + idx, 1 + idx + num_endpoints * 2, 2)
-#         # Relies on the fact that indexing
-#         # with None creates a new axis, only
-#         vertices[sl, 0] = r0.x_central[r1.mask_display].ravel()
-#         vertices[sl, 1] = r0.y_central[r1.mask_display].ravel()
-#         vertices[sl, 2] = r0.z * z_mult
-#         idx += num_endpoints * 2
-#         return idx
+    # Obtain the paths and leaves of the model
+    paths, leaves =  jax.tree.flatten_with_path(model)
 
-#     r1 = all_rays[-1]
-#     for r0 in reversed(all_rays[:-1]):
-#         _add_vertices(r1, r0)
-#         if (r1b := r1.blocked_rays()) is not None:
-#             _add_vertices(r1b, r0)
-#         r1 = r0
+    # Initialise the flat index to find parameters
+    flat_idx = 0
 
-#     return get_array_from_device(vertices)
+    # loop through the paths and leaves of the model to find the 
+    # parameters we want to differentiate with respect to. 
+    for path, leaf in zip(paths, leaves):
+        component_idx = path[0]
+        component_params = path[1]
+        target_parameters = parameters.get(component_idx)
 
+        if target_parameters is not None:
+            # Check that target parameters exists, if not, skip
+            # and also make sure it is a list
+            target_parameters = target_parameters if isinstance(target_parameters, list) else [target_parameters]
+            if component_params in target_parameters:
+                flat_leaf, _ = ravel_pytree(leaf)
 
-# def plot_rays(model: 'STEMModel'):
-#     import matplotlib.pyplot as plt
-#     from .components import DoubleDeflector
+                # Add the indices to a dictionary of parameter names
+                indices[component_params] = (flat_idx, flat_idx + flat_leaf.size)
 
-#     # Iterate over components and their ray positions
-#     num_rays = 3
-#     yx = (0, 8)
-#     all_rays = tuple(model.scan_point_iter(num_rays=num_rays, yx=yx))
-
-#     fig, ax = plt.subplots()
-#     xvals = jnp.stack(tuple(r.x for r in all_rays), axis=0)
-#     zvals = jnp.asarray(tuple(r.z for r in all_rays))
-#     ax.plot(xvals, zvals)
-
-#     # Optional: Mark the component positions
-#     extent = 1.5 * jnp.abs(xvals).max()
-#     for component in model.components:
-#         if isinstance(component, DoubleDeflector):
-#             ax.hlines(
-#                 component.first.z, -extent, extent, linestyle='--'
-#             )
-#             ax.text(-extent, component.first.z, repr(component.first), va='bottom')
-#             ax.hlines(
-#                 component.second.z, -extent, extent, linestyle='--'
-#             )
-#             ax.text(-extent, component.second.z, repr(component.second), va='bottom')
-#         else:
-#             ax.hlines(component.z, -extent, extent, label=repr(component))
-#             ax.text(-extent, component.z, repr(component), va='bottom')
-
-#     ax.hlines(
-#         model.objective.ffp, -extent, extent, linestyle=':'
-#     )
-
-#     ax.axvline(color='black', linestyle=":", alpha=0.3)
-#     _, scan_pos_x = model.sample.scan_position(yx)
-#     ax.plot([scan_pos_x], [model.sample.z], 'ko')
-
-#     # dx = model.detector.shape[1]
-#     # detector_pixels = jnp.arange(- dx // 2., dx // 2.) * model.detector.pixel_size
-#     # ax.plot(
-#     #     detector_pixels,
-#     #     model.detector.z * jnp.ones_like(detector_pixels),
-#     #     'ro',
-#     # )
-
-#     ax.set_xlabel('x position')
-#     ax.set_ylabel('z position')
-#     ax.invert_yaxis()
-#     ax.set_title(f'Ray paths for {num_rays} rays at position {yx}')
-#     plt.show()
+    # Return the indices, the flat model and the treedef function
+    return indices, flat_model, treedef
 
 
 def _flip_y():
