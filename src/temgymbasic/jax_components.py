@@ -77,19 +77,16 @@ class Descanner:
         
         scan_position_x = self.scan_position[0]
         scan_position_y = self.scan_position[1]
-        incoming_beam_angle_x = self.incoming_beam_angle[0]
-        incoming_beam_angle_y = self.incoming_beam_angle[1]
-
+        descan_error_x, descan_error_y, descan_error_dx, descan_error_dy = self.descan_error
         x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
-        new_x = x - scan_position_x + self.descan_error_pos_x
-        new_y = y - scan_position_y + self.descan_error_pos_y
-        new_dx = dx - incoming_beam_angle_x + self.descan_error_tilt_x
-        new_dy = dy - incoming_beam_angle_y + self.descan_error_tilt_y
+        new_x = x - scan_position_x + descan_error_x
+        new_y = y - scan_position_y + descan_error_y
 
-        # The extra distance due to the change in tilt is given by the dot‐product
-        # of the transverse position with the change in slope.
-        pathlength = ray.pathlength + x * (new_dx - dx) + y * (new_dy - dy)
+        new_dy = dy + descan_error_dy
+        new_dx = dx + descan_error_dx
+
+        pathlength = ray.pathlength
 
         Ray = ray_matrix(new_x, new_y, new_dx, new_dy,
                          ray.z, ray.amplitude,
@@ -137,13 +134,30 @@ class Sample:
     z: float
     complex_image: NDArray
     pixel_size: float
-    shape: Tuple[int, int]
     rotation: Degrees = 0.
     flip_y: bool = False
     center: Tuple[float, float] = (0., 0.)
 
     def step(self, ray: Ray):
-        return ray
+        ray_y_px, ray_x_px = self.on_grid(ray, as_int=True)
+        new_amplitude = ray.amplitude * jnp.abs(self.complex_image[ray_y_px, ray_x_px])
+        new_pathlength = ray.pathlength + jnp.angle(self.complex_image[ray_y_px, ray_x_px]) * ray.wavelength / (2 * jnp.pi)
+
+        Ray = ray_matrix(ray.x, ray.y, ray.dx, ray.dy,
+                        ray.z, new_amplitude,
+                        new_pathlength, ray.wavelength,
+                        ray.blocked)
+        return Ray
+    
+    def on_grid(self, ray: Ray, as_int: bool = True) -> NDArray:
+        return ray_on_grid(
+            ray,
+            shape=self.complex_image.shape,
+            pixel_size=self.pixel_size,
+            flip_y=self.flip_y,
+            rotation=self.rotation,
+            as_int=as_int,
+        )
 
 @jdc.pytree_dataclass
 class Aperture:

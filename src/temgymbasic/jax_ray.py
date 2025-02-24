@@ -8,16 +8,17 @@ from . import (
     PositiveFloat,
     Degrees,
 )
+import jax
 
 
 @jdc.pytree_dataclass
 class Ray:
-    matrix: jnp.ndarray  # Shape (5,) vector [x, y, dx, dy, 1], or shape (N, 5)
+    matrix: jnp.ndarray  # Shape (5,) vector [x, y, dx, dy, 1]
     z: float
-    amplitude: jdc.Static[float] = 1.0
-    pathlength: jdc.Static[float] = 0.0
-    wavelength: jdc.Static[float] = 1.0
-    blocked: jdc.Static[Optional[jnp.ndarray]] = 0
+    amplitude: float
+    pathlength: float
+    wavelength: float
+    blocked: float
 
     @property
     def x(self):
@@ -89,7 +90,6 @@ def ray_matrix(x, y, dx, dy,
                pathlength, wavelength,
                blocked):
 
-    # new_matrix = jnp.stack([x, y, dx, dy, jnp.ones_like(x)], axis=1) # Doesnt work if all values have 0 shape
     new_matrix = jnp.array([x, y, dx, dy, jnp.ones_like(x)]).T  # Doesnt work if all values have 0 shape
     return Ray(
         matrix=new_matrix,
