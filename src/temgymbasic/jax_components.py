@@ -70,23 +70,23 @@ class Descanner:
     # Implicit in the descanner is that there is no lens above it, and 
     # the incoming beam above is from a point source above the sample. 
     z: float
-    scan_position: Tuple[float, float]  # Position of the scan center
     descan_error: Tuple[float, float, float, float]  # Error in the scan position pos_x, y, tilt_x, y
+    offset_x: float
+    offset_y: float
 
     def step(self, ray: Ray):
-        
-        scan_position_x = self.scan_position[0]
-        scan_position_y = self.scan_position[1]
+        offset_x, offset_y = self.offset_x, self.offset_y
+        optical_axis_x, optical_axis_y = 0, 0
         descan_error_x, descan_error_y, descan_error_dx, descan_error_dy = self.descan_error
         x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
-        new_x = x - scan_position_x + descan_error_x
-        new_y = y - scan_position_y + descan_error_y
+        new_x = x - offset_x * descan_error_x
+        new_y = y - offset_y * descan_error_y
 
         new_dy = dy + descan_error_dy
         new_dx = dx + descan_error_dx
 
-        pathlength = ray.pathlength
+        pathlength = ray.pathlength - (offset_x * x) - (offset_y * y)
 
         Ray = ray_matrix(new_x, new_y, new_dx, new_dy,
                          ray.z, ray.amplitude,
@@ -293,19 +293,17 @@ class Detector:
             as_int=as_int,
         )
 
-    def get_det_coords_for_gauss_rays(self, xEnd, yEnd):
+    def get_det_coords(self):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
         x_det = jnp.linspace(-det_size_y / 2,
                              det_size_y / 2,
-                             self.shape[0],
-                             dtype=xEnd.dtype) + self.center[0]
+                             self.shape[0]) + self.center[0]
 
         y_det = jnp.linspace(-det_size_x / 2,
                              det_size_x / 2,
-                             self.shape[1],
-                             dtype=yEnd.dtype) + self.center[1]
+                             self.shape[1]) + self.center[1]
 
         x, y = jnp.meshgrid(x_det, y_det)
 
