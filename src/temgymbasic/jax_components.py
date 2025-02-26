@@ -76,17 +76,17 @@ class Descanner:
 
     def step(self, ray: Ray):
         offset_x, offset_y = self.offset_x, self.offset_y
-        optical_axis_x, optical_axis_y = 0, 0
         descan_error_x, descan_error_y, descan_error_dx, descan_error_dy = self.descan_error
+
         x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
-        new_x = x - offset_x * descan_error_x
-        new_y = y - offset_y * descan_error_y
+        new_x = x * descan_error_x + offset_x
+        new_y = y * descan_error_y + offset_y
 
-        new_dy = dy + descan_error_dy
-        new_dx = dx + descan_error_dx
-
-        pathlength = ray.pathlength - (offset_x * x) - (offset_y * y)
+        new_dx = dx + x * descan_error_dx
+        new_dy = dy + y * descan_error_dy
+        
+        pathlength = ray.pathlength - (offset_x * x) - (offset_y * y) - (descan_error_dy) - (descan_error_dx)
 
         Ray = ray_matrix(new_x, new_y, new_dx, new_dy,
                          ray.z, ray.amplitude,
@@ -148,6 +148,25 @@ class Sample:
                         new_pathlength, ray.wavelength,
                         ray.blocked)
         return Ray
+    
+    def get_coords(self):
+
+        det_size_y = self.complex_image.shape[0] * self.pixel_size
+        det_size_x = self.complex_image.shape[1] * self.pixel_size
+
+        x_det = jnp.linspace(-det_size_x / 2,
+                             det_size_x / 2,
+                             self.complex_image.shape[0]) + self.center[0]
+
+        y_det = jnp.linspace(-det_size_y / 2,
+                             det_size_y / 2,
+                             self.complex_image.shape[1]) + self.center[1]
+
+        x, y = jnp.meshgrid(x_det, y_det, indexing='ij')
+
+        r = jnp.stack((x, y), axis=-1).reshape(-1, 2)
+
+        return r
     
     def on_grid(self, ray: Ray, as_int: bool = True) -> NDArray:
         return ray_on_grid(
@@ -293,19 +312,19 @@ class Detector:
             as_int=as_int,
         )
 
-    def get_det_coords(self):
+    def get_coords(self):
         det_size_y = self.shape[0] * self.pixel_size
         det_size_x = self.shape[1] * self.pixel_size
 
-        x_det = jnp.linspace(-det_size_y / 2,
-                             det_size_y / 2,
+        x_det = jnp.linspace(-det_size_x / 2,
+                             det_size_x / 2,
                              self.shape[0]) + self.center[0]
 
-        y_det = jnp.linspace(-det_size_x / 2,
-                             det_size_x / 2,
+        y_det = jnp.linspace(-det_size_y / 2,
+                             det_size_y / 2,
                              self.shape[1]) + self.center[1]
 
-        x, y = jnp.meshgrid(x_det, y_det)
+        x, y = jnp.meshgrid(x_det, y_det, indexing='ij')
 
         r = jnp.stack((x, y), axis=-1).reshape(-1, 2)
 
