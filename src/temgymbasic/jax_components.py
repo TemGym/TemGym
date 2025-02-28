@@ -151,20 +151,21 @@ class Sample:
     
     def get_coords(self):
 
-        image_size_x = self.complex_image.shape[1] * self.pixel_size
+        centre_x, centre_y = self.center
         image_size_y = self.complex_image.shape[0] * self.pixel_size
-
-        x_image = jnp.linspace(-image_size_x / 2,
-                             image_size_x / 2,
-                             self.complex_image.shape[1]) + self.center[0]
+        image_size_x = self.complex_image.shape[1] * self.pixel_size
 
         y_image = jnp.linspace(-image_size_y / 2,
                              image_size_y / 2,
-                             self.complex_image.shape[0]) + self.center[1]
+                             self.complex_image.shape[0]) + centre_x
+        
+        x_image = jnp.linspace(-image_size_x / 2,
+                             image_size_x / 2,
+                             self.complex_image.shape[1]) + centre_y
 
-        x, y = jnp.meshgrid(x_image, y_image, indexing='ij')
+        y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        r = jnp.stack((x, y), axis=-1).reshape(-1, 2)
+        r = jnp.stack((y, x), axis=-1).reshape(-1, 2)
 
         return r
     
@@ -313,20 +314,22 @@ class Detector:
         )
 
     def get_coords(self):
-        det_size_y = self.shape[0] * self.pixel_size
-        det_size_x = self.shape[1] * self.pixel_size
 
-        x_det = jnp.linspace(-det_size_x / 2,
-                             det_size_x / 2,
-                             self.shape[1]) + self.center[0]
+        centre_x, centre_y = self.center
+        image_size_y = self.shape[0] * self.pixel_size
+        image_size_x = self.shape[1] * self.pixel_size
 
-        y_det = jnp.linspace(-det_size_y / 2,
-                             det_size_y / 2,
-                             self.shape[0]) + self.center[1]
+        y_image = jnp.linspace(-image_size_y / 2,
+                             image_size_y / 2,
+                             self.shape[0]) + centre_x
+        
+        x_image = jnp.linspace(-image_size_x / 2,
+                             image_size_x / 2,
+                             self.shape[1]) + centre_y
 
-        x, y = jnp.meshgrid(x_det, y_det, indexing='ij')
+        y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        r = jnp.stack((x, y), axis=-1).reshape(-1, 2)
+        r = jnp.stack((y, x), axis=-1).reshape(-1, 2)
 
         return r
 
