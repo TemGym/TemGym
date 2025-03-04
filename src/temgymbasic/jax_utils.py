@@ -59,8 +59,8 @@ def get_pytree_idx_from_model(model, parameters):
 def _flip_y():
     # From libertem.corrections.coordinates v0.11.1
     return jnp.array([
-        (-1, 0),
-        (0, 1)
+        (-1., 0.),
+        (0., 1.)
     ])
 
 
@@ -85,12 +85,12 @@ def _rotate_deg(degrees: 'Degrees', jnp=jnp):
 
 
 def get_pixel_coords(
-    rays_x, rays_y, shape, pixel_size, flip_y=False, scan_rotation: 'Degrees' = 0.
+    rays_x, rays_y, shape, pixel_size, flip_y=1, scan_rotation: 'Degrees' = 0.
 ):
-    if flip_y:
-        transform = _flip_y()
-    else:
-        transform = _identity()
+    transform = jax.lax.cond(flip_y,
+                             lambda _: _flip_y(),
+                             lambda _: _identity(),
+                             operand=None)
 
     # Transformations are applied right to left
     transform = _rotate_deg(jnp.array(scan_rotation), jnp) @ transform

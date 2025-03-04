@@ -128,6 +128,13 @@ class DoubleDeflector:
         ray = self.second.step(ray)
 
         return ray
+
+@jdc.pytree_dataclass
+class InputPlane:
+    z: float
+
+    def step(self, ray: Ray):
+        return ray
     
 @jdc.pytree_dataclass
 class Sample:
@@ -135,7 +142,7 @@ class Sample:
     complex_image: NDArray
     pixel_size: float
     rotation: Degrees = 0.
-    flip_y: bool = False
+    flip_y: int = 0
     center: Tuple[float, float] = (0., 0.)
 
     def step(self, ray: Ray):
@@ -156,12 +163,13 @@ class Sample:
         image_size_x = self.complex_image.shape[1] * self.pixel_size
 
         y_image = jnp.linspace(-image_size_y / 2,
-                             image_size_y / 2,
-                             self.complex_image.shape[0]) + centre_x
+                               image_size_y / 2 - self.pixel_size,
+                               self.complex_image.shape[0], endpoint=True) + centre_y
         
         x_image = jnp.linspace(-image_size_x / 2,
-                             image_size_x / 2,
-                             self.complex_image.shape[1]) + centre_y
+                               image_size_x / 2 - self.pixel_size,
+                               self.complex_image.shape[1], endpoint=True) + centre_x
+
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
@@ -264,7 +272,7 @@ class Detector:
     pixel_size: jdc.Static[float]
     shape: jdc.Static[Tuple[int, int]]
     rotation: jdc.Static[Degrees] = 0.
-    flip_y: jdc.Static[bool] = False
+    flip_y: jdc.Static[int] = 0
     center: jdc.Static[Tuple[float, float]] = (0., 0.)
 
     def step(self, ray: Ray):
@@ -320,12 +328,13 @@ class Detector:
         image_size_x = self.shape[1] * self.pixel_size
 
         y_image = jnp.linspace(-image_size_y / 2,
-                             image_size_y / 2,
-                             self.shape[0]) + centre_x
+                               image_size_y / 2 - self.pixel_size,
+                               self.shape[0], endpoint=True) + centre_y
         
         x_image = jnp.linspace(-image_size_x / 2,
-                             image_size_x / 2,
-                             self.shape[1]) + centre_y
+                               image_size_x / 2 - self.pixel_size,
+                               self.shape[1], endpoint=True) + centre_x
+
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
