@@ -26,9 +26,6 @@ def get_pytree_idx_from_model(model, parameters):
 
     indices = {}
 
-    # Flatten the model to indices, and return the treedef function to reconstruct the model
-    flat_model, treedef = ravel_pytree(model)
-
     # Obtain the paths and leaves of the model
     paths, leaves =  jax.tree.flatten_with_path(model)
 
@@ -37,7 +34,7 @@ def get_pytree_idx_from_model(model, parameters):
 
     # loop through the paths and leaves of the model to find the 
     # parameters we want to differentiate with respect to. 
-    for path, leaf in zip(paths, leaves):
+    for path, leaf in zip(paths):
         component_idx = path[0]
         component_params = path[1]
         target_parameters = parameters.get(component_idx)
