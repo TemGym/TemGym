@@ -76,23 +76,26 @@ class Descanner:
 
     def step(self, ray: Ray):
         offset_x, offset_y = self.offset_x, self.offset_y
-        descan_error_x, descan_error_y, descan_error_dx, descan_error_dy = self.descan_error
+
+        (descan_error_xx, descan_error_xy, descan_error_yx, descan_error_yy,
+         descan_error_dxx, descan_error_dxy, descan_error_dyx, descan_error_dyy) = self.descan_error
 
         x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
-        new_x = x * descan_error_x + offset_x
-        new_y = y * descan_error_y + offset_y
+        new_x = x * descan_error_xx + descan_error_xy * y + offset_x
+        new_y = y * descan_error_yy + descan_error_yx * x + offset_y
 
-        new_dx = dx + x * descan_error_dx
-        new_dy = dy + y * descan_error_dy
+        new_dx = dx + x * descan_error_dxx + y * descan_error_dxy
+        new_dy = dy + y * descan_error_dyy + x * descan_error_dyx
         
-        pathlength = ray.pathlength - (offset_x * x) - (offset_y * y) - (descan_error_dy) - (descan_error_dx)
+        pathlength = ray.pathlength - (offset_x * x) - (offset_y * y)
 
         Ray = ray_matrix(new_x, new_y, new_dx, new_dy,
                          ray.z, ray.amplitude,
                          pathlength, ray.wavelength,
                          ray.blocked)
         return Ray
+
 
 @jdc.pytree_dataclass
 class Deflector:
