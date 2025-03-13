@@ -36,4 +36,4 @@ dist/
 *.txt
 *.png
 *nsys-rep
-wavefronts/fourdstem_overfocused.npy
+fourdstem_overfocused.npy

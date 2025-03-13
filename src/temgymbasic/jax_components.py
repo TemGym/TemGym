@@ -117,6 +117,7 @@ class Deflector:
                         ray.blocked)
         return Ray
 
+<<<<<<< HEAD
 @jdc.pytree_dataclass
 class Rotator:
     z: float
@@ -139,6 +140,8 @@ class Rotator:
                         pathlength, ray.wavelength,
                         ray.blocked)
         return Ray
+=======
+>>>>>>> b89c34c8f431d138ede8882a2de4f640625c8708
 
 @jdc.pytree_dataclass
 class DoubleDeflector:
@@ -211,8 +214,11 @@ class Sample:
             rotation=self.rotation,
             as_int=as_int,
         )
+<<<<<<< HEAD
     
 
+=======
+>>>>>>> b89c34c8f431d138ede8882a2de4f640625c8708
 
 @jdc.pytree_dataclass
 class Aperture:
