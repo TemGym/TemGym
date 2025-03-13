@@ -117,6 +117,28 @@ class Deflector:
                         ray.blocked)
         return Ray
 
+@jdc.pytree_dataclass
+class Rotator:
+    z: float
+    angle: Degrees
+
+    def step(self, ray: Ray):
+            
+        angle = jnp.deg2rad(self.angle)
+        # Rotate the ray's position
+        new_x = ray.x * jnp.cos(angle) - ray.y * jnp.sin(angle)
+        new_y = ray.x * jnp.sin(angle) + ray.y * jnp.cos(angle)
+        # Rotate the ray's slopes
+        new_dx = ray.dx * jnp.cos(angle) - ray.dy * jnp.sin(angle)
+        new_dy = ray.dx * jnp.sin(angle) + ray.dy * jnp.cos(angle)
+
+        pathlength = ray.pathlength
+
+        Ray = ray_matrix(new_x, new_y, new_dx, new_dy,
+                        ray.z, ray.amplitude,
+                        pathlength, ray.wavelength,
+                        ray.blocked)
+        return Ray
 
 @jdc.pytree_dataclass
 class DoubleDeflector:
@@ -189,6 +211,8 @@ class Sample:
             rotation=self.rotation,
             as_int=as_int,
         )
+    
+
 
 @jdc.pytree_dataclass
 class Aperture:

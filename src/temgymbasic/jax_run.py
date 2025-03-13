@@ -14,3 +14,4 @@ def run_to_component(ray, component):
     ray = propagate(distance, ray)
     ray = component.step(ray)
     return ray
+
