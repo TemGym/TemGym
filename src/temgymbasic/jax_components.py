@@ -125,6 +125,7 @@ class Rotator:
     def step(self, ray: Ray):
             
         angle = jnp.deg2rad(self.angle)
+
         # Rotate the ray's position
         new_x = ray.x * jnp.cos(angle) - ray.y * jnp.sin(angle)
         new_y = ray.x * jnp.sin(angle) + ray.y * jnp.cos(angle)
@@ -162,39 +163,33 @@ class InputPlane:
         return ray
     
 @jdc.pytree_dataclass
-class Sample:
+class ScanGrid:
     z: float
-    complex_image: NDArray
-    pixel_size: float
-    rotation: Degrees = 0.
-    flip_y: int = 0
-    center: Tuple[float, float] = (0., 0.)
+    pixel_size: jdc.Static[float]
+    shape: jdc.Static[Tuple[int, int]]
+    center: jdc.Static[Tuple[float, float]]= (0., 0.)
 
     def step(self, ray: Ray):
-        ray_y_px, ray_x_px = self.on_grid(ray, as_int=True)
-        new_amplitude = ray.amplitude * jnp.abs(self.complex_image[ray_y_px, ray_x_px])
-        new_pathlength = ray.pathlength + jnp.angle(self.complex_image[ray_y_px, ray_x_px]) * ray.wavelength / (2 * jnp.pi)
-
         Ray = ray_matrix(ray.x, ray.y, ray.dx, ray.dy,
-                        ray.z, new_amplitude,
-                        new_pathlength, ray.wavelength,
+                        ray.z, ray.amplitude,
+                        ray.pathlength, ray.wavelength,
                         ray.blocked)
         return Ray
     
     def get_coords(self):
 
         centre_x, centre_y = self.center
-        image_size_y = self.complex_image.shape[0] * self.pixel_size
-        image_size_x = self.complex_image.shape[1] * self.pixel_size
+        image_size_y = self.shape[0] * self.pixel_size
+        image_size_x = self.shape[1] * self.pixel_size
+        shape_y, shape_x = self.shape
 
         y_image = jnp.linspace(-image_size_y / 2,
                                image_size_y / 2 - self.pixel_size,
-                               self.complex_image.shape[0], endpoint=True) + centre_y
+                               shape_y, endpoint=True) + centre_y
         
         x_image = jnp.linspace(-image_size_x / 2,
                                image_size_x / 2 - self.pixel_size,
-                               self.complex_image.shape[1], endpoint=True) + centre_x
-
+                               shape_x, endpoint=True) + centre_x
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
