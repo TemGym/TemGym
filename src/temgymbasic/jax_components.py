@@ -165,6 +165,7 @@ class InputPlane:
 @jdc.pytree_dataclass
 class ScanGrid:
     z: float
+    rotation: Degrees
     pixel_size: jdc.Static[float]
     shape: jdc.Static[Tuple[int, int]]
     center: jdc.Static[Tuple[float, float]]= (0., 0.)
@@ -193,7 +194,10 @@ class ScanGrid:
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        r = jnp.stack((y, x), axis=-1).reshape(-1, 2)
+        y_rot = jnp.cos(self.rotation) * y - jnp.sin(self.rotation) * x
+        x_rot = jnp.sin(self.rotation) * y + jnp.cos(self.rotation) * x
+
+        r = jnp.stack((y_rot, x_rot), axis=-1).reshape(-1, 2)
 
         return r
     
