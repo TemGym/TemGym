@@ -157,7 +157,8 @@ class DoubleDeflector:
 
 @jdc.pytree_dataclass
 class InputPlane:
-    z: float
+    z: float   
+    semi_conv: float
 
     def step(self, ray: Ray):
         return ray
@@ -165,9 +166,9 @@ class InputPlane:
 @jdc.pytree_dataclass
 class ScanGrid:
     z: float
-    rotation: Degrees
-    pixel_size: jdc.Static[float]
-    shape: jdc.Static[Tuple[int, int]]
+    scan_rotation: jdc.Static[Degrees]
+    scan_step: jdc.Static[float]
+    scan_shape: jdc.Static[Tuple[int, int]]
     center: jdc.Static[Tuple[float, float]]= (0., 0.)
 
     def step(self, ray: Ray):
@@ -210,6 +211,22 @@ class ScanGrid:
             rotation=self.rotation,
             as_int=as_int,
         )
+    
+    def scan_position(self, yx: Tuple[int, int]) -> Tuple[float, float]:
+        y, x = yx
+        # Get the scan position in physical units
+        scan_step_y, scan_step_x = self.scan_step_yx
+        sy, sx = self.scan_shape
+        scan_position_x = (x - sx / 2.) * scan_step_x
+        scan_position_y = (y - sy / 2.) * scan_step_y
+
+        scan_rotation_rad = jnp.deg2rad(self.scan_rotation)
+        if scan_rotation_rad != 0.:
+            pos_r, pos_a = R2P(scan_position_x + scan_position_y * 1j)
+            pos_c = P2R(pos_r, pos_a + scan_rotation_rad)
+            scan_position_y, scan_position_x = pos_c.imag, pos_c.real
+        return (scan_position_y, scan_position_x)
+
     
 
 @jdc.pytree_dataclass

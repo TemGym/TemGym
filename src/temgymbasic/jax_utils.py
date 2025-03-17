@@ -1,6 +1,7 @@
 from jax.numpy import ndarray as NDArray
 import jax
 import jax.numpy as jnp
+import numpy as np
 from . import Degrees, Radians
 from jax.flatten_util import ravel_pytree
 
@@ -302,3 +303,79 @@ def lens_phase_factor(n, ps, lambda0, f):
     phase_factor = jnp.ejnp(-1j * jnp.pi * (X**2 + Y**2) / (lambda0 * f) + 1j * jnp.pi)
 
     return phase_factor
+
+
+def run_model_for_rays_and_slopes(transfer_matrices, input_slopes, scan_position):
+    #Given input model and it's transfer matrix, run the model to find the positions of the rays at the sample and detector
+    scan_pos_y, scan_pos_x = scan_position
+
+    input_slopes_x = input_slopes[0]
+    input_slopes_y = input_slopes[1]
+
+    # Make the input rays we can run through one last time in the model to find positions at sample and detector
+    rays_at_source_with_semi_conv = np.vstack([
+        np.full(len(input_slopes_x), scan_pos_x),
+        np.full(len(input_slopes_y), scan_pos_y),
+        input_slopes_x,
+        input_slopes_y,
+        np.ones_like(input_slopes_x)
+    ])
+
+    # Propagate the point source coordinates through the forward ABCD matrices
+    coord_list = [rays_at_source_with_semi_conv]
+    for ABCD in transfer_matrices:
+        new_coord = np.dot(ABCD[0], coord_list[-1])
+        coord_list.append(new_coord)
+        
+    # Stack the propagated coordinates into an array for easier indexing
+    coords_array = np.stack(coord_list, axis=0)
+    
+    xs = coords_array[:, 0, :]
+    ys = coords_array[:, 1, :]
+    dxs = coords_array[:, 2, :]
+    dys = coords_array[:, 3, :]
+
+    coords = np.array([xs, ys, dxs, dys])
+    
+    return coords
+
+
+def find_input_slopes_that_hit_detpx_from_pt_source_with_semiconv(pixel_coords, scan_pos, semi_conv, transformation_matrix):
+    """
+    Given a set of detector pixel coordinates, a semi-convergence angle from a source, and a transformation matrix, find a mask that tells us 
+    what slopes will hit the detector pixels from the point source.
+
+    Args:
+    - pixel_coords (jnp.array): A (N, 2) array of pixel coordinates in y, x format.
+    - scan_pos (jnp.array): A (2,) array of the scan position in x and y format.
+    - semi_conv (float): The semi-convergence angle of the point source.q
+    - transformation_matrix (jnp.array): A (5, 5) transformation matrix.
+    """
+    # We rely on the fact that theta_x_in**2 + theta_y_in**2 = semi_conv**2 - this is essentially a parametric equation of an ellipse.  
+    # which can be evaluated to find all pixels less than any semi_conv from the point source 
+    # For a point source, our system of equations is:
+    # [x_out, y_out, theta_x_out, theta_y_out, 1] = transformation_matrix @ [scan_pos_x, scan_pos_y, theta_x_in, theta_y_in, 1]
+    # where theta_x_in and theta_y_in are given by alpha * cos(phi) and alpha * sin(phi), with alpha being the semi convergence angle
+    # and phi the azimuthal angle of a ray from the point source. This is a parametric equation for a cone of rays from the point source
+    # giving us the means to find a mask, which will tell us which slopes will hit the detector pixel from the point source for a given semi_conv.
+    scan_pos_y, scan_pos_x = scan_pos
+
+    A_xx, A_xy, B_xx, B_xy = transformation_matrix[0, :4] # Select first row not including the last column of values from the 5x5 transfer matrix
+    A_yx, A_yy, B_yx, B_yy = transformation_matrix[1, :4] # Select second row not including the last column of values from the 5x5 transfer matrix
+
+    delta_x, delta_y = transformation_matrix[0, 4], transformation_matrix[1, 4] # Get the shift values from the final column of the transfer matrix
+
+    y_out, x_out = pixel_coords[:, 0], pixel_coords[:, 1]
+
+    denom = (B_xx*B_yy - B_xy*B_yx)
+    theta_x_in = (-A_xx*B_yy*scan_pos_x - A_xy*B_yy*scan_pos_y + A_yx*B_xy*scan_pos_x + 
+         A_yy*B_xy*scan_pos_y + B_xy*delta_y - B_xy*y_out - B_yy*delta_x + B_yy*x_out) / denom
+    
+    theta_y_in = (A_xx*B_yx*scan_pos_x + A_xy*B_yx*scan_pos_y - A_yx*B_xx*scan_pos_x - 
+         A_yy*B_xx*scan_pos_y - B_xx*delta_y + B_xx*y_out + B_yx*delta_x - B_yx*x_out) / denom
+    
+    F = (theta_x_in**2 + theta_y_in**2) - semi_conv **2
+    mask = F <= 0
+    input_slopes_masked = np.stack([theta_x_in, theta_y_in]) * mask
+    
+    return input_slopes_masked
