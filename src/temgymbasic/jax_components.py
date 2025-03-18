@@ -182,22 +182,26 @@ class ScanGrid:
     def get_coords(self):
 
         centre_x, centre_y = self.center
+        scan_step_y, scan_step_x = self.scan_step
         image_size_y = self.scan_shape[0] * self.scan_step[0]
         image_size_x = self.scan_shape[1] * self.scan_step[1]
         shape_y, shape_x = self.scan_shape
 
         y_image = jnp.linspace(-image_size_y / 2,
-                               image_size_y / 2 - self.scan_step[0],
+                               image_size_y / 2 - scan_step_y,
                                shape_y, endpoint=True) + centre_y
         
         x_image = jnp.linspace(-image_size_x / 2,
-                               image_size_x / 2 - self.scan_step[1],
+                               image_size_x / 2 - scan_step_x,
                                shape_x, endpoint=True) + centre_x
+
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        y_rot = jnp.cos(self.scan_rotation) * y - jnp.sin(self.scan_rotation) * x
-        x_rot = jnp.sin(self.scan_rotation) * y + jnp.cos(self.scan_rotation) * x
+        scan_rotation_rad = jnp.deg2rad(self.scan_rotation)
+
+        y_rot = jnp.cos(scan_rotation_rad) * y - jnp.sin(scan_rotation_rad) * x
+        x_rot = jnp.sin(scan_rotation_rad) * y + jnp.cos(scan_rotation_rad) * x
 
         r = jnp.stack((y_rot, x_rot), axis=-1).reshape(-1, 2)
 
@@ -321,21 +325,6 @@ class Detector:
     def step(self, ray: Ray):
         return ray
 
-    @property
-    def rotation_deg(self) -> Degrees:  # type: ignore
-        return jnp.rad2deg(self.rotation_rad)
-
-    @rotation_deg.setter
-    def rotation_deg(self, val: Degrees):
-        self.rotation_rad: Radians = jnp.deg2rad(val)
-
-    @property
-    def rotation_rad(self) -> Radians:
-        return self._rotation
-
-    @rotation_rad.setter
-    def rotation_rad(self, val: Radians):
-        self._rotation = val
 
     def set_center_px(self, center_px: Tuple[int, int]):
         """
@@ -364,6 +353,7 @@ class Detector:
             as_int=as_int,
         )
 
+
     def get_coords(self):
 
         centre_x, centre_y = self.center
@@ -382,176 +372,10 @@ class Detector:
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
         rotation_rad = jnp.deg2rad(self.rotation)
+
         y_rot = jnp.cos(rotation_rad) * y - jnp.sin(rotation_rad) * x
         x_rot = jnp.sin(rotation_rad) * y + jnp.cos(rotation_rad) * x
 
         r = jnp.stack((y_rot, x_rot), axis=-1).reshape(-1, 2)
 
         return r
-
-    def image_dtype(
-        self,
-        interfere: bool
-    ):
-        if interfere:
-            return jnp.complex128
-            return jnp.complex64
-        else:
-            return jnp.int32
-
-    def get_image(
-        self,
-        ray: Union[Ray, Sequence[Ray]],
-        interfere: bool = True,
-        out: Optional[NDArray] = None,
-    ) -> NDArray:
-
-        if not isinstance(ray, Sequence):
-            ray = [ray]
-        assert len(ray) > 0
-
-        image_dtype = self.image_dtype(interfere)
-
-        if out is None:
-            out = jnp.zeros(
-                self.shape,
-                dtype=image_dtype,
-            )
-        else:
-            assert out.dtype == image_dtype
-            assert out.shape == self.shape
-
-        if interfere and isinstance(ray[0], GaussianRay):
-            if len(ray) < 2:
-                raise UsageError(
-                    "GaussianRays must have two sets of rays to calculate interference"
-                )
-
-            self._gaussian_beam_summation(ray, out=out)
-
-        else:
-            out = self._basic_beam_summation(ray, interfere, out=out)
-
-        return out.reshape(self.shape)
-
-    def _basic_beam_summation(
-        self,
-        ray: tuple[Ray],
-        interfere: bool,
-        out: Optional[NDArray] = None,
-    ) -> NDArray:
-
-        ray = ray[-1]
-
-        # Convert rays from detector positions to pixel positions
-        pixel_coords_y, pixel_coords_x = self.on_grid(ray, as_int=True)
-        sy, sx = self.shape
-        mask = jnp.logical_and(
-            jnp.logical_and(
-                0 <= pixel_coords_y,
-                pixel_coords_y < sy
-            ),
-            jnp.logical_and(
-                0 <= pixel_coords_x,
-                pixel_coords_x < sx
-            )
-        )
-
-        # Add rays as complex numbers if interference is enabled,
-        # or just add rays as counts otherwise.
-        if interfere:
-            # If we are doing interference, we add a complex number representing
-            # the phase of the ray for now to each pixel.
-            # Amplitude is 1.0 for now for each complex ray.
-            # Need to implement triangulation of wavefront
-            # to properly track amplitude of each ray.
-            wavefronts = 1.0 * jnp.exp(-1j * (2 * jnp.pi / ray.wavelength) * ray.pathlength)
-            valid_wavefronts = wavefronts[mask]
-        else:
-            # If we are not doing interference, we simply add 1 to each pixel that a ray hits
-            valid_wavefronts = 1
-
-        # Get a flattened list pixel indices where rays have hit
-        flat_icds = jnp.ravel_multi_index(
-                [
-                    pixel_coords_y[mask],
-                    pixel_coords_x[mask],
-                ],
-                out.shape
-            )
-
-        out_flat = out.flatten()
-        out_flat = self.sum_rays_on_detector(out_flat, flat_icds, valid_wavefronts)
-
-        return out_flat
-
-    def sum_rays_on_detector(self,
-                             out: NDArray,
-                             flat_icds: NDArray,
-                             valid_wavefronts: NDArray):
-
-        if jnp.iscomplexobj(out):
-            # Separate the real and imaginary parts
-            real_out = out.real
-            imag_out = out.imag
-
-            # Perform the addition separately for real and imaginary parts
-            real_out = real_out.at[flat_icds].add(valid_wavefronts.real)
-            imag_out = imag_out.at[flat_icds].add(valid_wavefronts.imag)
-
-            # Combine the real and imaginary parts back into the out array
-            out = real_out + 1j * imag_out
-        else:
-            # Perform the addition directly for non-complex arrays
-            out = out.at[flat_icds].add(valid_wavefronts)
-
-        return out
-
-    # def _gaussian_beam_summation(
-    #     self,
-    #     ray: tuple[GaussianRay],
-    #     ABCD: NDArray,
-    #     out: Optional[NDArray] = None,
-    # ) -> NDArray:
-
-    #     ray_start = ray[0]
-    #     ray_end = ray[-1]
-
-    #     float_dtype = out.real.dtype.type
-
-    #     wo = ray_start.wo
-    #     wavelength = ray_start.wavelength
-
-    #     div = ray_start.wavelength / (jnp.pi * wo)
-    #     k = float_dtype(2 * jnp.pi / wavelength)
-
-    #     z0 = float_dtype(ray_start.z)
-    #     z_r = float_dtype(jnp.pi * wo ** 2 / wavelength)
-    #     pathlength = ray_end.path_length[0::5].astype(float_dtype)
-    #     # A, B, C, D all have shape (n_gauss, 2, 2)
-    #     Qinv = calculate_Qinv(z0, z_r, wo, wavelength, n_gauss, xp=xp)
-
-    #     # matmul, addition and mat inverse inside
-    #     # on operands with form (n_gauss, 2, 2)
-    #     # matmul broadcasts in the last two indices
-    #     # inv can be broadcast with jnp.linalg.inv last 2 idcs
-    #     # if all inputs are stacked in the first dim
-    #     Qpinv = calculate_Qpinv(A, B, C, D, Qinv, xp=xp)
-
-    #     px1m = rays_start.data[0, 0::5]  # x that central ray leaves at
-    #     py1m = rays_start.data[2, 0::5]  # y that central ray leaves at
-    #     thetax1m = rays_start.data[1, 0::5]  # slope that central ray arrives at
-    #     thetay1m = rays_start.data[3, 0::5]  # slope that central ray arrives at
-
-    #     p1m = jnp.array([px1m, py1m]).T.astype(float_dtype)
-    #     theta1m = jnp.array([thetax1m, thetay1m]).T.astype(float_dtype)
-
-    #     xEnd, yEnd = rayset1[0, 0], rayset1[0, 2]
-
-    #     # central beam final x , y coords
-    #     det_coords = get_det_coords_for_gauss_rays(xEnd, yEnd, xp=xp)
-
-    #     propagate_misaligned_gaussian(
-    #         Qinv, Qpinv, det_coords, p1m,
-    #         theta1m, k, A, B, path_length, out.ravel(), xp=xp
-    #     )
