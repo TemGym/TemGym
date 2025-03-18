@@ -324,7 +324,7 @@ def run_model_for_rays_and_slopes(transfer_matrices, input_slopes, scan_position
     # Propagate the point source coordinates through the forward ABCD matrices
     coord_list = [rays_at_source_with_semi_conv]
     for ABCD in transfer_matrices:
-        new_coord = np.dot(ABCD[0], coord_list[-1])
+        new_coord = np.dot(ABCD, coord_list[-1])
         coord_list.append(new_coord)
         
     # Stack the propagated coordinates into an array for easier indexing

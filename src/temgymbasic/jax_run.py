@@ -17,7 +17,6 @@ def run_to_component(ray, component):
     ray = component.step(ray)
     return ray
 
-@jax.jit
 def run_model_for_jacobians(ray, model):
 
     model_jacobians = []
@@ -41,8 +40,8 @@ def run_model_for_jacobians(ray, model):
         ray_jacobian = jacobian['jacobian'] #dr_out/dr_in
         shift_vectors = ray_jacobian.pathlength.matrix # This is the shift vector for each ray, dopl_out/dr_in
         ABCD = ray_jacobian.matrix.matrix # This is the ABCD matrix for each ray, dr_out/dr_in
-        ABCD = ABCD.at[0, :, -1].set(shift_vectors[0, :])
-        ABCD = ABCD.at[0, -1, -1].set(1.0)
+        ABCD = ABCD.at[:, -1].set(shift_vectors[0, :])
+        ABCD = ABCD.at[-1, -1].set(1.0)
         ABCDs.append(ABCD)
 
     return jnp.array(ABCDs)

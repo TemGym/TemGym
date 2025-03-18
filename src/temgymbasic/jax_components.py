@@ -77,9 +77,10 @@ class Descanner:
     def step(self, ray: Ray):
         offset_x, offset_y = self.offset_x, self.offset_y
 
+        ##TODO: Redescribe descan terms so that 0, 0 means no error, not 1, 1 in Axx, Ayy.
         (descan_error_xx, descan_error_xy, descan_error_yx, descan_error_yy,
          descan_error_dxx, descan_error_dxy, descan_error_dyx, descan_error_dyy) = self.descan_error
-
+        
         x, y, dx, dy = ray.x, ray.y, ray.dx, ray.dy
 
         new_x = x * descan_error_xx + descan_error_xy * y + offset_x
@@ -181,22 +182,22 @@ class ScanGrid:
     def get_coords(self):
 
         centre_x, centre_y = self.center
-        image_size_y = self.shape[0] * self.pixel_size
-        image_size_x = self.shape[1] * self.pixel_size
-        shape_y, shape_x = self.shape
+        image_size_y = self.scan_shape[0] * self.scan_step[0]
+        image_size_x = self.scan_shape[1] * self.scan_step[1]
+        shape_y, shape_x = self.scan_shape
 
         y_image = jnp.linspace(-image_size_y / 2,
-                               image_size_y / 2 - self.pixel_size,
+                               image_size_y / 2 - self.scan_step[0],
                                shape_y, endpoint=True) + centre_y
         
         x_image = jnp.linspace(-image_size_x / 2,
-                               image_size_x / 2 - self.pixel_size,
+                               image_size_x / 2 - self.scan_step[1],
                                shape_x, endpoint=True) + centre_x
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        y_rot = jnp.cos(self.rotation) * y - jnp.sin(self.rotation) * x
-        x_rot = jnp.sin(self.rotation) * y + jnp.cos(self.rotation) * x
+        y_rot = jnp.cos(self.scan_rotation) * y - jnp.sin(self.scan_rotation) * x
+        x_rot = jnp.sin(self.scan_rotation) * y + jnp.cos(self.scan_rotation) * x
 
         r = jnp.stack((y_rot, x_rot), axis=-1).reshape(-1, 2)
 
@@ -215,7 +216,7 @@ class ScanGrid:
     def scan_position(self, yx: Tuple[int, int]) -> Tuple[float, float]:
         y, x = yx
         # Get the scan position in physical units
-        scan_step_y, scan_step_x = self.scan_step_yx
+        scan_step_y, scan_step_x = self.scan_step
         sy, sx = self.scan_shape
         scan_position_x = (x - sx / 2.) * scan_step_x
         scan_position_y = (y - sy / 2.) * scan_step_y
@@ -380,7 +381,11 @@ class Detector:
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        r = jnp.stack((y, x), axis=-1).reshape(-1, 2)
+        rotation_rad = jnp.deg2rad(self.rotation)
+        y_rot = jnp.cos(rotation_rad) * y - jnp.sin(rotation_rad) * x
+        x_rot = jnp.sin(rotation_rad) * y + jnp.cos(rotation_rad) * x
+
+        r = jnp.stack((y_rot, x_rot), axis=-1).reshape(-1, 2)
 
         return r
 
