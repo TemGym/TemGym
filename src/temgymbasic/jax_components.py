@@ -182,9 +182,10 @@ class ScanGrid:
     def get_coords(self):
 
         centre_x, centre_y = self.center
+        scan_shape_y, scan_shape_x = self.scan_shape
         scan_step_y, scan_step_x = self.scan_step
-        image_size_y = self.scan_shape[0] * self.scan_step[0]
-        image_size_x = self.scan_shape[1] * self.scan_step[1]
+        image_size_y = scan_shape_y * scan_step_y
+        image_size_x = scan_shape_x * scan_step_x
         shape_y, shape_x = self.scan_shape
 
         y_image = jnp.linspace(-image_size_y / 2,
@@ -357,24 +358,26 @@ class Detector:
     def get_coords(self):
 
         centre_x, centre_y = self.center
-        image_size_y = self.shape[0] * self.pixel_size
-        image_size_x = self.shape[1] * self.pixel_size
+        shape_y, shape_x = self.shape
+        pixel_size = self.pixel_size
+        image_size_y = shape_y * pixel_size
+        image_size_x = shape_x * pixel_size
 
         y_image = jnp.linspace(-image_size_y / 2,
-                               image_size_y / 2 - self.pixel_size,
-                               self.shape[0], endpoint=True) + centre_y
+                               image_size_y / 2 - pixel_size,
+                               shape_y, endpoint=True) + centre_y
         
         x_image = jnp.linspace(-image_size_x / 2,
-                               image_size_x / 2 - self.pixel_size,
-                               self.shape[1], endpoint=True) + centre_x
+                               image_size_x / 2 - pixel_size,
+                               shape_x, endpoint=True) + centre_x
 
 
         y, x = jnp.meshgrid(y_image, x_image, indexing='ij')
 
-        rotation_rad = jnp.deg2rad(self.rotation)
+        det_rotation_rad = jnp.deg2rad(self.rotation)
 
-        y_rot = jnp.cos(rotation_rad) * y - jnp.sin(rotation_rad) * x
-        x_rot = jnp.sin(rotation_rad) * y + jnp.cos(rotation_rad) * x
+        y_rot = jnp.cos(det_rotation_rad) * y - jnp.sin(det_rotation_rad) * x
+        x_rot = jnp.sin(det_rotation_rad) * y + jnp.cos(det_rotation_rad) * x
 
         r = jnp.stack((y_rot, x_rot), axis=-1).reshape(-1, 2)
 
